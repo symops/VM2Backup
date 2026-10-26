@@ -1,0 +1,63 @@
+# English text <TAB> translation (\n line break). Empty = show English. Run tools/gen_lang.py --update after changing the sources.
+- Installing VM2Backup -	- VM2Backup をインストールしています -
+- Removing VM2Backup -	- VM2Backup を削除しています -
+Backup of virtual machines to a folder, FTP, FTP over TLS and SCP	仮想マシンをフォルダー、FTP、FTP over TLS、SCP にバックアップ
+Browse...	参照...
+Close	閉じる
+Closing the running VM2Backup and stopping its service...	実行中の VM2Backup を閉じ、そのサービスを停止しています...
+Copying the files to %s	ファイルを %s にコピーしています
+Could not open: %s	開けませんでした: %s
+Creating the shortcuts.	ショートカットを作成しています。
+Data folder:	データフォルダー:
+Desktop shortcut	デスクトップ ショートカット
+Done.	完了しました。
+Enabled, but not listening	有効ですが待ち受けていません
+Error: VM2Backup.exe was not found next to the installer.	エラー: インストーラーと同じ場所に VM2Backup.exe が見つかりません。
+Error: VM2BackupService.exe was not found next to the installer.	エラー: インストーラーと同じ場所に VM2BackupService.exe が見つかりません。
+Error: cannot copy %s (error %lu).	エラー: %s をコピーできません (エラー %lu)。
+Error: cannot find the Program Files folder.	エラー: Program Files フォルダーが見つかりません。
+Error: the installation folder is not valid (a full path such as C:\\Programs\\VM2Backup is needed).	エラー: インストール フォルダーが無効です (C:\\Programs\\VM2Backup のような完全なパスが必要です)。
+Error: the service could not be registered (are you an administrator?).	エラー: サービスを登録できませんでした (管理者ですか?)。
+Exit	終了
+Failed.	失敗しました。
+Install	インストール
+Install to:	インストール先:
+Installed: version %s, %s	インストール済み: バージョン %s, %s
+Language:	言語:
+Launch	起動
+Listening on %s:%lld	%s:%lld で待ち受け中
+Not installed	未インストール
+Off	オフ
+Open logs folder	ログフォルダーを開く
+Open web interface	Web インターフェイスを開く
+Registering the program in Apps & features.	アプリと機能にプログラムを登録しています。
+Reinstall	再インストール
+Remove	削除
+Remove VM2Backup from this computer?\n\nYour settings, the history and the backups you made are kept.	このコンピューターから VM2Backup を削除しますか?\n\n設定、履歴、作成したバックアップは保持されます。
+Removing the shortcuts.	ショートカットを削除しています。
+Restart service	サービスを再起動
+Restart the service? Running backups are paused and continue after the restart.	サービスを再起動しますか？実行中のバックアップは一時停止され、再起動後に再開されます。
+Running	実行中
+Select the folder to install VM2Backup to	VM2Backup のインストール先フォルダーを選択
+Service	サービス
+Service:	サービス:
+Start menu shortcut	スタート メニュー ショートカット
+Start service	サービスを開始
+Start the backup service now	バックアップ サービスを今すぐ開始
+Stop service	サービスを停止
+Stop the service? Running backups are paused and continue after the next start.	サービスを停止しますか? 実行中のバックアップは一時停止され、次回の開始後に続行されます。
+Stopped	停止
+The VM2Backup service is not running, so there is no web site. Start the service first.	VM2Backup サービスが実行されていないため、Web サイトはありません。先にサービスを開始してください。
+The VM2Backup service is not running. Start it with the "Start service" button.	VM2Backup サービスが実行されていません。「サービスを開始」ボタンで開始してください。
+The backup service is installed (it starts with Windows).	バックアップ サービスをインストールしました (Windows と共に開始されます)。
+The backup service is installed and started.	バックアップ サービスをインストールし、開始しました。
+The backup service is installed but did not start; start it with the "Start service" button of the program.	バックアップ サービスはインストールされましたが開始しませんでした。プログラムの「サービスを開始」ボタンで開始してください。
+The service could not be started (is it installed? are you an administrator?).	サービスを開始できませんでした (インストールされていますか? 管理者ですか?)。
+The service could not be stopped (are you an administrator?).	サービスを停止できませんでした（管理者ですか？）。
+The web site is enabled, but not listening. Check the certificate and the port in the web interface.	Web サイトは有効ですが、待ち受けていません。Web インターフェイスで証明書とポートを確認してください。
+The web site is off. Switch it on in the web interface, or reset it with VM2BackupService.exe /reset-web.	Web サイトはオフです。Web インターフェイスでオンにするか、VM2BackupService.exe /reset-web でリセットしてください。
+Update	更新
+Version:	バージョン:
+Web site:	Web サイト:
+Windows language	Windows の言語
+Your settings, the history and the backups you made are kept.	設定、履歴、作成したバックアップは保持されます。

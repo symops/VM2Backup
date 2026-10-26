@@ -1,0 +1,11 @@
+# Third-party libraries (see docs/DEV.md "Dependencies").  One line per library, whitespace separated:
+#   name  version  url  sha256-of-the-tarball  license  [track]
+# `track` (optional): the release line to stay in when the version is raised by hand (prefix of the version, e.g. 3.5 = the 3.5 LTS).
+# To update a library: change version, URL and sha256 here (check the sha256 against the digest the project publishes) and rebuild everything.
+openssl 3.5.9 https://github.com/openssl/openssl/releases/download/openssl-3.5.9/openssl-3.5.9.tar.gz 603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a Apache-2.0 3.5
+# xz: ONLY liblzma is built (no xz/xzdec command line tools). Official release of tukaani-project/xz from GitHub; the sha256 equals the digest
+# GitHub publishes for the asset. NOTE: xz-utils 5.6.0 and 5.6.1 contained the March 2024 backdoor (CVE-2024-3094): never pin those
+# versions - always >= 5.6.4 (the first clean release after the incident) / the current stable.
+xz 5.8.4 https://github.com/tukaani-project/xz/releases/download/v5.8.4/xz-5.8.4.tar.gz 0014c7886930454fe8bd4228665b51af55eeae560ea135c9c4cd33f55b2591d9 0BSD/public-domain 5.8
+# libssh2: the SSH-2 client of the SCP target (OpenSSL backend, no zlib); built after openssl (its flags list -lssl -lcrypto again).
+libssh2 1.11.1 https://github.com/libssh2/libssh2/releases/download/libssh2-1.11.1/libssh2-1.11.1.tar.gz d9ec76cbe34db98eec3539fe2c899d26b0c837cb3eb466a56b0f109cabf658f7 BSD-3-Clause 1.11

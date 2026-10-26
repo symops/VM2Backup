@@ -1,0 +1,470 @@
+# English text <TAB> translation (\n line break). Empty = show English. Run tools/webui_strings.py --update after changing src/web/app.js.
+(chosen by the server)	(dipilih oleh server)
+(the default resource pool)	(resource pool default)
+(the root VM folder)	(folder VM root)
+A PKCS#12 file (.pfx) with the certificate and its private key, 1 MB at most. Only the certificate itself is served, not the chain.	File PKCS#12 (.pfx) berisi sertifikat dan kunci privatnya, maksimal 1 MB. Hanya sertifikat itu sendiri yang disajikan, bukan rantainya.
+A mapped drive letter (Z:) cannot be used: the service does not see it. Choose "Network drive..." to use its UNC path, or enter the UNC path.	Huruf drive yang dipetakan (Z:) tidak dapat dipakai: layanan tidak melihatnya. Pilih "Drive jaringan..." untuk memakai jalur UNC-nya, atau masukkan jalur UNC.
+A new certificate was created. Your browser will ask you to trust it again.	Sertifikat baru telah dibuat. Browser Anda akan meminta untuk mempercayainya lagi.
+A new user needs a password.	Pengguna baru memerlukan kata sandi.
+A path on the server computer	Jalur di komputer server
+A path on the server computer (the service reads it)	Jalur di komputer server (dibaca oleh layanan)
+A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	VM ESXi / vCenter yang berjalan disalin dari snapshot sementara, yang kemudian dihapus. Tanpa VMware Tools, snapshot quiesced gagal: matikan quiescing untuk VM seperti itu.
+A virtual machine with this name already exists on the server. Enter another name; an existing machine is never overwritten.	Mesin virtual dengan nama ini sudah ada di server. Masukkan nama lain; mesin yang ada tidak pernah ditimpa.
+Abort	Batalkan
+Add Scheduled Task	Tambah tugas terjadwal
+Add Server	Tambah server
+Add address	Tambah alamat
+Add at least one backup element.	Tambahkan minimal satu elemen cadangan.
+Add element...	Tambah elemen...
+Add user	Tambah pengguna
+Add user...	Tambah pengguna...
+Add window	Tambah jendela
+Additional names	Nama tambahan
+Address	Alamat
+Advanced	Lanjutan
+After a lost connection the program reconnects and goes on; nothing finished is sent again.	Setelah koneksi terputus, program tersambung kembali dan melanjutkan; apa yang sudah selesai tidak dikirim ulang.
+All	Semua
+All interfaces	Semua antarmuka
+All results	Semua hasil
+Allow a copy of a running VM (the copy is consistent only at the crash level)	Izinkan penyalinan VM yang sedang berjalan (salinan hanya konsisten pada tingkat crash)
+An administrator needs two-factor authentication when it is required in the security settings.	Administrator memerlukan autentikasi dua faktor jika diwajibkan di pengaturan keamanan.
+Apply	Terapkan
+Archive	Arsip
+As in the backup (every file back to its original datastore)	Seperti di cadangan (setiap berkas kembali ke datastore aslinya)
+At least 10 characters	Minimal 10 karakter
+At least 10 characters, not containing the user name.	Minimal 10 karakter, tidak memuat nama pengguna.
+Audit log	Log audit
+Auto	Otomatis
+Back	Kembali
+Backup Explorer	Penjelajah Cadangan
+Backup of {0}	Cadangan {0}
+Backup started.	Pencadangan dimulai.
+Backup virtual machines...	Cadangkan mesin virtual...
+Balanced (default)	Seimbang (default)
+Browse network	Telusuri jaringan
+Browse network...	Telusuri jaringan...
+Browse...	Telusuri...
+Cancel	Batal
+Cannot reach the server.	Tidak dapat menjangkau server.
+Cannot read: 	Tidak dapat membaca: 
+Certificate	Sertifikat
+Change	Ubah
+Change password	Ubah kata sandi
+Change settings...	Ubah pengaturan...
+Check the user name and password in the form.	Periksa nama pengguna dan kata sandi di formulir.
+Choose a file	Pilih berkas
+Choose a file.	Pilih berkas.
+Choose a folder	Pilih folder
+Choose a folder.	Pilih folder.
+Choose a server with virtual machines.	Pilih server yang memiliki mesin virtual.
+Choose a share or a folder.	Pilih share atau folder.
+Choose a source server.	Pilih server sumber.
+Choose at least one day in every time window.	Pilih minimal satu hari di setiap jendela waktu.
+Choose at least one day of the week.	Pilih minimal satu hari dalam seminggu.
+Choose at least one virtual machine.	Pilih minimal satu mesin virtual.
+Choose the ESXi or vCenter server to restore to.	Pilih server ESXi atau vCenter tujuan pemulihan.
+Choose the datacenter.	Pilih datacenter.
+Choose the datastore.	Pilih datastore.
+Choose the date and time.	Pilih tanggal dan waktu.
+Choose the file.	Pilih berkas.
+Choose the first start time.	Pilih waktu mulai pertama.
+Choose the kind of server to add.	Pilih jenis server yang akan ditambahkan.
+Choose the start time.	Pilih waktu mulai.
+Clear history	Hapus riwayat
+Clear the whole history?	Hapus seluruh riwayat?
+Close	Tutup
+Code	Kode
+Comment	Komentar
+Complete	Selesai
+Compression	Kompresi
+Compression level	Tingkat kompresi
+Compression threads	Thread kompresi
+Confirm	Konfirmasi
+Connection	Koneksi
+Continue an interrupted backup of this VM when there is one	Lanjutkan pencadangan VM ini yang terputus jika ada
+Copy	Salin
+Create	Buat
+Create a self-signed certificate	Buat sertifikat yang ditandatangani sendiri
+Create new self-signed...	Buat baru yang ditandatangani sendiri...
+Create schedule...	Buat jadwal...
+Created	Dibuat
+Current password	Kata sandi saat ini
+Data folder	Folder data
+Datacenter	Datacenter
+Datastore	Datastore
+Date and time	Tanggal dan waktu
+Day of the month	Tanggal dalam bulan
+Default local folder	Folder lokal default
+Delete	Hapus
+Delete backup	Hapus cadangan
+Delete server "{0}"? Backups already made stay where they are.	Hapus server "{0}"? Cadangan yang sudah dibuat tetap berada di tempatnya.
+Delete task "{0}"?	Hapus tugas "{0}"?
+Delete the backup "{0}"?	Hapus cadangan "{0}"?
+Delete user "{0}"?	Hapus pengguna "{0}"?
+Details	Detail
+Disable two-factor	Nonaktifkan dua faktor
+Disable two-factor authentication of "{0}"?	Nonaktifkan autentikasi dua faktor untuk "{0}"?
+Disabled	Nonaktif
+Discard the unfinished backup "{0}"? What was already copied is deleted.	Buang cadangan "{0}" yang belum selesai? Yang sudah disalin akan dihapus.
+Domain user name or user@domain; empty = the account of the service	Nama pengguna domain atau pengguna@domain; kosong = akun layanan
+Down	Turun
+Drive	Drive
+Drive {0} is not a network drive that the service can see. Enter the UNC path of the share or choose "Network drive...".	Drive {0} bukan drive jaringan yang dapat dilihat layanan. Masukkan jalur UNC share atau pilih "Drive jaringan...".
+Duration	Durasi
+ESXi host or vCenter	Host ESXi atau vCenter
+Edit	Edit
+Edit Server	Edit server
+Edit user	Edit pengguna
+Elements	Elemen
+Enable scheduler	Aktifkan penjadwal
+Enable this only behind a reverse proxy that you control and that sets X-Forwarded-For itself; otherwise anybody can fake the address that is shown in the audit log and used for the login limits.	Aktifkan ini hanya di belakang reverse proxy yang Anda kendalikan dan yang mengatur X-Forwarded-For sendiri; jika tidak, siapa pun dapat memalsukan alamat yang ditampilkan di log audit dan dipakai untuk batas login.
+Enabled	Aktif
+Encrypt the backup (AES-256)	Enkripsi cadangan (AES-256)
+Encrypted	Terenkripsi
+Enter a name for the new virtual machine.	Masukkan nama untuk mesin virtual baru.
+Enter a password, a private key file or the private key text.	Masukkan kata sandi, berkas kunci privat, atau teks kunci privat.
+Enter a whole number in every numeric field.	Masukkan bilangan bulat di setiap kolom angka.
+Enter the address of the server.	Masukkan alamat server.
+Enter the code from your authenticator app, or a recovery code.	Masukkan kode dari aplikasi autentikator Anda, atau kode pemulihan.
+Enter the destination folder.	Masukkan folder tujuan.
+Enter the interval (a number of 1 or more).	Masukkan interval (angka 1 atau lebih).
+Enter the password for the encryption.	Masukkan kata sandi untuk enkripsi.
+Enter the user name.	Masukkan nama pengguna.
+Every N minutes / hours / days	Setiap N menit / jam / hari
+Every N months	Setiap N bulan
+Every N weeks	Setiap N minggu
+Every volume is read back from the target: its size and SHA-256 are compared with the ones recorded while it was written, and the data is decrypted and decompressed to prove that the backup can be restored.	Setiap volume dibaca kembali dari target: ukuran dan SHA-256-nya dibandingkan dengan yang dicatat saat penulisan, dan data didekripsi serta didekompresi untuk membuktikan bahwa cadangan dapat dipulihkan.
+FTP	FTP
+FTP over explicit TLS (FTPES)	FTP melalui TLS eksplisit (FTPES)
+FTP over implicit TLS (FTPS)	FTP melalui TLS implisit (FTPS)
+Failed	Gagal
+Fast	Cepat
+Fastest	Tercepat
+File	Berkas
+Fingerprint	Sidik jari
+Finish	Selesai
+Finished	Selesai
+First start	Mulai pertama
+First wait before a reconnect, s	Tunggu pertama sebelum menyambung ulang, dtk
+Folder	Folder
+Folder on the server	Folder di server
+Folder with VMs	Folder berisi VM
+For several virtual machines the folder must contain the {VM} tag.	Untuk beberapa mesin virtual, folder harus memuat tag {VM}.
+Fri	Jum
+From	Dari
+General	Umum
+Give the server a name.	Beri nama pada server.
+Give the task a title.	Beri judul pada tugas.
+Go	Buka
+HTML report...	Laporan HTML...
+History entries kept	Entri riwayat yang disimpan
+Host	Host
+Host key	Kunci host
+Imported	Diimpor
+Include the memory of the virtual machine in the snapshot	Sertakan memori mesin virtual dalam snapshot
+Job "{0}" finished: {1}	Tugas "{0}" selesai: {1}
+Keep last backups	Simpan cadangan terakhir
+Keep the computer awake while the scheduler is on	Jaga komputer tetap aktif saat penjadwal menyala
+Key passphrase	Frasa sandi kunci
+Kind	Jenis
+Language	Bahasa
+Last result	Hasil terakhir
+Last run	Terakhir dijalankan
+Leave empty to keep the password.	Biarkan kosong untuk mempertahankan kata sandi.
+Lines	Baris
+Link	Tautan
+Listening interfaces	Antarmuka yang mendengarkan
+Load	Muat
+Loading...	Memuat...
+Loading... {0} s	Memuat... {0} dtk
+Local Computer	Komputer Lokal
+Local Computer cannot be changed.	Komputer Lokal tidak dapat diubah.
+Local Computer cannot be deleted.	Komputer Lokal tidak dapat dihapus.
+Longest wait before a reconnect, s	Tunggu terlama sebelum menyambung ulang, dtk
+Machine file	Berkas mesin
+Maximum	Maksimum
+Message	Pesan
+Minimum TLS version	Versi TLS minimum
+Mon	Sen
+Monthly	Bulanan
+Name	Nama
+Names	Nama
+Needs about {0} GiB of memory per CPU core.	Membutuhkan sekitar {0} GiB memori per inti CPU.
+Network	Jaringan
+Network drive	Drive jaringan
+Network drive...	Drive jaringan...
+Network folder	Folder jaringan
+Network folder (SMB)	Folder jaringan (SMB)
+Network path	Jalur jaringan
+Never	Tidak pernah
+New VM name	Nama VM baru
+New password	Kata sandi baru
+Next	Berikutnya
+Next run	Eksekusi berikutnya
+Next run: {0}	Eksekusi berikutnya: {0}
+No	Tidak
+No computers were found. Type a server name below.	Tidak ada komputer yang ditemukan. Ketik nama server di bawah.
+No elements yet. Add a backup element.	Belum ada elemen. Tambahkan elemen cadangan.
+No mapped network drives were found.	Tidak ada drive jaringan yang dipetakan.
+No users are configured. On the server, run VM2BackupService.exe /reset-web as an administrator.	Tidak ada pengguna yang dikonfigurasi. Di server, jalankan VM2BackupService.exe /reset-web sebagai administrator.
+No virtual machines found.	Mesin virtual tidak ditemukan.
+Not scheduled	Tidak dijadwalkan
+Not scheduled (run manually)	Tidak dijadwalkan (jalankan manual)
+Nothing here yet.	Belum ada apa pun di sini.
+Nothing here.	Tidak ada apa pun di sini.
+OK	OK
+On error, go on with the next VM	Jika terjadi kesalahan, lanjutkan ke VM berikutnya
+Once	Sekali
+One volume (no resuming)	Satu volume (tanpa melanjutkan)
+Only for a network folder that asks for a user name	Hanya untuk folder jaringan yang meminta nama pengguna
+Open	Buka
+Owner	Pemilik
+Parallel jobs	Tugas paralel
+Parallel jobs: 1 to 16.	Tugas paralel: 1 sampai 16.
+Passive mode	Mode pasif
+Password	Kata sandi
+Password changed. Sign in again.	Kata sandi diubah. Masuk lagi.
+Password of the file	Kata sandi berkas
+Paste the key instead of a file; it is stored protected and never shown again	Tempel kunci sebagai ganti berkas; disimpan terlindungi dan tidak pernah ditampilkan lagi
+Paused	Dijeda
+Pinned fingerprint	Sidik jari yang disematkan
+Port	Port
+Power on after restore	Nyalakan setelah pemulihan
+Press Load to read the datacenters, datastores, folders and resource pools of the server.	Tekan Muat untuk membaca datacenter, datastore, folder, dan resource pool dari server.
+Private key file	Berkas kunci privat
+Private key text	Teks kunci privat
+Quiesce the guest file system (needs VMware Tools in the VM)	Quiesce sistem berkas guest (memerlukan VMware Tools di VM)
+Recovery code	Kode pemulihan
+Recovery codes	Kode pemulihan
+Recovery codes left	Sisa kode pemulihan
+Refresh	Segarkan
+Remove	Hapus
+Remove window	Hapus jendela
+Repeat	Ulangi
+Repeat every	Ulangi setiap
+Report	Laporan
+Require two-factor authentication for administrators	Wajibkan autentikasi dua faktor untuk administrator
+Resource pool	Resource pool
+Restore	Pulihkan
+Restore started.	Pemulihan dimulai.
+Restore to	Pulihkan ke
+Restore to folder	Pulihkan ke folder
+Restore...	Pulihkan...
+Restored as	Dipulihkan sebagai
+Restoring "{0}" of {1}.	Memulihkan "{0}" dari {1}.
+Result	Hasil
+Resumable transfer	Transfer yang dapat dilanjutkan
+Retries after a lost connection	Percobaan ulang setelah koneksi terputus
+Role	Peran
+Run now	Jalankan sekarang
+Running	Berjalan
+Running jobs	Tugas yang berjalan
+SCP (SSH)	SCP (SSH)
+SFTP (no longer supported)	SFTP (tidak lagi didukung)
+Sat	Sab
+Saved.	Disimpan.
+Scan the code with an authenticator app (or type the secret), then enter the 6-digit code it shows.	Pindai kode dengan aplikasi autentikator (atau ketik rahasianya), lalu masukkan kode 6 digit yang ditampilkan.
+Schedule	Jadwal
+Scheduled Task Details	Detail tugas terjadwal
+Scheduled Tasks	Tugas terjadwal
+Scheduler	Penjadwal
+Secret	Rahasia
+Security	Keamanan
+Select	Pilih
+Select a drive first.	Pilih drive terlebih dahulu.
+Select a row first.	Pilih baris terlebih dahulu.
+Self-signed	Ditandatangani sendiri
+Server	Server
+Server name	Nama server
+Session idle timeout, minutes	Batas waktu sesi menganggur, menit
+Set up two-factor authentication	Siapkan autentikasi dua faktor
+Set up two-factor...	Siapkan dua faktor...
+Settings	Pengaturan
+Show	Tampilkan
+Sign in	Masuk
+Sign out	Keluar
+Sign-in failed.	Gagal masuk.
+Size	Ukuran
+Snapshot	Snapshot
+Source	Sumber
+Source server	Server sumber
+Speed	Kecepatan
+Speed limit, Mbit/s (0 = unlimited)	Batas kecepatan, Mbit/s (0 = tanpa batas)
+Start	Mulai
+Start time	Waktu mulai
+Started	Dimulai
+State	Kondisi
+Status	Status
+Stop	Hentikan
+Stopped.	Dihentikan.
+Stored	Tersimpan
+Strong	Kuat
+Subject	Subjek
+Success	Berhasil
+Sun	Min
+Switch the scheduler off	Matikan penjadwal
+Switch the scheduler on	Nyalakan penjadwal
+TLS 1.0 (weak)	TLS 1.0 (lemah)
+TLS 1.0 and 1.1 are weak. Use them only for old hosts (ESXi 6.0 / 6.5) that offer nothing newer.	TLS 1.0 dan 1.1 lemah. Gunakan hanya untuk host lama (ESXi 6.0 / 6.5) yang tidak menawarkan versi lebih baru.
+TLS 1.1 (weak)	TLS 1.1 (lemah)
+Target	Target
+Target server	Server target
+Task	Tugas
+Task History	Riwayat tugas
+Task started.	Tugas dimulai.
+Test connection	Uji koneksi
+Testing...	Menguji...
+The QR code is not available.	Kode QR tidak tersedia.
+The certificate always includes this computer name, localhost, 127.0.0.1 and ::1. Add the DNS names and IP addresses under which the site is reached, one per line.	Sertifikat selalu menyertakan nama komputer ini, localhost, 127.0.0.1, dan ::1. Tambahkan nama DNS dan alamat IP yang dipakai untuk mengakses situs, satu per baris.
+The certificate was installed.	Sertifikat telah dipasang.
+The connection is tested now. "Test connection" tests again; "Finish" saves the server.	Koneksi sedang diuji. "Uji koneksi" menguji lagi; "Selesai" menyimpan server.
+The connection test failed or has not finished. Save the server anyway?	Uji koneksi gagal atau belum selesai. Tetap simpan server?
+The connection works.	Koneksi berfungsi.
+The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	Datastore "{0}" memiliki {1} ruang kosong, cadangan berisi hingga {2}. Tetap pulihkan?
+The figures are approximate (typical data). More CPU cores make compression faster.	Angka-angka ini perkiraan (data umum). Lebih banyak inti CPU membuat kompresi lebih cepat.
+The file is larger than 1 MB.	Berkas lebih besar dari 1 MB.
+The list is cut: only the first entries are shown.	Daftar dipotong: hanya entri pertama yang ditampilkan.
+The longest wait cannot be shorter than the first one.	Tunggu terlama tidak boleh lebih singkat dari yang pertama.
+The name of the virtual machine must be at most 80 characters and cannot contain slashes or %.	Nama mesin virtual maksimal 80 karakter dan tidak boleh memuat garis miring atau %.
+The password is too simple.	Kata sandi terlalu sederhana.
+The password must be at least 10 characters long.	Kata sandi harus terdiri dari minimal 10 karakter.
+The password must not contain the user name.	Kata sandi tidak boleh memuat nama pengguna.
+The passwords differ.	Kata sandi tidak cocok.
+The port must be 1..65535.	Port harus 1..65535.
+The schedule windows of a task can set another limit for its hours; the lowest one applies.	Jendela jadwal suatu tugas dapat menetapkan batas lain untuk jamnya; yang terendah berlaku.
+The scheduler is off: scheduled tasks do not start by themselves.	Penjadwal mati: tugas terjadwal tidak dimulai dengan sendirinya.
+The server did not answer in time; try again.	Server tidak menjawab tepat waktu; coba lagi.
+The server or share was not found.	Server atau share tidak ditemukan.
+The server presented an identity that is not known yet: {0}. If you recognise it, you can trust it.	Server menyajikan identitas yang belum dikenal: {0}. Jika Anda mengenalinya, Anda dapat mempercayainya.
+The service cannot see drive letters. Enter the UNC path of the share.	Layanan tidak melihat huruf drive. Masukkan jalur UNC share.
+The service cannot see drive letters. {0} is the network drive {1}: its UNC path is stored instead. Enter the user name and password that give access to it.	Layanan tidak melihat huruf drive. {0} adalah drive jaringan {1}: jalur UNC-nya disimpan sebagai gantinya. Masukkan nama pengguna dan kata sandi yang memberi akses ke sana.
+The site always stays reachable on this computer (localhost): that is how a mistake here can be repaired.	Situs selalu tetap dapat diakses di komputer ini (localhost): dengan begitu kesalahan di sini dapat diperbaiki.
+The site is moving to port {0}. Open {1} and sign in again.	Situs pindah ke port {0}. Buka {1} dan masuk lagi.
+The snapshot settings apply to ESXi and vCenter sources only.	Pengaturan snapshot hanya berlaku untuk sumber ESXi dan vCenter.
+The speed limit cannot be negative.	Batas kecepatan tidak boleh negatif.
+The task may run only inside its windows. A window that ends before it starts goes over midnight.	Tugas hanya boleh berjalan di dalam jendelanya. Jendela yang berakhir sebelum dimulai melewati tengah malam.
+The task was copied.	Tugas telah disalin.
+The volume size cannot be negative.	Ukuran volume tidak boleh negatif.
+The waits must be between 1 and 86400 seconds.	Waktu tunggu harus antara 1 dan 86400 detik.
+There is no ESXi or vCenter server yet. Add one on the Datacenter page first.	Belum ada server ESXi atau vCenter. Tambahkan satu terlebih dahulu di halaman Datacenter.
+This backup is encrypted: enter its password.	Cadangan ini terenkripsi: masukkan kata sandinya.
+This browser cannot read files.	Browser ini tidak dapat membaca berkas.
+This browser cannot save files.	Browser ini tidak dapat menyimpan berkas.
+This computer	Komputer ini
+This computer only (localhost)	Hanya komputer ini (localhost)
+This is an unfinished backup.	Ini adalah cadangan yang belum selesai.
+This server holds backups, not virtual machines.	Server ini menyimpan cadangan, bukan mesin virtual.
+Thu	Kam
+Time windows	Jendela waktu
+Title	Judul
+To	Sampai
+Transfer: SSH encrypted	Transfer: dienkripsi SSH
+Transfer: TLS encrypted (FTP over TLS)	Transfer: dienkripsi TLS (FTP melalui TLS)
+Transfer: local / network folder	Transfer: folder lokal / jaringan
+Transfer: network folder (SMB; not encrypted unless the share requires it)	Transfer: folder jaringan (SMB; tidak terenkripsi kecuali share mewajibkannya)
+Transfer: plain FTP (not encrypted - enable encryption of the backup!)	Transfer: FTP biasa (tidak terenkripsi - aktifkan enkripsi cadangan!)
+Trigger	Pemicu
+Trust X-Forwarded-For from a reverse proxy on this computer	Percayai X-Forwarded-For dari reverse proxy di komputer ini
+Trust this identity and test again	Percayai identitas ini dan uji lagi
+Tue	Sel
+Two-factor	Dua faktor
+Type	Jenis
+Unfinished (resumable)	Belum selesai (dapat dilanjutkan)
+Unit	Satuan
+Up	Naik
+Upload	Unggah
+Upload PFX...	Unggah PFX...
+Upload a certificate (PFX)	Unggah sertifikat (PFX)
+Use	Gunakan
+Use a recovery code	Gunakan kode pemulihan
+Use the authenticator code	Gunakan kode autentikator
+Use {VM} for the VM name	Gunakan {VM} untuk nama VM
+User	Pengguna
+User name	Nama pengguna
+Users	Pengguna
+VM folder	Folder VM
+VM folder (VMware Workstation / Player)	Folder VM (VMware Workstation / Player)
+VMware ESXi host	Host VMware ESXi
+VMware vCenter	VMware vCenter
+Valid from	Berlaku dari
+Valid until	Berlaku sampai
+Verification started.	Verifikasi dimulai.
+Verify	Verifikasi
+Verify Backup	Verifikasi cadangan
+Verify the backup after it is made	Verifikasi cadangan setelah dibuat
+Verify the certificate	Verifikasi sertifikat
+Version	Versi
+Virtual Machine Backup	Cadangan mesin virtual
+Virtual machine	Mesin virtual
+Virtual machines	Mesin virtual
+Virtual machines...	Mesin virtual...
+Volume size	Ukuran volume
+Volume size, MiB (0 = one volume)	Ukuran volume, MiB (0 = satu volume)
+Volumes	Volume
+Wait until the choices of the server are loaded.	Tunggu hingga pilihan server selesai dimuat.
+Waiting	Menunggu
+Warning	Peringatan
+Warning: the password is stored encrypted and is not retrievable. Be sure to remember it or write it down in a safe place in order to be able to decrypt the backup.	Peringatan: kata sandi disimpan terenkripsi dan tidak dapat diambil kembali. Pastikan Anda mengingatnya atau menuliskannya di tempat aman agar dapat mendekripsi cadangan.
+Web access	Akses web
+Wed	Rab
+Weekly	Mingguan
+Windows maps drives per user. The service sees only the drives mapped for users who are logged on and its own. The drive letter itself cannot be used by the service: its UNC path is stored, and the credentials must be entered.	Windows memetakan drive per pengguna. Layanan hanya melihat drive yang dipetakan untuk pengguna yang sedang masuk dan miliknya sendiri. Huruf drive itu sendiri tidak dapat dipakai layanan: jalur UNC-nya disimpan, dan kredensial harus dimasukkan.
+Write these one-time codes down now: they are shown only once.	Catat kode sekali pakai ini sekarang: kode ini hanya ditampilkan sekali.
+Yes	Ya
+Your session has ended. Sign in again.	Sesi Anda telah berakhir. Masuk lagi.
+admin	admin
+backup	cadangan
+cdrom	cdrom
+days	hari
+down	mati
+encrypted	terenkripsi
+every month	setiap bulan
+every week	setiap minggu
+every {0} months	setiap {0} bulan
+every {0} weeks	setiap {0} minggu
+every {0} {1}	setiap {0} {1}
+fixed	tetap
+folder	folder
+from {0}	dari {0}
+hours	jam
+last	terakhir
+limit {0} Mbit/s	batas {0} Mbit/s
+listening	mendengarkan
+manual	manual
+minutes	menit
+network	jaringan
+not confirmed	belum dikonfirmasi
+not listening	tidak mendengarkan
+off	mati
+on	menyala
+on day {0} at {1}	pada tanggal {0} pukul {1}
+on {0} at {1}	pada {0} pukul {1}
+once at {0}	sekali pada {0}
+operator	operator
+optional	opsional
+optional: the datacenter used when a backup does not name one	opsional: datacenter yang dipakai jika cadangan tidak menyebutkannya
+other	lainnya
+read	baca
+removable	removable
+required	wajib
+restore	pemulihan
+restore_esxi	pemulihan ke ESXi
+running {0}	{0} berjalan
+scheduled	terjadwal
+server	server
+sha256:... (optional)	sha256:... (opsional)
+share	share
+stored	tersimpan
+task	tugas
+the service	layanan
+transferred	ditransfer
+vCenter only; empty = the one of the server	khusus vCenter; kosong = milik server
+verify	verifikasi
+viewer	penampil
+{0} datastore(s), {1} folder(s), {2} resource pool(s) found.	Ditemukan {0} datastore, {1} folder, {2} resource pool.
+{0} free of {1}	{0} kosong dari {1}
+{0} virtual machine(s)	{0} mesin virtual
+{0} volume(s)	{0} volume
+{0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: sekitar {1} MB/s per inti CPU; cadangan sekitar {2}% lebih besar daripada tingkat 5.
+{0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: sekitar {1} MB/s per inti CPU; cadangan sekitar {2}% lebih kecil daripada tingkat 5.
+{0}: about {1} MB/s per CPU core; the baseline size (levels 1-4 are larger, 6-9 smaller).	{0}: sekitar {1} MB/s per inti CPU; ukuran dasar (tingkat 1-4 lebih besar, 6-9 lebih kecil).

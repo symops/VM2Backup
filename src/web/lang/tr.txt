@@ -1,0 +1,470 @@
+# English text <TAB> translation (\n line break). Empty = show English. Run tools/webui_strings.py --update after changing src/web/app.js.
+(chosen by the server)	(sunucu seçer)
+(the default resource pool)	(varsayılan kaynak havuzu)
+(the root VM folder)	(kök VM klasörü)
+A PKCS#12 file (.pfx) with the certificate and its private key, 1 MB at most. Only the certificate itself is served, not the chain.	Sertifikayı ve özel anahtarını içeren bir PKCS#12 dosyası (.pfx), en çok 1 MB. Yalnızca sertifikanın kendisi sunulur, zincir sunulmaz.
+A mapped drive letter (Z:) cannot be used: the service does not see it. Choose "Network drive..." to use its UNC path, or enter the UNC path.	Eşlenmiş bir sürücü harfi (Z:) kullanılamaz: hizmet onu görmez. UNC yolunu kullanmak için "Ağ sürücüsü..." seçeneğini seçin veya UNC yolunu girin.
+A new certificate was created. Your browser will ask you to trust it again.	Yeni bir sertifika oluşturuldu. Tarayıcınız ona yeniden güvenmenizi isteyecek.
+A new user needs a password.	Yeni kullanıcı için parola gerekir.
+A path on the server computer	Sunucu bilgisayardaki bir yol
+A path on the server computer (the service reads it)	Sunucu bilgisayardaki bir yol (hizmet onu okur)
+A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	Çalışan bir ESXi / vCenter VM'si, sonradan silinen geçici bir anlık görüntüden kopyalanır. VMware Tools olmadan sessize alınmış anlık görüntü başarısız olur: bu tür VM'ler için sessize almayı kapatın.
+A virtual machine with this name already exists on the server. Enter another name; an existing machine is never overwritten.	Sunucuda bu adla bir sanal makine zaten var. Başka bir ad girin; mevcut makinenin üzerine asla yazılmaz.
+Abort	İptal et
+Add Scheduled Task	Zamanlanmış görev ekle
+Add Server	Sunucu ekle
+Add address	Adres ekle
+Add at least one backup element.	En az bir yedekleme öğesi ekleyin.
+Add element...	Öğe ekle...
+Add user	Kullanıcı ekle
+Add user...	Kullanıcı ekle...
+Add window	Pencere ekle
+Additional names	Ek adlar
+Address	Adres
+Advanced	Gelişmiş
+After a lost connection the program reconnects and goes on; nothing finished is sent again.	Bağlantı koptuktan sonra program yeniden bağlanır ve devam eder; tamamlanan hiçbir şey yeniden gönderilmez.
+All	Tümü
+All interfaces	Tüm arayüzler
+All results	Tüm sonuçlar
+Allow a copy of a running VM (the copy is consistent only at the crash level)	Çalışan bir VM'nin kopyalanmasına izin ver (kopya yalnızca çökme düzeyinde tutarlıdır)
+An administrator needs two-factor authentication when it is required in the security settings.	Güvenlik ayarlarında gerekli kılındığında yöneticinin iki aşamalı kimlik doğrulamaya ihtiyacı vardır.
+Apply	Uygula
+Archive	Arşiv
+As in the backup (every file back to its original datastore)	Yedekteki gibi (her dosya özgün veri deposuna)
+At least 10 characters	En az 10 karakter
+At least 10 characters, not containing the user name.	En az 10 karakter, kullanıcı adını içermemeli.
+Audit log	Denetim günlüğü
+Auto	Otomatik
+Back	Geri
+Backup Explorer	Yedek Gezgini
+Backup of {0}	{0} yedeği
+Backup started.	Yedekleme başlatıldı.
+Backup virtual machines...	Sanal makineleri yedekle...
+Balanced (default)	Dengeli (varsayılan)
+Browse network	Ağa göz at
+Browse network...	Ağa göz at...
+Browse...	Gözat...
+Cancel	İptal
+Cannot reach the server.	Sunucuya ulaşılamıyor.
+Cannot read: 	Okunamıyor: 
+Certificate	Sertifika
+Change	Değiştir
+Change password	Parolayı değiştir
+Change settings...	Ayarları değiştir...
+Check the user name and password in the form.	Formdaki kullanıcı adını ve parolayı kontrol edin.
+Choose a file	Bir dosya seçin
+Choose a file.	Bir dosya seçin.
+Choose a folder	Bir klasör seçin
+Choose a folder.	Bir klasör seçin.
+Choose a server with virtual machines.	Sanal makineleri olan bir sunucu seçin.
+Choose a share or a folder.	Bir paylaşım veya klasör seçin.
+Choose a source server.	Bir kaynak sunucu seçin.
+Choose at least one day in every time window.	Her zaman penceresinde en az bir gün seçin.
+Choose at least one day of the week.	Haftanın en az bir gününü seçin.
+Choose at least one virtual machine.	En az bir sanal makine seçin.
+Choose the ESXi or vCenter server to restore to.	Geri yüklenecek ESXi veya vCenter sunucusunu seçin.
+Choose the datacenter.	Veri merkezini seçin.
+Choose the datastore.	Veri deposunu seçin.
+Choose the date and time.	Tarih ve saati seçin.
+Choose the file.	Dosyayı seçin.
+Choose the first start time.	İlk başlangıç zamanını seçin.
+Choose the kind of server to add.	Eklenecek sunucu türünü seçin.
+Choose the start time.	Başlangıç zamanını seçin.
+Clear history	Geçmişi temizle
+Clear the whole history?	Tüm geçmiş temizlensin mi?
+Close	Kapat
+Code	Kod
+Comment	Açıklama
+Complete	Tamamlandı
+Compression	Sıkıştırma
+Compression level	Sıkıştırma düzeyi
+Compression threads	Sıkıştırma iş parçacıkları
+Confirm	Onayla
+Connection	Bağlantı
+Continue an interrupted backup of this VM when there is one	Varsa bu VM'nin yarıda kalan yedeklemesini sürdür
+Copy	Kopyala
+Create	Oluştur
+Create a self-signed certificate	Otomatik imzalı sertifika oluştur
+Create new self-signed...	Yeni otomatik imzalı oluştur...
+Create schedule...	Zamanlama oluştur...
+Created	Oluşturuldu
+Current password	Geçerli parola
+Data folder	Veri klasörü
+Datacenter	Veri merkezi
+Datastore	Veri deposu
+Date and time	Tarih ve saat
+Day of the month	Ayın günü
+Default local folder	Varsayılan yerel klasör
+Delete	Sil
+Delete backup	Yedeği sil
+Delete server "{0}"? Backups already made stay where they are.	"{0}" sunucusu silinsin mi? Önceden alınmış yedekler bulundukları yerde kalır.
+Delete task "{0}"?	"{0}" görevi silinsin mi?
+Delete the backup "{0}"?	"{0}" yedeği silinsin mi?
+Delete user "{0}"?	"{0}" kullanıcısı silinsin mi?
+Details	Ayrıntılar
+Disable two-factor	İki aşamalıyı kapat
+Disable two-factor authentication of "{0}"?	"{0}" için iki aşamalı kimlik doğrulama kapatılsın mı?
+Disabled	Devre dışı
+Discard the unfinished backup "{0}"? What was already copied is deleted.	Tamamlanmamış "{0}" yedeği atılsın mı? Şimdiye kadar kopyalananlar silinir.
+Domain user name or user@domain; empty = the account of the service	Etki alanı kullanıcı adı veya kullanıcı@etkialanı; boş = hizmetin hesabı
+Down	Aşağı
+Drive	Sürücü
+Drive {0} is not a network drive that the service can see. Enter the UNC path of the share or choose "Network drive...".	{0} sürücüsü hizmetin görebildiği bir ağ sürücüsü değil. Paylaşımın UNC yolunu girin veya "Ağ sürücüsü..." seçeneğini seçin.
+Duration	Süre
+ESXi host or vCenter	ESXi ana bilgisayarı veya vCenter
+Edit	Düzenle
+Edit Server	Sunucuyu düzenle
+Edit user	Kullanıcıyı düzenle
+Elements	Öğeler
+Enable scheduler	Zamanlayıcıyı etkinleştir
+Enable this only behind a reverse proxy that you control and that sets X-Forwarded-For itself; otherwise anybody can fake the address that is shown in the audit log and used for the login limits.	Bunu yalnızca kontrol ettiğiniz ve X-Forwarded-For değerini kendisi ayarlayan bir ters proxy arkasında etkinleştirin; aksi halde herkes denetim günlüğünde gösterilen ve oturum açma sınırlarında kullanılan adresi taklit edebilir.
+Enabled	Etkin
+Encrypt the backup (AES-256)	Yedeği şifrele (AES-256)
+Encrypted	Şifreli
+Enter a name for the new virtual machine.	Yeni sanal makine için bir ad girin.
+Enter a password, a private key file or the private key text.	Bir parola, özel anahtar dosyası veya özel anahtar metni girin.
+Enter a whole number in every numeric field.	Her sayısal alana bir tam sayı girin.
+Enter the address of the server.	Sunucunun adresini girin.
+Enter the code from your authenticator app, or a recovery code.	Kimlik doğrulayıcı uygulamanızdaki kodu veya bir kurtarma kodunu girin.
+Enter the destination folder.	Hedef klasörü girin.
+Enter the interval (a number of 1 or more).	Aralığı girin (1 veya daha büyük bir sayı).
+Enter the password for the encryption.	Şifreleme parolasını girin.
+Enter the user name.	Kullanıcı adını girin.
+Every N minutes / hours / days	Her N dakikada / saatte / günde
+Every N months	Her N ayda
+Every N weeks	Her N haftada
+Every volume is read back from the target: its size and SHA-256 are compared with the ones recorded while it was written, and the data is decrypted and decompressed to prove that the backup can be restored.	Her birim hedeften geri okunur: boyutu ve SHA-256 değeri yazılırken kaydedilenlerle karşılaştırılır; yedeğin geri yüklenebildiğini kanıtlamak için veriler şifresi çözülür ve açılır.
+FTP	FTP
+FTP over explicit TLS (FTPES)	Açık TLS üzerinden FTP (FTPES)
+FTP over implicit TLS (FTPS)	Örtük TLS üzerinden FTP (FTPS)
+Failed	Başarısız
+Fast	Hızlı
+Fastest	En hızlı
+File	Dosya
+Fingerprint	Parmak izi
+Finish	Bitir
+Finished	Bitti
+First start	İlk başlangıç
+First wait before a reconnect, s	Yeniden bağlanmadan önceki ilk bekleme, sn
+Folder	Klasör
+Folder on the server	Sunucudaki klasör
+Folder with VMs	VM'lerin bulunduğu klasör
+For several virtual machines the folder must contain the {VM} tag.	Birden çok sanal makine için klasör {VM} etiketini içermelidir.
+Fri	Cum
+From	Başlangıç
+General	Genel
+Give the server a name.	Sunucuya bir ad verin.
+Give the task a title.	Göreve bir başlık verin.
+Go	Git
+HTML report...	HTML raporu...
+History entries kept	Saklanan geçmiş girdileri
+Host	Ana bilgisayar
+Host key	Ana bilgisayar anahtarı
+Imported	İçe aktarıldı
+Include the memory of the virtual machine in the snapshot	Sanal makinenin belleğini anlık görüntüye dahil et
+Job "{0}" finished: {1}	"{0}" işi bitti: {1}
+Keep last backups	Son yedekleri sakla
+Keep the computer awake while the scheduler is on	Zamanlayıcı açıkken bilgisayarı uyanık tut
+Key passphrase	Anahtar parolası
+Kind	Tür
+Language	Dil
+Last result	Son sonuç
+Last run	Son çalışma
+Leave empty to keep the password.	Parolayı korumak için boş bırakın.
+Lines	Satır
+Link	Bağlantı
+Listening interfaces	Dinleyen arayüzler
+Load	Yükle
+Loading...	Yükleniyor...
+Loading... {0} s	Yükleniyor... {0} sn
+Local Computer	Yerel Bilgisayar
+Local Computer cannot be changed.	Yerel Bilgisayar değiştirilemez.
+Local Computer cannot be deleted.	Yerel Bilgisayar silinemez.
+Longest wait before a reconnect, s	Yeniden bağlanmadan önceki en uzun bekleme, sn
+Machine file	Makine dosyası
+Maximum	Maksimum
+Message	İleti
+Minimum TLS version	En düşük TLS sürümü
+Mon	Pzt
+Monthly	Aylık
+Name	Ad
+Names	Adlar
+Needs about {0} GiB of memory per CPU core.	CPU çekirdeği başına yaklaşık {0} GiB bellek gerekir.
+Network	Ağ
+Network drive	Ağ sürücüsü
+Network drive...	Ağ sürücüsü...
+Network folder	Ağ klasörü
+Network folder (SMB)	Ağ klasörü (SMB)
+Network path	Ağ yolu
+Never	Hiçbir zaman
+New VM name	Yeni VM adı
+New password	Yeni parola
+Next	İleri
+Next run	Sonraki çalışma
+Next run: {0}	Sonraki çalışma: {0}
+No	Hayır
+No computers were found. Type a server name below.	Bilgisayar bulunamadı. Aşağıya bir sunucu adı yazın.
+No elements yet. Add a backup element.	Henüz öğe yok. Bir yedekleme öğesi ekleyin.
+No mapped network drives were found.	Eşlenmiş ağ sürücüsü bulunamadı.
+No users are configured. On the server, run VM2BackupService.exe /reset-web as an administrator.	Yapılandırılmış kullanıcı yok. Sunucuda VM2BackupService.exe /reset-web komutunu yönetici olarak çalıştırın.
+No virtual machines found.	Sanal makine bulunamadı.
+Not scheduled	Zamanlanmadı
+Not scheduled (run manually)	Zamanlanmadı (elle çalıştırın)
+Nothing here yet.	Burada henüz bir şey yok.
+Nothing here.	Burada hiçbir şey yok.
+OK	Tamam
+On error, go on with the next VM	Hata olursa sonraki VM ile devam et
+Once	Bir kez
+One volume (no resuming)	Tek birim (devam ettirme yok)
+Only for a network folder that asks for a user name	Yalnızca kullanıcı adı isteyen bir ağ klasörü için
+Open	Aç
+Owner	Sahip
+Parallel jobs	Paralel işler
+Parallel jobs: 1 to 16.	Paralel işler: 1 ile 16 arası.
+Passive mode	Pasif mod
+Password	Parola
+Password changed. Sign in again.	Parola değiştirildi. Yeniden oturum açın.
+Password of the file	Dosyanın parolası
+Paste the key instead of a file; it is stored protected and never shown again	Dosya yerine anahtarı yapıştırın; korumalı olarak saklanır ve bir daha gösterilmez
+Paused	Duraklatıldı
+Pinned fingerprint	Sabitlenmiş parmak izi
+Port	Bağlantı noktası
+Power on after restore	Geri yüklemeden sonra aç
+Press Load to read the datacenters, datastores, folders and resource pools of the server.	Sunucunun veri merkezlerini, veri depolarını, klasörlerini ve kaynak havuzlarını okumak için Yükle'ye basın.
+Private key file	Özel anahtar dosyası
+Private key text	Özel anahtar metni
+Quiesce the guest file system (needs VMware Tools in the VM)	Konuk dosya sistemini sessize al (VM'de VMware Tools gerekir)
+Recovery code	Kurtarma kodu
+Recovery codes	Kurtarma kodları
+Recovery codes left	Kalan kurtarma kodları
+Refresh	Yenile
+Remove	Kaldır
+Remove window	Pencereyi kaldır
+Repeat	Tekrarla
+Repeat every	Şu aralıkla tekrarla
+Report	Rapor
+Require two-factor authentication for administrators	Yöneticiler için iki aşamalı kimlik doğrulamayı zorunlu kıl
+Resource pool	Kaynak havuzu
+Restore	Geri yükle
+Restore started.	Geri yükleme başlatıldı.
+Restore to	Geri yükleme hedefi
+Restore to folder	Klasöre geri yükle
+Restore...	Geri yükle...
+Restored as	Şu adla geri yüklendi
+Restoring "{0}" of {1}.	{1} içinden "{0}" geri yükleniyor.
+Result	Sonuç
+Resumable transfer	Devam ettirilebilir aktarım
+Retries after a lost connection	Bağlantı koptuktan sonra yeniden denemeler
+Role	Rol
+Run now	Şimdi çalıştır
+Running	Çalışıyor
+Running jobs	Çalışan işler
+SCP (SSH)	SCP (SSH)
+SFTP (no longer supported)	SFTP (artık desteklenmiyor)
+Sat	Cmt
+Saved.	Kaydedildi.
+Scan the code with an authenticator app (or type the secret), then enter the 6-digit code it shows.	Kodu bir kimlik doğrulayıcı uygulamayla tarayın (veya gizli anahtarı yazın), ardından gösterilen 6 haneli kodu girin.
+Schedule	Zamanlama
+Scheduled Task Details	Zamanlanmış görev ayrıntıları
+Scheduled Tasks	Zamanlanmış görevler
+Scheduler	Zamanlayıcı
+Secret	Gizli anahtar
+Security	Güvenlik
+Select	Seç
+Select a drive first.	Önce bir sürücü seçin.
+Select a row first.	Önce bir satır seçin.
+Self-signed	Otomatik imzalı
+Server	Sunucu
+Server name	Sunucu adı
+Session idle timeout, minutes	Oturum boşta kalma zaman aşımı, dakika
+Set up two-factor authentication	İki aşamalı kimlik doğrulamayı ayarla
+Set up two-factor...	İki aşamalıyı ayarla...
+Settings	Ayarlar
+Show	Göster
+Sign in	Oturum aç
+Sign out	Oturumu kapat
+Sign-in failed.	Oturum açılamadı.
+Size	Boyut
+Snapshot	Anlık görüntü
+Source	Kaynak
+Source server	Kaynak sunucu
+Speed	Hız
+Speed limit, Mbit/s (0 = unlimited)	Hız sınırı, Mbit/s (0 = sınırsız)
+Start	Başlat
+Start time	Başlangıç zamanı
+Started	Başladı
+State	Durum
+Status	Durum
+Stop	Durdur
+Stopped.	Durduruldu.
+Stored	Saklanan
+Strong	Güçlü
+Subject	Konu
+Success	Başarılı
+Sun	Paz
+Switch the scheduler off	Zamanlayıcıyı kapat
+Switch the scheduler on	Zamanlayıcıyı aç
+TLS 1.0 (weak)	TLS 1.0 (zayıf)
+TLS 1.0 and 1.1 are weak. Use them only for old hosts (ESXi 6.0 / 6.5) that offer nothing newer.	TLS 1.0 ve 1.1 zayıftır. Bunları yalnızca daha yenisini sunmayan eski ana bilgisayarlar (ESXi 6.0 / 6.5) için kullanın.
+TLS 1.1 (weak)	TLS 1.1 (zayıf)
+Target	Hedef
+Target server	Hedef sunucu
+Task	Görev
+Task History	Görev geçmişi
+Task started.	Görev başlatıldı.
+Test connection	Bağlantıyı sına
+Testing...	Sınanıyor...
+The QR code is not available.	QR kodu kullanılamıyor.
+The certificate always includes this computer name, localhost, 127.0.0.1 and ::1. Add the DNS names and IP addresses under which the site is reached, one per line.	Sertifika her zaman bu bilgisayarın adını, localhost, 127.0.0.1 ve ::1 değerlerini içerir. Sitenin eriştiği DNS adlarını ve IP adreslerini her satıra bir tane gelecek şekilde ekleyin.
+The certificate was installed.	Sertifika yüklendi.
+The connection is tested now. "Test connection" tests again; "Finish" saves the server.	Bağlantı şimdi sınanıyor. "Bağlantıyı sına" yeniden sınar; "Bitir" sunucuyu kaydeder.
+The connection test failed or has not finished. Save the server anyway?	Bağlantı sınaması başarısız oldu veya bitmedi. Sunucu yine de kaydedilsin mi?
+The connection works.	Bağlantı çalışıyor.
+The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	"{0}" veri deposunda {1} boş alan var, yedek en çok {2} içeriyor. Yine de geri yüklensin mi?
+The figures are approximate (typical data). More CPU cores make compression faster.	Rakamlar yaklaşıktır (tipik veriler). Daha fazla CPU çekirdeği sıkıştırmayı hızlandırır.
+The file is larger than 1 MB.	Dosya 1 MB'tan büyük.
+The list is cut: only the first entries are shown.	Liste kesildi: yalnızca ilk girdiler gösteriliyor.
+The longest wait cannot be shorter than the first one.	En uzun bekleme ilkinden kısa olamaz.
+The name of the virtual machine must be at most 80 characters and cannot contain slashes or %.	Sanal makinenin adı en çok 80 karakter olabilir; eğik çizgi veya '%' karakteri içeremez.
+The password is too simple.	Parola çok basit.
+The password must be at least 10 characters long.	Parola en az 10 karakter uzunluğunda olmalıdır.
+The password must not contain the user name.	Parola kullanıcı adını içermemelidir.
+The passwords differ.	Parolalar uyuşmuyor.
+The port must be 1..65535.	Bağlantı noktası 1..65535 olmalıdır.
+The schedule windows of a task can set another limit for its hours; the lowest one applies.	Bir görevin zamanlama pencereleri saatleri için başka bir sınır belirleyebilir; en düşük olan uygulanır.
+The scheduler is off: scheduled tasks do not start by themselves.	Zamanlayıcı kapalı: zamanlanmış görevler kendiliğinden başlamaz.
+The server did not answer in time; try again.	Sunucu zamanında yanıt vermedi; yeniden deneyin.
+The server or share was not found.	Sunucu veya paylaşım bulunamadı.
+The server presented an identity that is not known yet: {0}. If you recognise it, you can trust it.	Sunucu henüz bilinmeyen bir kimlik sundu: {0}. Tanıyorsanız ona güvenebilirsiniz.
+The service cannot see drive letters. Enter the UNC path of the share.	Hizmet sürücü harflerini görmez. Paylaşımın UNC yolunu girin.
+The service cannot see drive letters. {0} is the network drive {1}: its UNC path is stored instead. Enter the user name and password that give access to it.	Hizmet sürücü harflerini görmez. {0}, {1} ağ sürücüsüdür: bunun yerine UNC yolu saklanır. Ona erişim sağlayan kullanıcı adını ve parolayı girin.
+The site always stays reachable on this computer (localhost): that is how a mistake here can be repaired.	Site bu bilgisayarda (localhost) her zaman erişilebilir kalır: buradaki bir hata bu şekilde düzeltilebilir.
+The site is moving to port {0}. Open {1} and sign in again.	Site {0} numaralı bağlantı noktasına taşınıyor. {1} adresini açın ve yeniden oturum açın.
+The snapshot settings apply to ESXi and vCenter sources only.	Anlık görüntü ayarları yalnızca ESXi ve vCenter kaynakları için geçerlidir.
+The speed limit cannot be negative.	Hız sınırı negatif olamaz.
+The task may run only inside its windows. A window that ends before it starts goes over midnight.	Görev yalnızca pencereleri içinde çalışabilir. Başlangıçtan önce biten bir pencere gece yarısını aşar.
+The task was copied.	Görev kopyalandı.
+The volume size cannot be negative.	Birim boyutu negatif olamaz.
+The waits must be between 1 and 86400 seconds.	Bekleme süreleri 1 ile 86400 saniye arasında olmalıdır.
+There is no ESXi or vCenter server yet. Add one on the Datacenter page first.	Henüz ESXi veya vCenter sunucusu yok. Önce Veri merkezi sayfasında bir tane ekleyin.
+This backup is encrypted: enter its password.	Bu yedek şifrelidir: parolasını girin.
+This browser cannot read files.	Bu tarayıcı dosyaları okuyamıyor.
+This browser cannot save files.	Bu tarayıcı dosyaları kaydedemiyor.
+This computer	Bu bilgisayar
+This computer only (localhost)	Yalnızca bu bilgisayar (localhost)
+This is an unfinished backup.	Bu, tamamlanmamış bir yedektir.
+This server holds backups, not virtual machines.	Bu sunucu sanal makineleri değil, yedekleri tutar.
+Thu	Per
+Time windows	Zaman pencereleri
+Title	Başlık
+To	Bitiş
+Transfer: SSH encrypted	Aktarım: SSH ile şifreli
+Transfer: TLS encrypted (FTP over TLS)	Aktarım: TLS ile şifreli (TLS üzerinden FTP)
+Transfer: local / network folder	Aktarım: yerel / ağ klasörü
+Transfer: network folder (SMB; not encrypted unless the share requires it)	Aktarım: ağ klasörü (SMB; paylaşım gerektirmedikçe şifresiz)
+Transfer: plain FTP (not encrypted - enable encryption of the backup!)	Aktarım: düz FTP (şifresiz - yedeğin şifrelemesini etkinleştirin!)
+Trigger	Tetikleyici
+Trust X-Forwarded-For from a reverse proxy on this computer	Bu bilgisayardaki bir ters proxy'den gelen X-Forwarded-For değerine güven
+Trust this identity and test again	Bu kimliğe güven ve yeniden sına
+Tue	Sal
+Two-factor	İki aşamalı
+Type	Tür
+Unfinished (resumable)	Tamamlanmadı (devam ettirilebilir)
+Unit	Birim
+Up	Yukarı
+Upload	Yükle
+Upload PFX...	PFX yükle...
+Upload a certificate (PFX)	Sertifika yükle (PFX)
+Use	Kullan
+Use a recovery code	Kurtarma kodu kullan
+Use the authenticator code	Kimlik doğrulayıcı kodunu kullan
+Use {VM} for the VM name	VM adı için {VM} kullanın
+User	Kullanıcı
+User name	Kullanıcı adı
+Users	Kullanıcılar
+VM folder	VM klasörü
+VM folder (VMware Workstation / Player)	VM klasörü (VMware Workstation / Player)
+VMware ESXi host	VMware ESXi ana bilgisayarı
+VMware vCenter	VMware vCenter
+Valid from	Geçerlilik başlangıcı
+Valid until	Geçerlilik bitişi
+Verification started.	Doğrulama başlatıldı.
+Verify	Doğrula
+Verify Backup	Yedeği doğrula
+Verify the backup after it is made	Yedeği oluşturulduktan sonra doğrula
+Verify the certificate	Sertifikayı doğrula
+Version	Sürüm
+Virtual Machine Backup	Sanal makine yedekleme
+Virtual machine	Sanal makine
+Virtual machines	Sanal makineler
+Virtual machines...	Sanal makineler...
+Volume size	Birim boyutu
+Volume size, MiB (0 = one volume)	Birim boyutu, MiB (0 = tek birim)
+Volumes	Birimler
+Wait until the choices of the server are loaded.	Sunucunun seçenekleri yüklenene kadar bekleyin.
+Waiting	Bekliyor
+Warning	Uyarı
+Warning: the password is stored encrypted and is not retrievable. Be sure to remember it or write it down in a safe place in order to be able to decrypt the backup.	Uyarı: parola şifreli olarak saklanır ve geri alınamaz. Yedeğin şifresini çözebilmek için parolayı aklınızda tutun veya güvenli bir yere yazın.
+Web access	Web erişimi
+Wed	Çar
+Weekly	Haftalık
+Windows maps drives per user. The service sees only the drives mapped for users who are logged on and its own. The drive letter itself cannot be used by the service: its UNC path is stored, and the credentials must be entered.	Windows sürücüleri kullanıcı başına eşler. Hizmet yalnızca oturum açmış kullanıcılar için eşlenen sürücüleri ve kendi sürücülerini görür. Sürücü harfinin kendisi hizmet tarafından kullanılamaz: UNC yolu saklanır ve kimlik bilgileri girilmelidir.
+Write these one-time codes down now: they are shown only once.	Bu tek kullanımlık kodları şimdi not edin: yalnızca bir kez gösterilir.
+Yes	Evet
+Your session has ended. Sign in again.	Oturumunuz sona erdi. Yeniden oturum açın.
+admin	yönetici
+backup	yedekleme
+cdrom	CD-ROM
+days	gün
+down	kapalı
+encrypted	şifreli
+every month	her ay
+every week	her hafta
+every {0} months	her {0} ayda bir
+every {0} weeks	her {0} haftada bir
+every {0} {1}	her {0} {1}
+fixed	sabit
+folder	klasör
+from {0}	{0} kaynağından
+hours	saat
+last	son
+limit {0} Mbit/s	sınır {0} Mbit/s
+listening	dinliyor
+manual	elle
+minutes	dakika
+network	ağ
+not confirmed	onaylanmadı
+not listening	dinlemiyor
+off	kapalı
+on	açık
+on day {0} at {1}	ayın {0}. günü saat {1}
+on {0} at {1}	{0} günü saat {1}
+once at {0}	bir kez, {0}
+operator	operatör
+optional	isteğe bağlı
+optional: the datacenter used when a backup does not name one	isteğe bağlı: bir yedek veri merkezi belirtmediğinde kullanılan veri merkezi
+other	diğer
+read	okuma
+removable	çıkarılabilir
+required	gerekli
+restore	geri yükleme
+restore_esxi	ESXi'ye geri yükleme
+running {0}	{0} çalışıyor
+scheduled	zamanlanmış
+server	sunucu
+sha256:... (optional)	sha256:... (isteğe bağlı)
+share	paylaşım
+stored	saklanan
+task	görev
+the service	hizmet
+transferred	aktarıldı
+vCenter only; empty = the one of the server	yalnızca vCenter; boş = sunucununki
+verify	doğrulama
+viewer	görüntüleyici
+{0} datastore(s), {1} folder(s), {2} resource pool(s) found.	{0} veri deposu, {1} klasör, {2} kaynak havuzu bulundu.
+{0} free of {1}	{1} içinde {0} boş
+{0} virtual machine(s)	{0} sanal makine
+{0} volume(s)	{0} birim
+{0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: CPU çekirdeği başına yaklaşık {1} MB/s; yedekler 5. düzeye göre yaklaşık %{2} daha büyüktür.
+{0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: CPU çekirdeği başına yaklaşık {1} MB/s; yedekler 5. düzeye göre yaklaşık %{2} daha küçüktür.
+{0}: about {1} MB/s per CPU core; the baseline size (levels 1-4 are larger, 6-9 smaller).	{0}: CPU çekirdeği başına yaklaşık {1} MB/s; temel boyut (1-4. düzeyler daha büyük, 6-9. düzeyler daha küçüktür).

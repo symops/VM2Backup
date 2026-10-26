@@ -1,0 +1,470 @@
+# English text <TAB> translation (\n line break). Empty = show English. Run tools/webui_strings.py --update after changing src/web/app.js.
+(chosen by the server)	(由服务器选择)
+(the default resource pool)	(默认资源池)
+(the root VM folder)	(根虚拟机文件夹)
+A PKCS#12 file (.pfx) with the certificate and its private key, 1 MB at most. Only the certificate itself is served, not the chain.	包含证书及其私钥的 PKCS#12 文件 (.pfx),最大 1 MB。仅使用证书本身,不包含证书链。
+A mapped drive letter (Z:) cannot be used: the service does not see it. Choose "Network drive..." to use its UNC path, or enter the UNC path.	无法使用映射的驱动器号 (Z:): 服务看不到它。请选择"网络驱动器..."以使用其 UNC 路径,或直接输入 UNC 路径。
+A new certificate was created. Your browser will ask you to trust it again.	已创建新证书。浏览器将要求您重新信任它。
+A new user needs a password.	新用户需要设置密码。
+A path on the server computer	服务器计算机上的路径
+A path on the server computer (the service reads it)	服务器计算机上的路径(由服务读取)
+A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	正在运行的 ESXi / vCenter 虚拟机将从临时快照复制,随后该快照会被删除。没有 VMware Tools 时,静默快照会失败: 请对此类虚拟机关闭静默。
+A virtual machine with this name already exists on the server. Enter another name; an existing machine is never overwritten.	服务器上已存在同名虚拟机。请输入其他名称; 现有虚拟机绝不会被覆盖。
+Abort	中止
+Add Scheduled Task	添加计划任务
+Add Server	添加服务器
+Add address	添加地址
+Add at least one backup element.	请至少添加一个备份项。
+Add element...	添加项...
+Add user	添加用户
+Add user...	添加用户...
+Add window	添加时间窗口
+Additional names	附加名称
+Address	地址
+Advanced	高级
+After a lost connection the program reconnects and goes on; nothing finished is sent again.	连接中断后,程序会重新连接并继续; 已完成的部分不会重复发送。
+All	全部
+All interfaces	所有接口
+All results	所有结果
+Allow a copy of a running VM (the copy is consistent only at the crash level)	允许复制正在运行的虚拟机(副本仅为崩溃一致性)
+An administrator needs two-factor authentication when it is required in the security settings.	当安全设置要求时,管理员需要使用双因素认证。
+Apply	应用
+Archive	存档
+As in the backup (every file back to its original datastore)	与备份中相同(每个文件回到其原始数据存储)
+At least 10 characters	至少 10 个字符
+At least 10 characters, not containing the user name.	至少 10 个字符,且不得包含用户名。
+Audit log	审计日志
+Auto	自动
+Back	返回
+Backup Explorer	Backup Explorer
+Backup of {0}	{0} 的备份
+Backup started.	备份已开始。
+Backup virtual machines...	备份虚拟机...
+Balanced (default)	均衡(默认)
+Browse network	浏览网络
+Browse network...	浏览网络...
+Browse...	浏览...
+Cancel	取消
+Cannot reach the server.	无法连接到服务器。
+Cannot read: 	无法读取: 
+Certificate	证书
+Change	更改
+Change password	更改密码
+Change settings...	更改设置...
+Check the user name and password in the form.	请检查表单中的用户名和密码。
+Choose a file	选择文件
+Choose a file.	请选择一个文件。
+Choose a folder	选择文件夹
+Choose a folder.	请选择一个文件夹。
+Choose a server with virtual machines.	请选择包含虚拟机的服务器。
+Choose a share or a folder.	请选择共享或文件夹。
+Choose a source server.	请选择源服务器。
+Choose at least one day in every time window.	请在每个时间窗口中至少选择一天。
+Choose at least one day of the week.	请至少选择一个星期几。
+Choose at least one virtual machine.	请至少选择一台虚拟机。
+Choose the ESXi or vCenter server to restore to.	请选择要还原到的 ESXi 或 vCenter 服务器。
+Choose the datacenter.	请选择数据中心。
+Choose the datastore.	请选择数据存储。
+Choose the date and time.	请选择日期和时间。
+Choose the file.	请选择文件。
+Choose the first start time.	请选择首次开始时间。
+Choose the kind of server to add.	请选择要添加的服务器类型。
+Choose the start time.	请选择开始时间。
+Clear history	清除历史记录
+Clear the whole history?	清除全部历史记录?
+Close	关闭
+Code	代码
+Comment	备注
+Complete	完成
+Compression	压缩
+Compression level	压缩级别
+Compression threads	压缩线程数
+Confirm	确认
+Connection	连接
+Continue an interrupted backup of this VM when there is one	如果存在,继续此虚拟机中断的备份
+Copy	复制
+Create	创建
+Create a self-signed certificate	创建自签名证书
+Create new self-signed...	新建自签名...
+Create schedule...	创建计划...
+Created	创建时间
+Current password	当前密码
+Data folder	数据文件夹
+Datacenter	数据中心
+Datastore	数据存储
+Date and time	日期和时间
+Day of the month	每月日期
+Default local folder	默认本地文件夹
+Delete	删除
+Delete backup	删除备份
+Delete server "{0}"? Backups already made stay where they are.	删除服务器"{0}"? 已创建的备份保留在原处。
+Delete task "{0}"?	删除任务"{0}"?
+Delete the backup "{0}"?	删除备份"{0}"?
+Delete user "{0}"?	删除用户"{0}"?
+Details	详细信息
+Disable two-factor	停用双因素认证
+Disable two-factor authentication of "{0}"?	停用"{0}"的双因素认证?
+Disabled	已禁用
+Discard the unfinished backup "{0}"? What was already copied is deleted.	放弃未完成的备份"{0}"? 已复制的内容将被删除。
+Domain user name or user@domain; empty = the account of the service	域用户名或 user@domain; 留空 = 服务账户
+Down	下移
+Drive	驱动器
+Drive {0} is not a network drive that the service can see. Enter the UNC path of the share or choose "Network drive...".	驱动器 {0} 不是服务能看到的网络驱动器。请输入共享的 UNC 路径,或选择"网络驱动器..."。
+Duration	持续时间
+ESXi host or vCenter	ESXi 主机或 vCenter
+Edit	编辑
+Edit Server	编辑服务器
+Edit user	编辑用户
+Elements	项目
+Enable scheduler	启用计划程序
+Enable this only behind a reverse proxy that you control and that sets X-Forwarded-For itself; otherwise anybody can fake the address that is shown in the audit log and used for the login limits.	仅当位于您控制且自行设置 X-Forwarded-For 的反向代理之后才启用此项; 否则任何人都可以伪造审计日志中显示并用于登录限制的地址。
+Enabled	已启用
+Encrypt the backup (AES-256)	加密备份 (AES-256)
+Encrypted	已加密
+Enter a name for the new virtual machine.	请输入新虚拟机的名称。
+Enter a password, a private key file or the private key text.	请输入密码、私钥文件或私钥文本。
+Enter a whole number in every numeric field.	请在每个数字字段中输入整数。
+Enter the address of the server.	请输入服务器地址。
+Enter the code from your authenticator app, or a recovery code.	请输入验证器应用中的代码,或恢复代码。
+Enter the destination folder.	请输入目标文件夹。
+Enter the interval (a number of 1 or more).	请输入间隔(1 或更大的数字)。
+Enter the password for the encryption.	请输入加密密码。
+Enter the user name.	请输入用户名。
+Every N minutes / hours / days	每 N 分钟 / 小时 / 天
+Every N months	每 N 个月
+Every N weeks	每 N 周
+Every volume is read back from the target: its size and SHA-256 are compared with the ones recorded while it was written, and the data is decrypted and decompressed to prove that the backup can be restored.	每个卷都会从目标读回: 将其大小和 SHA-256 与写入时记录的值进行比较,并对数据解密和解压,以证明备份可以还原。
+FTP	FTP
+FTP over explicit TLS (FTPES)	显式 TLS 的 FTP (FTPES)
+FTP over implicit TLS (FTPS)	隐式 TLS 的 FTP (FTPS)
+Failed	失败
+Fast	快速
+Fastest	最快
+File	文件
+Fingerprint	指纹
+Finish	完成
+Finished	已完成
+First start	首次开始
+First wait before a reconnect, s	重新连接前的首次等待,秒
+Folder	文件夹
+Folder on the server	服务器上的文件夹
+Folder with VMs	包含虚拟机的文件夹
+For several virtual machines the folder must contain the {VM} tag.	对于多台虚拟机,文件夹必须包含 {VM} 标记。
+Fri	周五
+From	从
+General	常规
+Give the server a name.	请为服务器命名。
+Give the task a title.	请为任务设置标题。
+Go	前往
+HTML report...	HTML 报告...
+History entries kept	保留的历史记录条数
+Host	主机
+Host key	主机密钥
+Imported	已导入
+Include the memory of the virtual machine in the snapshot	在快照中包含虚拟机的内存
+Job "{0}" finished: {1}	任务"{0}"已结束: {1}
+Keep last backups	保留最近的备份数
+Keep the computer awake while the scheduler is on	计划程序开启时保持计算机唤醒
+Key passphrase	密钥密码短语
+Kind	类型
+Language	语言
+Last result	上次结果
+Last run	上次运行
+Leave empty to keep the password.	留空则保持原密码。
+Lines	行数
+Link	链接
+Listening interfaces	监听接口
+Load	加载
+Loading...	正在加载...
+Loading... {0} s	正在加载... {0} 秒
+Local Computer	本地计算机
+Local Computer cannot be changed.	无法更改本地计算机。
+Local Computer cannot be deleted.	无法删除本地计算机。
+Longest wait before a reconnect, s	重新连接前的最长等待,秒
+Machine file	机器文件
+Maximum	最大
+Message	消息
+Minimum TLS version	最低 TLS 版本
+Mon	周一
+Monthly	每月
+Name	名称
+Names	名称
+Needs about {0} GiB of memory per CPU core.	每个 CPU 核心约需 {0} GiB 内存。
+Network	网络
+Network drive	网络驱动器
+Network drive...	网络驱动器...
+Network folder	网络文件夹
+Network folder (SMB)	网络文件夹 (SMB)
+Network path	网络路径
+Never	从不
+New VM name	新虚拟机名称
+New password	新密码
+Next	下一步
+Next run	下次运行
+Next run: {0}	下次运行: {0}
+No	否
+No computers were found. Type a server name below.	未找到计算机。请在下方输入服务器名称。
+No elements yet. Add a backup element.	尚无项目。请添加备份项。
+No mapped network drives were found.	未找到已映射的网络驱动器。
+No users are configured. On the server, run VM2BackupService.exe /reset-web as an administrator.	未配置任何用户。请在服务器上以管理员身份运行 VM2BackupService.exe /reset-web。
+No virtual machines found.	未找到虚拟机。
+Not scheduled	未计划
+Not scheduled (run manually)	未计划(手动运行)
+Nothing here yet.	这里还没有内容。
+Nothing here.	这里没有内容。
+OK	确定
+On error, go on with the next VM	出错时继续处理下一台虚拟机
+Once	一次
+One volume (no resuming)	单个卷(不可续传)
+Only for a network folder that asks for a user name	仅适用于要求用户名的网络文件夹
+Open	打开
+Owner	所有者
+Parallel jobs	并行作业数
+Parallel jobs: 1 to 16.	并行作业数: 1 到 16。
+Passive mode	被动模式
+Password	密码
+Password changed. Sign in again.	密码已更改。请重新登录。
+Password of the file	文件密码
+Paste the key instead of a file; it is stored protected and never shown again	粘贴密钥以代替文件; 它会受保护地存储且不再显示
+Paused	已暂停
+Pinned fingerprint	固定的指纹
+Port	端口
+Power on after restore	还原后开机
+Press Load to read the datacenters, datastores, folders and resource pools of the server.	点击"加载"以读取服务器的数据中心、数据存储、文件夹和资源池。
+Private key file	私钥文件
+Private key text	私钥文本
+Quiesce the guest file system (needs VMware Tools in the VM)	使客户机文件系统静默(虚拟机中需要 VMware Tools)
+Recovery code	恢复代码
+Recovery codes	恢复代码
+Recovery codes left	剩余恢复代码数
+Refresh	刷新
+Remove	移除
+Remove window	移除时间窗口
+Repeat	重复
+Repeat every	重复间隔
+Report	报告
+Require two-factor authentication for administrators	要求管理员使用双因素认证
+Resource pool	资源池
+Restore	还原
+Restore started.	还原已开始。
+Restore to	还原到
+Restore to folder	还原到文件夹
+Restore...	还原...
+Restored as	还原为
+Restoring "{0}" of {1}.	正在还原"{0}"(共 {1} 个)。
+Result	结果
+Resumable transfer	可续传传输
+Retries after a lost connection	连接中断后的重试次数
+Role	角色
+Run now	立即运行
+Running	正在运行
+Running jobs	正在运行的作业
+SCP (SSH)	SCP (SSH)
+SFTP (no longer supported)	SFTP(不再支持)
+Sat	周六
+Saved.	已保存。
+Scan the code with an authenticator app (or type the secret), then enter the 6-digit code it shows.	请用验证器应用扫描二维码(或输入密钥),然后输入其显示的 6 位数字代码。
+Schedule	计划
+Scheduled Task Details	计划任务详细信息
+Scheduled Tasks	计划任务
+Scheduler	计划程序
+Secret	密钥
+Security	安全
+Select	选择
+Select a drive first.	请先选择驱动器。
+Select a row first.	请先选择一行。
+Self-signed	自签名
+Server	服务器
+Server name	服务器名称
+Session idle timeout, minutes	会话空闲超时,分钟
+Set up two-factor authentication	设置双因素认证
+Set up two-factor...	设置双因素认证...
+Settings	设置
+Show	显示
+Sign in	登录
+Sign out	退出登录
+Sign-in failed.	登录失败。
+Size	大小
+Snapshot	快照
+Source	源
+Source server	源服务器
+Speed	速度
+Speed limit, Mbit/s (0 = unlimited)	速度限制,Mbit/s(0 = 不限制)
+Start	开始
+Start time	开始时间
+Started	开始于
+State	状态
+Status	状态
+Stop	停止
+Stopped.	已停止。
+Stored	已存储
+Strong	强
+Subject	主题
+Success	成功
+Sun	周日
+Switch the scheduler off	关闭计划程序
+Switch the scheduler on	开启计划程序
+TLS 1.0 (weak)	TLS 1.0(弱)
+TLS 1.0 and 1.1 are weak. Use them only for old hosts (ESXi 6.0 / 6.5) that offer nothing newer.	TLS 1.0 和 1.1 较弱。仅用于不支持更新版本的旧主机 (ESXi 6.0 / 6.5)。
+TLS 1.1 (weak)	TLS 1.1(弱)
+Target	目标
+Target server	目标服务器
+Task	任务
+Task History	任务历史记录
+Task started.	任务已开始。
+Test connection	测试连接
+Testing...	正在测试...
+The QR code is not available.	二维码不可用。
+The certificate always includes this computer name, localhost, 127.0.0.1 and ::1. Add the DNS names and IP addresses under which the site is reached, one per line.	证书始终包含此计算机名、localhost、127.0.0.1 和 ::1。请在下方添加访问本站点所用的 DNS 名称和 IP 地址,每行一个。
+The certificate was installed.	证书已安装。
+The connection is tested now. "Test connection" tests again; "Finish" saves the server.	现在正在测试连接。"测试连接"会再次测试; "完成"将保存服务器。
+The connection test failed or has not finished. Save the server anyway?	连接测试失败或尚未完成。仍要保存服务器吗?
+The connection works.	连接正常。
+The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	数据存储"{0}"有 {1} 可用空间,备份最多占用 {2}。仍要还原吗?
+The figures are approximate (typical data). More CPU cores make compression faster.	数字为近似值(典型数据)。更多 CPU 核心可使压缩更快。
+The file is larger than 1 MB.	文件大于 1 MB。
+The list is cut: only the first entries are shown.	列表已截断: 仅显示前几项。
+The longest wait cannot be shorter than the first one.	最长等待不能短于首次等待。
+The name of the virtual machine must be at most 80 characters and cannot contain slashes or %.	虚拟机名称最多 80 个字符,且不能包含斜杠或 %。
+The password is too simple.	密码过于简单。
+The password must be at least 10 characters long.	密码长度至少为 10 个字符。
+The password must not contain the user name.	密码不得包含用户名。
+The passwords differ.	两次输入的密码不一致。
+The port must be 1..65535.	端口必须为 1..65535。
+The schedule windows of a task can set another limit for its hours; the lowest one applies.	任务的计划时间窗口可为其运行时段设置另一个限制; 取最低者。
+The scheduler is off: scheduled tasks do not start by themselves.	计划程序已关闭: 计划任务不会自动启动。
+The server did not answer in time; try again.	服务器未及时响应; 请重试。
+The server or share was not found.	未找到服务器或共享。
+The server presented an identity that is not known yet: {0}. If you recognise it, you can trust it.	服务器出示了尚未知晓的身份: {0}。如果您认识它,可以信任它。
+The service cannot see drive letters. Enter the UNC path of the share.	服务无法看到驱动器号。请输入共享的 UNC 路径。
+The service cannot see drive letters. {0} is the network drive {1}: its UNC path is stored instead. Enter the user name and password that give access to it.	服务无法看到驱动器号。{0} 是网络驱动器 {1}: 将改为存储其 UNC 路径。请输入可访问它的用户名和密码。
+The site always stays reachable on this computer (localhost): that is how a mistake here can be repaired.	本站点始终可在此计算机上访问 (localhost): 这样可以修复此处的错误设置。
+The site is moving to port {0}. Open {1} and sign in again.	站点正在切换到端口 {0}。请打开 {1} 并重新登录。
+The snapshot settings apply to ESXi and vCenter sources only.	快照设置仅适用于 ESXi 和 vCenter 源。
+The speed limit cannot be negative.	速度限制不能为负数。
+The task may run only inside its windows. A window that ends before it starts goes over midnight.	任务只能在其时间窗口内运行。结束早于开始的窗口会跨越午夜。
+The task was copied.	任务已复制。
+The volume size cannot be negative.	卷大小不能为负数。
+The waits must be between 1 and 86400 seconds.	等待时间必须在 1 到 86400 秒之间。
+There is no ESXi or vCenter server yet. Add one on the Datacenter page first.	尚无 ESXi 或 vCenter 服务器。请先在"数据中心"页面添加一个。
+This backup is encrypted: enter its password.	此备份已加密: 请输入其密码。
+This browser cannot read files.	此浏览器无法读取文件。
+This browser cannot save files.	此浏览器无法保存文件。
+This computer	此计算机
+This computer only (localhost)	仅此计算机 (localhost)
+This is an unfinished backup.	这是一个未完成的备份。
+This server holds backups, not virtual machines.	此服务器存放备份,而不是虚拟机。
+Thu	周四
+Time windows	时间窗口
+Title	标题
+To	到
+Transfer: SSH encrypted	传输: SSH 加密
+Transfer: TLS encrypted (FTP over TLS)	传输: TLS 加密 (FTP over TLS)
+Transfer: local / network folder	传输: 本地 / 网络文件夹
+Transfer: network folder (SMB; not encrypted unless the share requires it)	传输: 网络文件夹 (SMB; 除非共享要求,否则不加密)
+Transfer: plain FTP (not encrypted - enable encryption of the backup!)	传输: 明文 FTP(未加密 - 请启用备份加密!)
+Trigger	触发器
+Trust X-Forwarded-For from a reverse proxy on this computer	信任此计算机上反向代理发来的 X-Forwarded-For
+Trust this identity and test again	信任此身份并重新测试
+Tue	周二
+Two-factor	双因素认证
+Type	类型
+Unfinished (resumable)	未完成(可续传)
+Unit	单位
+Up	上移
+Upload	上传
+Upload PFX...	上传 PFX...
+Upload a certificate (PFX)	上传证书 (PFX)
+Use	使用
+Use a recovery code	使用恢复代码
+Use the authenticator code	使用验证器代码
+Use {VM} for the VM name	用 {VM} 表示虚拟机名称
+User	用户
+User name	用户名
+Users	用户
+VM folder	虚拟机文件夹
+VM folder (VMware Workstation / Player)	虚拟机文件夹 (VMware Workstation / Player)
+VMware ESXi host	VMware ESXi 主机
+VMware vCenter	VMware vCenter
+Valid from	有效期自
+Valid until	有效期至
+Verification started.	验证已开始。
+Verify	验证
+Verify Backup	验证备份
+Verify the backup after it is made	备份完成后进行验证
+Verify the certificate	验证证书
+Version	版本
+Virtual Machine Backup	Virtual Machine Backup
+Virtual machine	虚拟机
+Virtual machines	虚拟机
+Virtual machines...	虚拟机...
+Volume size	卷大小
+Volume size, MiB (0 = one volume)	卷大小,MiB(0 = 单个卷)
+Volumes	卷
+Wait until the choices of the server are loaded.	请等待服务器的选项加载完成。
+Waiting	等待中
+Warning	警告
+Warning: the password is stored encrypted and is not retrievable. Be sure to remember it or write it down in a safe place in order to be able to decrypt the backup.	警告: 密码以加密方式存储且无法找回。请务必记住它或写下并妥善保管,以便解密备份。
+Web access	Web 访问
+Wed	周三
+Weekly	每周
+Windows maps drives per user. The service sees only the drives mapped for users who are logged on and its own. The drive letter itself cannot be used by the service: its UNC path is stored, and the credentials must be entered.	Windows 按用户映射驱动器。服务只能看到已登录用户及其自身映射的驱动器。服务无法使用驱动器号本身: 将存储其 UNC 路径,并且必须输入凭据。
+Write these one-time codes down now: they are shown only once.	请立即记下这些一次性代码: 它们只显示一次。
+Yes	是
+Your session has ended. Sign in again.	您的会话已结束。请重新登录。
+admin	admin
+backup	备份
+cdrom	光驱
+days	天
+down	下
+encrypted	已加密
+every month	每月
+every week	每周
+every {0} months	每 {0} 个月
+every {0} weeks	每 {0} 周
+every {0} {1}	每 {0} {1}
+fixed	固定
+folder	文件夹
+from {0}	自 {0}
+hours	小时
+last	最近
+limit {0} Mbit/s	限速 {0} Mbit/s
+listening	正在监听
+manual	手动
+minutes	分钟
+network	网络
+not confirmed	未确认
+not listening	未监听
+off	关
+on	开
+on day {0} at {1}	第 {0} 天 {1}
+on {0} at {1}	{0} {1}
+once at {0}	一次,{0}
+operator	操作员
+optional	可选
+optional: the datacenter used when a backup does not name one	可选: 备份未指定数据中心时使用的数据中心
+other	其他
+read	读取
+removable	可移动
+required	必需
+restore	还原
+restore_esxi	还原到 ESXi
+running {0}	正在运行 {0}
+scheduled	已计划
+server	服务器
+sha256:... (optional)	sha256:...(可选)
+share	共享
+stored	已存储
+task	任务
+the service	服务
+transferred	已传输
+vCenter only; empty = the one of the server	仅 vCenter; 留空 = 服务器的设置
+verify	验证
+viewer	查看者
+{0} datastore(s), {1} folder(s), {2} resource pool(s) found.	找到 {0} 个数据存储、{1} 个文件夹、{2} 个资源池。
+{0} free of {1}	{1} 中有 {0} 可用
+{0} virtual machine(s)	{0} 台虚拟机
+{0} volume(s)	{0} 个卷
+{0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: 每个 CPU 核心约 {1} MB/s; 备份比级别 5 约大 {2}%。
+{0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: 每个 CPU 核心约 {1} MB/s; 备份比级别 5 约小 {2}%。
+{0}: about {1} MB/s per CPU core; the baseline size (levels 1-4 are larger, 6-9 smaller).	{0}: 每个 CPU 核心约 {1} MB/s; 基准大小(级别 1-4 更大,6-9 更小)。

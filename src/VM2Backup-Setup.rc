@@ -1,0 +1,31 @@
+#include <winuser.h>
+#include <winver.h>
+#include "version.h"
+1 RT_MANIFEST "VM2Backup-Setup.manifest"
+1 ICON "VM2Backup-Setup.ico"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     VM2B_VER_MAJOR, VM2B_VER_MINOR, VM2B_VER_BUILD, VM2B_VER_REV
+PRODUCTVERSION  VM2B_VER_MAJOR, VM2B_VER_MINOR, VM2B_VER_BUILD, VM2B_VER_REV
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_APP
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      VM2B_AUTHOR_STR
+            VALUE "LegalCopyright",   VM2B_COPYRIGHT_STR
+            VALUE "FileDescription",  "VM2Backup setup"
+            VALUE "FileVersion",      VM2B_VER_STR
+            VALUE "InternalName",     "VM2Backup-Setup"
+            VALUE "OriginalFilename", "VM2Backup-Setup.exe"
+            VALUE "ProductName",      "VM2Backup"
+            VALUE "ProductVersion",   VM2B_VER_STR
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END

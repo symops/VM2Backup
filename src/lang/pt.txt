@@ -1,0 +1,63 @@
+# English text <TAB> translation (\n line break). Empty = show English. Run tools/gen_lang.py --update after changing the sources.
+- Installing VM2Backup -	- Instalando o VM2Backup -
+- Removing VM2Backup -	- Removendo o VM2Backup -
+Backup of virtual machines to a folder, FTP, FTP over TLS and SCP	Backup de máquinas virtuais em uma pasta, FTP, FTP sobre TLS e SCP
+Browse...	Procurar...
+Close	Fechar
+Closing the running VM2Backup and stopping its service...	Fechando o VM2Backup em execução e parando o serviço...
+Copying the files to %s	Copiando os arquivos para %s
+Could not open: %s	Não foi possível abrir: %s
+Creating the shortcuts.	Criando os atalhos.
+Data folder:	Pasta de dados:
+Desktop shortcut	Atalho na área de trabalho
+Done.	Concluído.
+Enabled, but not listening	Ativado, mas sem escutar
+Error: VM2Backup.exe was not found next to the installer.	Erro: VM2Backup.exe não encontrado ao lado do instalador.
+Error: VM2BackupService.exe was not found next to the installer.	Erro: VM2BackupService.exe não encontrado ao lado do instalador.
+Error: cannot copy %s (error %lu).	Erro: não foi possível copiar %s (erro %lu).
+Error: cannot find the Program Files folder.	Erro: não foi possível encontrar a pasta Arquivos de Programas.
+Error: the installation folder is not valid (a full path such as C:\\Programs\\VM2Backup is needed).	Erro: a pasta de instalação não é válida (é preciso um caminho completo como C:\\Programs\\VM2Backup).
+Error: the service could not be registered (are you an administrator?).	Erro: não foi possível registrar o serviço (você é administrador?).
+Exit	Sair
+Failed.	Falhou.
+Install	Instalar
+Install to:	Instalar em:
+Installed: version %s, %s	Instalado: versão %s, %s
+Language:	Idioma:
+Launch	Iniciar
+Listening on %s:%lld	Escutando em %s:%lld
+Not installed	Não instalado
+Off	Desativado
+Open logs folder	Abrir a pasta de logs
+Open web interface	Abrir a interface web
+Registering the program in Apps & features.	Registrando o programa em Aplicativos e recursos.
+Reinstall	Reinstalar
+Remove	Remover
+Remove VM2Backup from this computer?\n\nYour settings, the history and the backups you made are kept.	Remover o VM2Backup deste computador?\n\nSuas configurações, o histórico e os backups feitos são mantidos.
+Removing the shortcuts.	Removendo os atalhos.
+Restart service	Reiniciar o serviço
+Restart the service? Running backups are paused and continue after the restart.	Reiniciar o serviço? Os backups em andamento são pausados e continuam após a reinicialização.
+Running	Em execução
+Select the folder to install VM2Backup to	Selecione a pasta para instalar o VM2Backup
+Service	Serviço
+Service:	Serviço:
+Start menu shortcut	Atalho no menu Iniciar
+Start service	Iniciar serviço
+Start the backup service now	Iniciar o serviço de backup agora
+Stop service	Parar serviço
+Stop the service? Running backups are paused and continue after the next start.	Parar o serviço? Os backups em execução são pausados e continuam após a próxima inicialização.
+Stopped	Parado
+The VM2Backup service is not running, so there is no web site. Start the service first.	O serviço VM2Backup não está em execução, portanto não há site web. Inicie o serviço primeiro.
+The VM2Backup service is not running. Start it with the "Start service" button.	O serviço VM2Backup não está em execução. Inicie-o com o botão “Iniciar serviço”.
+The backup service is installed (it starts with Windows).	O serviço de backup está instalado (inicia com o Windows).
+The backup service is installed and started.	O serviço de backup está instalado e iniciado.
+The backup service is installed but did not start; start it with the "Start service" button of the program.	O serviço de backup está instalado, mas não iniciou; inicie-o com o botão “Iniciar serviço” do programa.
+The service could not be started (is it installed? are you an administrator?).	Não foi possível iniciar o serviço (está instalado? você é administrador?).
+The service could not be stopped (are you an administrator?).	Não foi possível parar o serviço (você é administrador?).
+The web site is enabled, but not listening. Check the certificate and the port in the web interface.	O site web está ativado, mas não está escutando. Verifique o certificado e a porta na interface web.
+The web site is off. Switch it on in the web interface, or reset it with VM2BackupService.exe /reset-web.	O site web está desativado. Ative-o na interface web ou redefina-o com VM2BackupService.exe /reset-web.
+Update	Atualizar
+Version:	Versão:
+Web site:	Site web:
+Windows language	Idioma do Windows
+Your settings, the history and the backups you made are kept.	Suas configurações, o histórico e os backups feitos são mantidos.

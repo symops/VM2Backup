@@ -1,0 +1,470 @@
+# English text <TAB> translation (\n line break). Empty = show English. Run tools/webui_strings.py --update after changing src/web/app.js.
+(chosen by the server)	(door de server gekozen)
+(the default resource pool)	(de standaard resourcepool)
+(the root VM folder)	(de hoofdmap voor VM's)
+A PKCS#12 file (.pfx) with the certificate and its private key, 1 MB at most. Only the certificate itself is served, not the chain.	Een PKCS#12-bestand (.pfx) met het certificaat en de persoonlijke sleutel, maximaal 1 MB. Alleen het certificaat zelf wordt aangeboden, niet de keten.
+A mapped drive letter (Z:) cannot be used: the service does not see it. Choose "Network drive..." to use its UNC path, or enter the UNC path.	Een gekoppelde stationsletter (Z:) kan niet worden gebruikt: de service ziet die niet. Kies "Netwerkstation..." om het UNC-pad te gebruiken, of voer het UNC-pad in.
+A new certificate was created. Your browser will ask you to trust it again.	Er is een nieuw certificaat gemaakt. Uw browser vraagt opnieuw om het te vertrouwen.
+A new user needs a password.	Een nieuwe gebruiker heeft een wachtwoord nodig.
+A path on the server computer	Een pad op de servercomputer
+A path on the server computer (the service reads it)	Een pad op de servercomputer (de service leest het)
+A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	Een draaiende ESXi / vCenter-VM wordt gekopieerd vanaf een tijdelijke snapshot, die daarna wordt verwijderd. Zonder VMware Tools mislukt de quiesced snapshot: schakel quiescing uit voor zulke VM's.
+A virtual machine with this name already exists on the server. Enter another name; an existing machine is never overwritten.	Er bestaat al een virtuele machine met deze naam op de server. Voer een andere naam in; een bestaande machine wordt nooit overschreven.
+Abort	Afbreken
+Add Scheduled Task	Geplande taak toevoegen
+Add Server	Server toevoegen
+Add address	Adres toevoegen
+Add at least one backup element.	Voeg minstens één back-upelement toe.
+Add element...	Element toevoegen...
+Add user	Gebruiker toevoegen
+Add user...	Gebruiker toevoegen...
+Add window	Tijdvenster toevoegen
+Additional names	Extra namen
+Address	Adres
+Advanced	Geavanceerd
+After a lost connection the program reconnects and goes on; nothing finished is sent again.	Na een verbroken verbinding maakt het programma opnieuw verbinding en gaat verder; niets wat al klaar is wordt opnieuw verzonden.
+All	Alles
+All interfaces	Alle interfaces
+All results	Alle resultaten
+Allow a copy of a running VM (the copy is consistent only at the crash level)	Een kopie van een draaiende VM toestaan (de kopie is alleen crash-consistent)
+An administrator needs two-factor authentication when it is required in the security settings.	Een beheerder heeft tweestapsverificatie nodig wanneer dit in de beveiligingsinstellingen is vereist.
+Apply	Toepassen
+Archive	Archief
+As in the backup (every file back to its original datastore)	Zoals in de back-up (elk bestand terug naar de oorspronkelijke datastore)
+At least 10 characters	Minstens 10 tekens
+At least 10 characters, not containing the user name.	Minstens 10 tekens, zonder de gebruikersnaam.
+Audit log	Auditlogboek
+Auto	Automatisch
+Back	Terug
+Backup Explorer	Back-upverkenner
+Backup of {0}	Back-up van {0}
+Backup started.	Back-up gestart.
+Backup virtual machines...	Back-up maken van virtuele machines...
+Balanced (default)	Gebalanceerd (standaard)
+Browse network	Netwerk doorbladeren
+Browse network...	Netwerk doorbladeren...
+Browse...	Bladeren...
+Cancel	Annuleren
+Cannot reach the server.	De server is niet bereikbaar.
+Cannot read: 	Kan niet lezen: 
+Certificate	Certificaat
+Change	Wijzigen
+Change password	Wachtwoord wijzigen
+Change settings...	Instellingen wijzigen...
+Check the user name and password in the form.	Controleer de gebruikersnaam en het wachtwoord in het formulier.
+Choose a file	Kies een bestand
+Choose a file.	Kies een bestand.
+Choose a folder	Kies een map
+Choose a folder.	Kies een map.
+Choose a server with virtual machines.	Kies een server met virtuele machines.
+Choose a share or a folder.	Kies een share of een map.
+Choose a source server.	Kies een bronserver.
+Choose at least one day in every time window.	Kies minstens één dag in elk tijdvenster.
+Choose at least one day of the week.	Kies minstens één dag van de week.
+Choose at least one virtual machine.	Kies minstens één virtuele machine.
+Choose the ESXi or vCenter server to restore to.	Kies de ESXi- of vCenter-server waarnaar moet worden hersteld.
+Choose the datacenter.	Kies het datacenter.
+Choose the datastore.	Kies de datastore.
+Choose the date and time.	Kies de datum en tijd.
+Choose the file.	Kies het bestand.
+Choose the first start time.	Kies de eerste starttijd.
+Choose the kind of server to add.	Kies het soort server dat u wilt toevoegen.
+Choose the start time.	Kies de starttijd.
+Clear history	Geschiedenis wissen
+Clear the whole history?	De hele geschiedenis wissen?
+Close	Sluiten
+Code	Code
+Comment	Opmerking
+Complete	Voltooid
+Compression	Compressie
+Compression level	Compressieniveau
+Compression threads	Compressiethreads
+Confirm	Bevestigen
+Connection	Verbinding
+Continue an interrupted backup of this VM when there is one	Een onderbroken back-up van deze VM hervatten als die er is
+Copy	Kopiëren
+Create	Maken
+Create a self-signed certificate	Een zelfondertekend certificaat maken
+Create new self-signed...	Nieuw zelfondertekend certificaat maken...
+Create schedule...	Schema maken...
+Created	Gemaakt
+Current password	Huidig wachtwoord
+Data folder	Gegevensmap
+Datacenter	Datacenter
+Datastore	Datastore
+Date and time	Datum en tijd
+Day of the month	Dag van de maand
+Default local folder	Standaard lokale map
+Delete	Verwijderen
+Delete backup	Back-up verwijderen
+Delete server "{0}"? Backups already made stay where they are.	Server "{0}" verwijderen? Reeds gemaakte back-ups blijven waar ze zijn.
+Delete task "{0}"?	Taak "{0}" verwijderen?
+Delete the backup "{0}"?	De back-up "{0}" verwijderen?
+Delete user "{0}"?	Gebruiker "{0}" verwijderen?
+Details	Details
+Disable two-factor	Tweestapsverificatie uitschakelen
+Disable two-factor authentication of "{0}"?	Tweestapsverificatie van "{0}" uitschakelen?
+Disabled	Uitgeschakeld
+Discard the unfinished backup "{0}"? What was already copied is deleted.	De onvoltooide back-up "{0}" verwerpen? Wat al gekopieerd is, wordt verwijderd.
+Domain user name or user@domain; empty = the account of the service	Domeingebruikersnaam of gebruiker@domein; leeg = het account van de service
+Down	Omlaag
+Drive	Station
+Drive {0} is not a network drive that the service can see. Enter the UNC path of the share or choose "Network drive...".	Station {0} is geen netwerkstation dat de service kan zien. Voer het UNC-pad van de share in of kies "Netwerkstation...".
+Duration	Duur
+ESXi host or vCenter	ESXi-host of vCenter
+Edit	Bewerken
+Edit Server	Server bewerken
+Edit user	Gebruiker bewerken
+Elements	Elementen
+Enable scheduler	Planner inschakelen
+Enable this only behind a reverse proxy that you control and that sets X-Forwarded-For itself; otherwise anybody can fake the address that is shown in the audit log and used for the login limits.	Schakel dit alleen in achter een reverse proxy die u zelf beheert en die zelf X-Forwarded-For instelt; anders kan iedereen het adres vervalsen dat in het auditlogboek wordt getoond en voor de aanmeldlimieten wordt gebruikt.
+Enabled	Ingeschakeld
+Encrypt the backup (AES-256)	De back-up versleutelen (AES-256)
+Encrypted	Versleuteld
+Enter a name for the new virtual machine.	Voer een naam in voor de nieuwe virtuele machine.
+Enter a password, a private key file or the private key text.	Voer een wachtwoord, een bestand met de persoonlijke sleutel of de tekst van de persoonlijke sleutel in.
+Enter a whole number in every numeric field.	Voer in elk numeriek veld een geheel getal in.
+Enter the address of the server.	Voer het adres van de server in.
+Enter the code from your authenticator app, or a recovery code.	Voer de code uit uw authenticator-app in, of een herstelcode.
+Enter the destination folder.	Voer de doelmap in.
+Enter the interval (a number of 1 or more).	Voer het interval in (een getal van 1 of meer).
+Enter the password for the encryption.	Voer het wachtwoord voor de versleuteling in.
+Enter the user name.	Voer de gebruikersnaam in.
+Every N minutes / hours / days	Elke N minuten / uren / dagen
+Every N months	Elke N maanden
+Every N weeks	Elke N weken
+Every volume is read back from the target: its size and SHA-256 are compared with the ones recorded while it was written, and the data is decrypted and decompressed to prove that the backup can be restored.	Elk volume wordt teruggelezen van het doel: de grootte en SHA-256 worden vergeleken met de waarden die tijdens het schrijven zijn vastgelegd, en de gegevens worden ontsleuteld en gedecomprimeerd om te bewijzen dat de back-up kan worden hersteld.
+FTP	FTP
+FTP over explicit TLS (FTPES)	FTP via expliciete TLS (FTPES)
+FTP over implicit TLS (FTPS)	FTP via impliciete TLS (FTPS)
+Failed	Mislukt
+Fast	Snel
+Fastest	Snelst
+File	Bestand
+Fingerprint	Vingerafdruk
+Finish	Voltooien
+Finished	Voltooid
+First start	Eerste start
+First wait before a reconnect, s	Eerste wachttijd vóór opnieuw verbinden, s
+Folder	Map
+Folder on the server	Map op de server
+Folder with VMs	Map met VM's
+For several virtual machines the folder must contain the {VM} tag.	Voor meerdere virtuele machines moet de map de tag {VM} bevatten.
+Fri	Vr
+From	Van
+General	Algemeen
+Give the server a name.	Geef de server een naam.
+Give the task a title.	Geef de taak een titel.
+Go	Ga
+HTML report...	HTML-rapport...
+History entries kept	Bewaarde geschiedenisitems
+Host	Host
+Host key	Hostsleutel
+Imported	Geïmporteerd
+Include the memory of the virtual machine in the snapshot	Het geheugen van de virtuele machine in de snapshot opnemen
+Job "{0}" finished: {1}	Taak "{0}" voltooid: {1}
+Keep last backups	Laatste back-ups bewaren
+Keep the computer awake while the scheduler is on	De computer wakker houden terwijl de planner aan staat
+Key passphrase	Wachtwoordzin van de sleutel
+Kind	Soort
+Language	Taal
+Last result	Laatste resultaat
+Last run	Laatste uitvoering
+Leave empty to keep the password.	Laat leeg om het wachtwoord te behouden.
+Lines	Regels
+Link	Link
+Listening interfaces	Luisterende interfaces
+Load	Laden
+Loading...	Laden...
+Loading... {0} s	Laden... {0} s
+Local Computer	Lokale computer
+Local Computer cannot be changed.	De lokale computer kan niet worden gewijzigd.
+Local Computer cannot be deleted.	De lokale computer kan niet worden verwijderd.
+Longest wait before a reconnect, s	Langste wachttijd vóór opnieuw verbinden, s
+Machine file	Machinebestand
+Maximum	Maximaal
+Message	Bericht
+Minimum TLS version	Minimale TLS-versie
+Mon	Ma
+Monthly	Maandelijks
+Name	Naam
+Names	Namen
+Needs about {0} GiB of memory per CPU core.	Heeft ongeveer {0} GiB geheugen per CPU-kern nodig.
+Network	Netwerk
+Network drive	Netwerkstation
+Network drive...	Netwerkstation...
+Network folder	Netwerkmap
+Network folder (SMB)	Netwerkmap (SMB)
+Network path	Netwerkpad
+Never	Nooit
+New VM name	Naam van nieuwe VM
+New password	Nieuw wachtwoord
+Next	Volgende
+Next run	Volgende uitvoering
+Next run: {0}	Volgende uitvoering: {0}
+No	Nee
+No computers were found. Type a server name below.	Er zijn geen computers gevonden. Typ hieronder een servernaam.
+No elements yet. Add a backup element.	Nog geen elementen. Voeg een back-upelement toe.
+No mapped network drives were found.	Er zijn geen gekoppelde netwerkstations gevonden.
+No users are configured. On the server, run VM2BackupService.exe /reset-web as an administrator.	Er zijn geen gebruikers geconfigureerd. Voer op de server VM2BackupService.exe /reset-web uit als beheerder.
+No virtual machines found.	Geen virtuele machines gevonden.
+Not scheduled	Niet gepland
+Not scheduled (run manually)	Niet gepland (handmatig uitvoeren)
+Nothing here yet.	Hier is nog niets.
+Nothing here.	Hier is niets.
+OK	OK
+On error, go on with the next VM	Bij een fout doorgaan met de volgende VM
+Once	Eenmalig
+One volume (no resuming)	Eén volume (geen hervatting)
+Only for a network folder that asks for a user name	Alleen voor een netwerkmap die om een gebruikersnaam vraagt
+Open	Openen
+Owner	Eigenaar
+Parallel jobs	Parallelle taken
+Parallel jobs: 1 to 16.	Parallelle taken: 1 tot 16.
+Passive mode	Passieve modus
+Password	Wachtwoord
+Password changed. Sign in again.	Wachtwoord gewijzigd. Meld u opnieuw aan.
+Password of the file	Wachtwoord van het bestand
+Paste the key instead of a file; it is stored protected and never shown again	Plak de sleutel in plaats van een bestand; hij wordt beveiligd opgeslagen en nooit meer getoond
+Paused	Gepauzeerd
+Pinned fingerprint	Vastgezette vingerafdruk
+Port	Poort
+Power on after restore	Inschakelen na herstel
+Press Load to read the datacenters, datastores, folders and resource pools of the server.	Klik op Laden om de datacenters, datastores, mappen en resourcepools van de server te lezen.
+Private key file	Bestand met persoonlijke sleutel
+Private key text	Tekst van persoonlijke sleutel
+Quiesce the guest file system (needs VMware Tools in the VM)	Het bestandssysteem van de gast quiescen (vereist VMware Tools in de VM)
+Recovery code	Herstelcode
+Recovery codes	Herstelcodes
+Recovery codes left	Resterende herstelcodes
+Refresh	Vernieuwen
+Remove	Verwijderen
+Remove window	Tijdvenster verwijderen
+Repeat	Herhalen
+Repeat every	Herhaal elke
+Report	Rapport
+Require two-factor authentication for administrators	Tweestapsverificatie vereisen voor beheerders
+Resource pool	Resourcepool
+Restore	Herstellen
+Restore started.	Herstel gestart.
+Restore to	Herstellen naar
+Restore to folder	Herstellen naar map
+Restore...	Herstellen...
+Restored as	Hersteld als
+Restoring "{0}" of {1}.	"{0}" van {1} wordt hersteld.
+Result	Resultaat
+Resumable transfer	Hervatbare overdracht
+Retries after a lost connection	Nieuwe pogingen na een verbroken verbinding
+Role	Rol
+Run now	Nu uitvoeren
+Running	Actief
+Running jobs	Actieve taken
+SCP (SSH)	SCP (SSH)
+SFTP (no longer supported)	SFTP (niet langer ondersteund)
+Sat	Za
+Saved.	Opgeslagen.
+Scan the code with an authenticator app (or type the secret), then enter the 6-digit code it shows.	Scan de code met een authenticator-app (of typ het geheim) en voer daarna de 6-cijferige code in die de app toont.
+Schedule	Schema
+Scheduled Task Details	Details van geplande taak
+Scheduled Tasks	Geplande taken
+Scheduler	Planner
+Secret	Geheim
+Security	Beveiliging
+Select	Selecteren
+Select a drive first.	Selecteer eerst een station.
+Select a row first.	Selecteer eerst een rij.
+Self-signed	Zelfondertekend
+Server	Server
+Server name	Servernaam
+Session idle timeout, minutes	Time-out bij inactiviteit van sessie, minuten
+Set up two-factor authentication	Tweestapsverificatie instellen
+Set up two-factor...	Tweestapsverificatie instellen...
+Settings	Instellingen
+Show	Tonen
+Sign in	Aanmelden
+Sign out	Afmelden
+Sign-in failed.	Aanmelden mislukt.
+Size	Grootte
+Snapshot	Snapshot
+Source	Bron
+Source server	Bronserver
+Speed	Snelheid
+Speed limit, Mbit/s (0 = unlimited)	Snelheidslimiet, Mbit/s (0 = onbeperkt)
+Start	Starten
+Start time	Starttijd
+Started	Gestart
+State	Staat
+Status	Status
+Stop	Stoppen
+Stopped.	Gestopt.
+Stored	Opgeslagen
+Strong	Sterk
+Subject	Onderwerp
+Success	Geslaagd
+Sun	Zo
+Switch the scheduler off	De planner uitschakelen
+Switch the scheduler on	De planner inschakelen
+TLS 1.0 (weak)	TLS 1.0 (zwak)
+TLS 1.0 and 1.1 are weak. Use them only for old hosts (ESXi 6.0 / 6.5) that offer nothing newer.	TLS 1.0 en 1.1 zijn zwak. Gebruik ze alleen voor oude hosts (ESXi 6.0 / 6.5) die niets nieuwers bieden.
+TLS 1.1 (weak)	TLS 1.1 (zwak)
+Target	Doel
+Target server	Doelserver
+Task	Taak
+Task History	Taakgeschiedenis
+Task started.	Taak gestart.
+Test connection	Verbinding testen
+Testing...	Testen...
+The QR code is not available.	De QR-code is niet beschikbaar.
+The certificate always includes this computer name, localhost, 127.0.0.1 and ::1. Add the DNS names and IP addresses under which the site is reached, one per line.	Het certificaat bevat altijd de naam van deze computer, localhost, 127.0.0.1 en ::1. Voeg de DNS-namen en IP-adressen toe waaronder de site bereikbaar is, één per regel.
+The certificate was installed.	Het certificaat is geïnstalleerd.
+The connection is tested now. "Test connection" tests again; "Finish" saves the server.	De verbinding wordt nu getest. "Verbinding testen" test opnieuw; "Voltooien" slaat de server op.
+The connection test failed or has not finished. Save the server anyway?	De verbindingstest is mislukt of nog niet voltooid. De server toch opslaan?
+The connection works.	De verbinding werkt.
+The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	De datastore "{0}" heeft {1} vrij, de back-up bevat tot {2}. Toch herstellen?
+The figures are approximate (typical data). More CPU cores make compression faster.	De cijfers zijn bij benadering (typische gegevens). Meer CPU-kernen maken de compressie sneller.
+The file is larger than 1 MB.	Het bestand is groter dan 1 MB.
+The list is cut: only the first entries are shown.	De lijst is ingekort: alleen de eerste items worden getoond.
+The longest wait cannot be shorter than the first one.	De langste wachttijd mag niet korter zijn dan de eerste.
+The name of the virtual machine must be at most 80 characters and cannot contain slashes or %.	De naam van de virtuele machine mag maximaal 80 tekens bevatten en mag geen slashes of % bevatten.
+The password is too simple.	Het wachtwoord is te eenvoudig.
+The password must be at least 10 characters long.	Het wachtwoord moet minstens 10 tekens lang zijn.
+The password must not contain the user name.	Het wachtwoord mag de gebruikersnaam niet bevatten.
+The passwords differ.	De wachtwoorden komen niet overeen.
+The port must be 1..65535.	De poort moet 1..65535 zijn.
+The schedule windows of a task can set another limit for its hours; the lowest one applies.	De tijdvensters van een taak kunnen een andere limiet voor hun uren instellen; de laagste geldt.
+The scheduler is off: scheduled tasks do not start by themselves.	De planner is uit: geplande taken starten niet vanzelf.
+The server did not answer in time; try again.	De server antwoordde niet op tijd; probeer het opnieuw.
+The server or share was not found.	De server of share is niet gevonden.
+The server presented an identity that is not known yet: {0}. If you recognise it, you can trust it.	De server presenteerde een identiteit die nog niet bekend is: {0}. Als u die herkent, kunt u ze vertrouwen.
+The service cannot see drive letters. Enter the UNC path of the share.	De service ziet geen stationsletters. Voer het UNC-pad van de share in.
+The service cannot see drive letters. {0} is the network drive {1}: its UNC path is stored instead. Enter the user name and password that give access to it.	De service ziet geen stationsletters. {0} is het netwerkstation {1}: in plaats daarvan wordt het UNC-pad opgeslagen. Voer de gebruikersnaam en het wachtwoord in die toegang geven.
+The site always stays reachable on this computer (localhost): that is how a mistake here can be repaired.	De site blijft altijd bereikbaar op deze computer (localhost): zo kan een fout hier worden hersteld.
+The site is moving to port {0}. Open {1} and sign in again.	De site verhuist naar poort {0}. Open {1} en meld u opnieuw aan.
+The snapshot settings apply to ESXi and vCenter sources only.	De snapshotinstellingen gelden alleen voor ESXi- en vCenter-bronnen.
+The speed limit cannot be negative.	De snelheidslimiet mag niet negatief zijn.
+The task may run only inside its windows. A window that ends before it starts goes over midnight.	De taak mag alleen binnen zijn tijdvensters worden uitgevoerd. Een venster dat eindigt vóór het begint, loopt over middernacht.
+The task was copied.	De taak is gekopieerd.
+The volume size cannot be negative.	De volumegrootte mag niet negatief zijn.
+The waits must be between 1 and 86400 seconds.	De wachttijden moeten tussen 1 en 86400 seconden liggen.
+There is no ESXi or vCenter server yet. Add one on the Datacenter page first.	Er is nog geen ESXi- of vCenter-server. Voeg er eerst een toe op de pagina Datacenter.
+This backup is encrypted: enter its password.	Deze back-up is versleuteld: voer het wachtwoord in.
+This browser cannot read files.	Deze browser kan geen bestanden lezen.
+This browser cannot save files.	Deze browser kan geen bestanden opslaan.
+This computer	Deze computer
+This computer only (localhost)	Alleen deze computer (localhost)
+This is an unfinished backup.	Dit is een onvoltooide back-up.
+This server holds backups, not virtual machines.	Deze server bevat back-ups, geen virtuele machines.
+Thu	Do
+Time windows	Tijdvensters
+Title	Titel
+To	Tot
+Transfer: SSH encrypted	Overdracht: SSH-versleuteld
+Transfer: TLS encrypted (FTP over TLS)	Overdracht: TLS-versleuteld (FTP via TLS)
+Transfer: local / network folder	Overdracht: lokale map / netwerkmap
+Transfer: network folder (SMB; not encrypted unless the share requires it)	Overdracht: netwerkmap (SMB; niet versleuteld tenzij de share dat vereist)
+Transfer: plain FTP (not encrypted - enable encryption of the backup!)	Overdracht: gewone FTP (niet versleuteld - schakel versleuteling van de back-up in!)
+Trigger	Trigger
+Trust X-Forwarded-For from a reverse proxy on this computer	X-Forwarded-For vertrouwen van een reverse proxy op deze computer
+Trust this identity and test again	Deze identiteit vertrouwen en opnieuw testen
+Tue	Di
+Two-factor	Tweestaps
+Type	Type
+Unfinished (resumable)	Onvoltooid (hervatbaar)
+Unit	Eenheid
+Up	Omhoog
+Upload	Uploaden
+Upload PFX...	PFX uploaden...
+Upload a certificate (PFX)	Een certificaat (PFX) uploaden
+Use	Gebruiken
+Use a recovery code	Een herstelcode gebruiken
+Use the authenticator code	De authenticator-code gebruiken
+Use {VM} for the VM name	Gebruik {VM} voor de naam van de VM
+User	Gebruiker
+User name	Gebruikersnaam
+Users	Gebruikers
+VM folder	VM-map
+VM folder (VMware Workstation / Player)	VM-map (VMware Workstation / Player)
+VMware ESXi host	VMware ESXi-host
+VMware vCenter	VMware vCenter
+Valid from	Geldig vanaf
+Valid until	Geldig tot
+Verification started.	Verificatie gestart.
+Verify	Verifiëren
+Verify Backup	Back-up verifiëren
+Verify the backup after it is made	De back-up verifiëren nadat die is gemaakt
+Verify the certificate	Het certificaat verifiëren
+Version	Versie
+Virtual Machine Backup	Back-up van virtuele machines
+Virtual machine	Virtuele machine
+Virtual machines	Virtuele machines
+Virtual machines...	Virtuele machines...
+Volume size	Volumegrootte
+Volume size, MiB (0 = one volume)	Volumegrootte, MiB (0 = één volume)
+Volumes	Volumes
+Wait until the choices of the server are loaded.	Wacht tot de keuzes van de server zijn geladen.
+Waiting	Wachtend
+Warning	Waarschuwing
+Warning: the password is stored encrypted and is not retrievable. Be sure to remember it or write it down in a safe place in order to be able to decrypt the backup.	Waarschuwing: het wachtwoord wordt versleuteld opgeslagen en kan niet worden opgehaald. Onthoud het of noteer het op een veilige plek om de back-up te kunnen ontsleutelen.
+Web access	Webtoegang
+Wed	Wo
+Weekly	Wekelijks
+Windows maps drives per user. The service sees only the drives mapped for users who are logged on and its own. The drive letter itself cannot be used by the service: its UNC path is stored, and the credentials must be entered.	Windows koppelt stations per gebruiker. De service ziet alleen de stations die zijn gekoppeld voor aangemelde gebruikers en zijn eigen stations. De stationsletter zelf kan niet door de service worden gebruikt: het UNC-pad wordt opgeslagen en de inloggegevens moeten worden ingevoerd.
+Write these one-time codes down now: they are shown only once.	Noteer deze eenmalige codes nu: ze worden maar één keer getoond.
+Yes	Ja
+Your session has ended. Sign in again.	Uw sessie is beëindigd. Meld u opnieuw aan.
+admin	beheerder
+backup	back-up
+cdrom	cd-rom
+days	dagen
+down	offline
+encrypted	versleuteld
+every month	elke maand
+every week	elke week
+every {0} months	elke {0} maanden
+every {0} weeks	elke {0} weken
+every {0} {1}	elke {0} {1}
+fixed	vast
+folder	map
+from {0}	van {0}
+hours	uur
+last	laatste
+limit {0} Mbit/s	limiet {0} Mbit/s
+listening	luistert
+manual	handmatig
+minutes	minuten
+network	netwerk
+not confirmed	niet bevestigd
+not listening	luistert niet
+off	uit
+on	aan
+on day {0} at {1}	op dag {0} om {1}
+on {0} at {1}	op {0} om {1}
+once at {0}	eenmalig om {0}
+operator	operator
+optional	optioneel
+optional: the datacenter used when a backup does not name one	optioneel: het datacenter dat wordt gebruikt als een back-up er geen noemt
+other	overig
+read	lezen
+removable	verwisselbaar
+required	vereist
+restore	herstel
+restore_esxi	herstel naar ESXi
+running {0}	{0} actief
+scheduled	gepland
+server	server
+sha256:... (optional)	sha256:... (optioneel)
+share	share
+stored	opgeslagen
+task	taak
+the service	de service
+transferred	overgedragen
+vCenter only; empty = the one of the server	alleen vCenter; leeg = die van de server
+verify	verificatie
+viewer	kijker
+{0} datastore(s), {1} folder(s), {2} resource pool(s) found.	{0} datastore(s), {1} map(pen), {2} resourcepool(s) gevonden.
+{0} free of {1}	{0} vrij van {1}
+{0} virtual machine(s)	{0} virtuele machine(s)
+{0} volume(s)	{0} volume(s)
+{0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: ongeveer {1} MB/s per CPU-kern; back-ups zijn ongeveer {2}% groter dan op niveau 5.
+{0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: ongeveer {1} MB/s per CPU-kern; back-ups zijn ongeveer {2}% kleiner dan op niveau 5.
+{0}: about {1} MB/s per CPU core; the baseline size (levels 1-4 are larger, 6-9 smaller).	{0}: ongeveer {1} MB/s per CPU-kern; de basisgrootte (niveaus 1-4 zijn groter, 6-9 kleiner).

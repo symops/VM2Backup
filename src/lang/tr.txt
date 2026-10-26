@@ -1,0 +1,63 @@
+# English text <TAB> translation (\n line break). Empty = show English. Run tools/gen_lang.py --update after changing the sources.
+- Installing VM2Backup -	- VM2Backup yükleniyor -
+- Removing VM2Backup -	- VM2Backup kaldırılıyor -
+Backup of virtual machines to a folder, FTP, FTP over TLS and SCP	Sanal makinelerin klasöre, FTP, FTP over TLS ve SCP'ye yedeklenmesi
+Browse...	Gözat...
+Close	Kapat
+Closing the running VM2Backup and stopping its service...	Çalışan VM2Backup kapatılıyor ve hizmeti durduruluyor...
+Copying the files to %s	Dosyalar %s konumuna kopyalanıyor
+Could not open: %s	Açılamadı: %s
+Creating the shortcuts.	Kısayollar oluşturuluyor.
+Data folder:	Veri klasörü:
+Desktop shortcut	Masaüstü kısayolu
+Done.	Bitti.
+Enabled, but not listening	Etkin, ancak dinlemiyor
+Error: VM2Backup.exe was not found next to the installer.	Hata: VM2Backup.exe yükleyicinin yanında bulunamadı.
+Error: VM2BackupService.exe was not found next to the installer.	Hata: VM2BackupService.exe yükleyicinin yanında bulunamadı.
+Error: cannot copy %s (error %lu).	Hata: %s kopyalanamıyor (hata %lu).
+Error: cannot find the Program Files folder.	Hata: Program Files klasörü bulunamıyor.
+Error: the installation folder is not valid (a full path such as C:\\Programs\\VM2Backup is needed).	Hata: yükleme klasörü geçerli değil (C:\\Programs\\VM2Backup gibi tam bir yol gerekir).
+Error: the service could not be registered (are you an administrator?).	Hata: hizmet kaydedilemedi (yönetici misiniz?).
+Exit	Çıkış
+Failed.	Başarısız.
+Install	Yükle
+Install to:	Yükleme konumu:
+Installed: version %s, %s	Yüklü: sürüm %s, %s
+Language:	Dil:
+Launch	Başlat
+Listening on %s:%lld	%s:%lld üzerinde dinleniyor
+Not installed	Yüklü değil
+Off	Kapalı
+Open logs folder	Günlük klasörünü aç
+Open web interface	Web arayüzünü aç
+Registering the program in Apps & features.	Program Uygulamalar ve özellikler'e kaydediliyor.
+Reinstall	Yeniden yükle
+Remove	Kaldır
+Remove VM2Backup from this computer?\n\nYour settings, the history and the backups you made are kept.	VM2Backup bu bilgisayardan kaldırılsın mı?\n\nAyarlarınız, geçmiş ve oluşturduğunuz yedekler korunur.
+Removing the shortcuts.	Kısayollar kaldırılıyor.
+Restart service	Hizmeti yeniden başlat
+Restart the service? Running backups are paused and continue after the restart.	Hizmet yeniden başlatılsın mı? Çalışan yedeklemeler duraklatılır ve yeniden başlatmadan sonra devam eder.
+Running	Çalışıyor
+Select the folder to install VM2Backup to	VM2Backup'ın yükleneceği klasörü seçin
+Service	Hizmet
+Service:	Hizmet:
+Start menu shortcut	Başlat menüsü kısayolu
+Start service	Hizmeti başlat
+Start the backup service now	Yedekleme hizmetini şimdi başlat
+Stop service	Hizmeti durdur
+Stop the service? Running backups are paused and continue after the next start.	Hizmet durdurulsun mu? Çalışan yedeklemeler duraklatılır ve bir sonraki başlatmadan sonra devam eder.
+Stopped	Durduruldu
+The VM2Backup service is not running, so there is no web site. Start the service first.	VM2Backup hizmeti çalışmıyor, bu nedenle web sitesi yok. Önce hizmeti başlatın.
+The VM2Backup service is not running. Start it with the "Start service" button.	VM2Backup hizmeti çalışmıyor. “Hizmeti başlat” düğmesiyle başlatın.
+The backup service is installed (it starts with Windows).	Yedekleme hizmeti yüklü (Windows ile başlar).
+The backup service is installed and started.	Yedekleme hizmeti yüklendi ve başlatıldı.
+The backup service is installed but did not start; start it with the "Start service" button of the program.	Yedekleme hizmeti kuruldu ancak başlamadı; programdaki “Hizmeti başlat” düğmesiyle başlatın.
+The service could not be started (is it installed? are you an administrator?).	Hizmet başlatılamadı (yüklü mü? yönetici misiniz?).
+The service could not be stopped (are you an administrator?).	Hizmet durdurulamadı (yönetici misiniz?).
+The web site is enabled, but not listening. Check the certificate and the port in the web interface.	Web sitesi etkin, ancak dinlemiyor. Web arayüzünde sertifikayı ve bağlantı noktasını denetleyin.
+The web site is off. Switch it on in the web interface, or reset it with VM2BackupService.exe /reset-web.	Web sitesi kapalı. Web arayüzünden açın veya VM2BackupService.exe /reset-web ile sıfırlayın.
+Update	Güncelle
+Version:	Sürüm:
+Web site:	Web sitesi:
+Windows language	Windows dili
+Your settings, the history and the backups you made are kept.	Ayarlarınız, geçmiş ve oluşturduğunuz yedekler korunur.

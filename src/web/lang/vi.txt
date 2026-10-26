@@ -1,0 +1,470 @@
+# English text <TAB> translation (\n line break). Empty = show English. Run tools/webui_strings.py --update after changing src/web/app.js.
+(chosen by the server)	(do máy chủ chọn)
+(the default resource pool)	(nhóm tài nguyên mặc định)
+(the root VM folder)	(thư mục VM gốc)
+A PKCS#12 file (.pfx) with the certificate and its private key, 1 MB at most. Only the certificate itself is served, not the chain.	Tệp PKCS#12 (.pfx) chứa chứng chỉ và khóa riêng của nó, tối đa 1 MB. Chỉ chứng chỉ được dùng, không kèm chuỗi chứng chỉ.
+A mapped drive letter (Z:) cannot be used: the service does not see it. Choose "Network drive..." to use its UNC path, or enter the UNC path.	Không thể dùng ký tự ổ đĩa được ánh xạ (Z:): dịch vụ không thấy nó. Chọn "Ổ đĩa mạng..." để dùng đường dẫn UNC của nó, hoặc nhập đường dẫn UNC.
+A new certificate was created. Your browser will ask you to trust it again.	Đã tạo chứng chỉ mới. Trình duyệt sẽ yêu cầu bạn tin cậy lại.
+A new user needs a password.	Người dùng mới cần có mật khẩu.
+A path on the server computer	Đường dẫn trên máy tính máy chủ
+A path on the server computer (the service reads it)	Đường dẫn trên máy tính máy chủ (dịch vụ đọc đường dẫn này)
+A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	VM ESXi / vCenter đang chạy được sao chép từ một snapshot tạm thời, snapshot này sẽ bị xóa sau đó. Nếu không có VMware Tools, snapshot quiesce sẽ thất bại: hãy tắt quiesce cho các VM như vậy.
+A virtual machine with this name already exists on the server. Enter another name; an existing machine is never overwritten.	Máy ảo có tên này đã tồn tại trên máy chủ. Hãy nhập tên khác; máy ảo hiện có không bao giờ bị ghi đè.
+Abort	Hủy bỏ
+Add Scheduled Task	Thêm tác vụ theo lịch
+Add Server	Thêm máy chủ
+Add address	Thêm địa chỉ
+Add at least one backup element.	Thêm ít nhất một thành phần sao lưu.
+Add element...	Thêm thành phần...
+Add user	Thêm người dùng
+Add user...	Thêm người dùng...
+Add window	Thêm khung giờ
+Additional names	Tên bổ sung
+Address	Địa chỉ
+Advanced	Nâng cao
+After a lost connection the program reconnects and goes on; nothing finished is sent again.	Sau khi mất kết nối, chương trình sẽ kết nối lại và tiếp tục; phần đã hoàn tất không được gửi lại.
+All	Tất cả
+All interfaces	Tất cả giao diện
+All results	Tất cả kết quả
+Allow a copy of a running VM (the copy is consistent only at the crash level)	Cho phép sao chép VM đang chạy (bản sao chỉ nhất quán ở mức crash)
+An administrator needs two-factor authentication when it is required in the security settings.	Quản trị viên cần xác thực hai yếu tố khi cài đặt bảo mật yêu cầu.
+Apply	Áp dụng
+Archive	Lưu trữ
+As in the backup (every file back to its original datastore)	Như trong bản sao lưu (mỗi tệp trở về datastore gốc)
+At least 10 characters	Ít nhất 10 ký tự
+At least 10 characters, not containing the user name.	Ít nhất 10 ký tự, không chứa tên người dùng.
+Audit log	Nhật ký kiểm tra
+Auto	Tự động
+Back	Quay lại
+Backup Explorer	Backup Explorer
+Backup of {0}	Sao lưu {0}
+Backup started.	Đã bắt đầu sao lưu.
+Backup virtual machines...	Sao lưu máy ảo...
+Balanced (default)	Cân bằng (mặc định)
+Browse network	Duyệt mạng
+Browse network...	Duyệt mạng...
+Browse...	Duyệt...
+Cancel	Hủy
+Cannot reach the server.	Không thể kết nối đến máy chủ.
+Cannot read: 	Không thể đọc: 
+Certificate	Chứng chỉ
+Change	Thay đổi
+Change password	Đổi mật khẩu
+Change settings...	Thay đổi cài đặt...
+Check the user name and password in the form.	Kiểm tra tên người dùng và mật khẩu trong biểu mẫu.
+Choose a file	Chọn một tệp
+Choose a file.	Chọn một tệp.
+Choose a folder	Chọn một thư mục
+Choose a folder.	Chọn một thư mục.
+Choose a server with virtual machines.	Chọn máy chủ có máy ảo.
+Choose a share or a folder.	Chọn một thư mục chia sẻ hoặc một thư mục.
+Choose a source server.	Chọn máy chủ nguồn.
+Choose at least one day in every time window.	Chọn ít nhất một ngày trong mỗi khung giờ.
+Choose at least one day of the week.	Chọn ít nhất một ngày trong tuần.
+Choose at least one virtual machine.	Chọn ít nhất một máy ảo.
+Choose the ESXi or vCenter server to restore to.	Chọn máy chủ ESXi hoặc vCenter để khôi phục.
+Choose the datacenter.	Chọn datacenter.
+Choose the datastore.	Chọn datastore.
+Choose the date and time.	Chọn ngày và giờ.
+Choose the file.	Chọn tệp.
+Choose the first start time.	Chọn thời điểm bắt đầu đầu tiên.
+Choose the kind of server to add.	Chọn loại máy chủ cần thêm.
+Choose the start time.	Chọn thời điểm bắt đầu.
+Clear history	Xóa lịch sử
+Clear the whole history?	Xóa toàn bộ lịch sử?
+Close	Đóng
+Code	Mã
+Comment	Ghi chú
+Complete	Hoàn tất
+Compression	Nén
+Compression level	Mức nén
+Compression threads	Số luồng nén
+Confirm	Xác nhận
+Connection	Kết nối
+Continue an interrupted backup of this VM when there is one	Tiếp tục bản sao lưu bị gián đoạn của VM này nếu có
+Copy	Sao chép
+Create	Tạo
+Create a self-signed certificate	Tạo chứng chỉ tự ký
+Create new self-signed...	Tạo mới chứng chỉ tự ký...
+Create schedule...	Tạo lịch...
+Created	Đã tạo
+Current password	Mật khẩu hiện tại
+Data folder	Thư mục dữ liệu
+Datacenter	Datacenter
+Datastore	Datastore
+Date and time	Ngày và giờ
+Day of the month	Ngày trong tháng
+Default local folder	Thư mục cục bộ mặc định
+Delete	Xóa
+Delete backup	Xóa bản sao lưu
+Delete server "{0}"? Backups already made stay where they are.	Xóa máy chủ "{0}"? Các bản sao lưu đã thực hiện vẫn được giữ nguyên.
+Delete task "{0}"?	Xóa tác vụ "{0}"?
+Delete the backup "{0}"?	Xóa bản sao lưu "{0}"?
+Delete user "{0}"?	Xóa người dùng "{0}"?
+Details	Chi tiết
+Disable two-factor	Tắt xác thực hai yếu tố
+Disable two-factor authentication of "{0}"?	Tắt xác thực hai yếu tố của "{0}"?
+Disabled	Đã tắt
+Discard the unfinished backup "{0}"? What was already copied is deleted.	Loại bỏ bản sao lưu chưa hoàn tất "{0}"? Phần đã sao chép sẽ bị xóa.
+Domain user name or user@domain; empty = the account of the service	Tên người dùng miền hoặc user@domain; để trống = tài khoản của dịch vụ
+Down	Xuống
+Drive	Ổ đĩa
+Drive {0} is not a network drive that the service can see. Enter the UNC path of the share or choose "Network drive...".	Ổ đĩa {0} không phải là ổ đĩa mạng mà dịch vụ nhìn thấy. Nhập đường dẫn UNC của thư mục chia sẻ hoặc chọn "Ổ đĩa mạng...".
+Duration	Thời lượng
+ESXi host or vCenter	Máy chủ ESXi hoặc vCenter
+Edit	Sửa
+Edit Server	Sửa máy chủ
+Edit user	Sửa người dùng
+Elements	Thành phần
+Enable scheduler	Bật bộ lập lịch
+Enable this only behind a reverse proxy that you control and that sets X-Forwarded-For itself; otherwise anybody can fake the address that is shown in the audit log and used for the login limits.	Chỉ bật tùy chọn này sau reverse proxy mà bạn kiểm soát và tự đặt X-Forwarded-For; nếu không, bất kỳ ai cũng có thể giả mạo địa chỉ hiển thị trong nhật ký kiểm tra và dùng cho giới hạn đăng nhập.
+Enabled	Đã bật
+Encrypt the backup (AES-256)	Mã hóa bản sao lưu (AES-256)
+Encrypted	Đã mã hóa
+Enter a name for the new virtual machine.	Nhập tên cho máy ảo mới.
+Enter a password, a private key file or the private key text.	Nhập mật khẩu, tệp khóa riêng hoặc văn bản khóa riêng.
+Enter a whole number in every numeric field.	Nhập số nguyên vào mọi trường số.
+Enter the address of the server.	Nhập địa chỉ của máy chủ.
+Enter the code from your authenticator app, or a recovery code.	Nhập mã từ ứng dụng xác thực của bạn, hoặc mã khôi phục.
+Enter the destination folder.	Nhập thư mục đích.
+Enter the interval (a number of 1 or more).	Nhập khoảng thời gian (số từ 1 trở lên).
+Enter the password for the encryption.	Nhập mật khẩu mã hóa.
+Enter the user name.	Nhập tên người dùng.
+Every N minutes / hours / days	Mỗi N phút / giờ / ngày
+Every N months	Mỗi N tháng
+Every N weeks	Mỗi N tuần
+Every volume is read back from the target: its size and SHA-256 are compared with the ones recorded while it was written, and the data is decrypted and decompressed to prove that the backup can be restored.	Mỗi volume được đọc lại từ đích: kích thước và SHA-256 của nó được so sánh với giá trị đã ghi khi nó được ghi, và dữ liệu được giải mã và giải nén để chứng minh rằng bản sao lưu có thể khôi phục.
+FTP	FTP
+FTP over explicit TLS (FTPES)	FTP qua TLS tường minh (FTPES)
+FTP over implicit TLS (FTPS)	FTP qua TLS ngầm định (FTPS)
+Failed	Thất bại
+Fast	Nhanh
+Fastest	Nhanh nhất
+File	Tệp
+Fingerprint	Dấu vân tay
+Finish	Hoàn thành
+Finished	Đã hoàn tất
+First start	Lần bắt đầu đầu tiên
+First wait before a reconnect, s	Thời gian chờ đầu tiên trước khi kết nối lại, giây
+Folder	Thư mục
+Folder on the server	Thư mục trên máy chủ
+Folder with VMs	Thư mục chứa VM
+For several virtual machines the folder must contain the {VM} tag.	Với nhiều máy ảo, thư mục phải chứa thẻ {VM}.
+Fri	T6
+From	Từ
+General	Chung
+Give the server a name.	Đặt tên cho máy chủ.
+Give the task a title.	Đặt tiêu đề cho tác vụ.
+Go	Đi
+HTML report...	Báo cáo HTML...
+History entries kept	Số mục lịch sử được giữ
+Host	Máy chủ
+Host key	Khóa máy chủ
+Imported	Đã nhập
+Include the memory of the virtual machine in the snapshot	Đưa bộ nhớ của máy ảo vào snapshot
+Job "{0}" finished: {1}	Tác vụ "{0}" đã kết thúc: {1}
+Keep last backups	Số bản sao lưu gần nhất được giữ
+Keep the computer awake while the scheduler is on	Giữ máy tính không ngủ khi bộ lập lịch đang bật
+Key passphrase	Cụm mật khẩu của khóa
+Kind	Loại
+Language	Ngôn ngữ
+Last result	Kết quả gần nhất
+Last run	Lần chạy gần nhất
+Leave empty to keep the password.	Để trống để giữ nguyên mật khẩu.
+Lines	Dòng
+Link	Liên kết
+Listening interfaces	Giao diện lắng nghe
+Load	Tải
+Loading...	Đang tải...
+Loading... {0} s	Đang tải... {0} giây
+Local Computer	Máy tính cục bộ
+Local Computer cannot be changed.	Không thể thay đổi Máy tính cục bộ.
+Local Computer cannot be deleted.	Không thể xóa Máy tính cục bộ.
+Longest wait before a reconnect, s	Thời gian chờ dài nhất trước khi kết nối lại, giây
+Machine file	Tệp máy
+Maximum	Tối đa
+Message	Thông báo
+Minimum TLS version	Phiên bản TLS tối thiểu
+Mon	T2
+Monthly	Hằng tháng
+Name	Tên
+Names	Tên
+Needs about {0} GiB of memory per CPU core.	Cần khoảng {0} GiB bộ nhớ cho mỗi lõi CPU.
+Network	Mạng
+Network drive	Ổ đĩa mạng
+Network drive...	Ổ đĩa mạng...
+Network folder	Thư mục mạng
+Network folder (SMB)	Thư mục mạng (SMB)
+Network path	Đường dẫn mạng
+Never	Không bao giờ
+New VM name	Tên máy ảo mới
+New password	Mật khẩu mới
+Next	Tiếp
+Next run	Lần chạy tiếp theo
+Next run: {0}	Lần chạy tiếp theo: {0}
+No	Không
+No computers were found. Type a server name below.	Không tìm thấy máy tính nào. Nhập tên máy chủ bên dưới.
+No elements yet. Add a backup element.	Chưa có thành phần nào. Thêm một thành phần sao lưu.
+No mapped network drives were found.	Không tìm thấy ổ đĩa mạng được ánh xạ nào.
+No users are configured. On the server, run VM2BackupService.exe /reset-web as an administrator.	Chưa cấu hình người dùng nào. Trên máy chủ, hãy chạy VM2BackupService.exe /reset-web với quyền quản trị viên.
+No virtual machines found.	Không tìm thấy máy ảo nào.
+Not scheduled	Chưa lập lịch
+Not scheduled (run manually)	Chưa lập lịch (chạy thủ công)
+Nothing here yet.	Chưa có gì ở đây.
+Nothing here.	Không có gì ở đây.
+OK	OK
+On error, go on with the next VM	Khi có lỗi, tiếp tục với VM kế tiếp
+Once	Một lần
+One volume (no resuming)	Một volume (không thể tiếp tục)
+Only for a network folder that asks for a user name	Chỉ dành cho thư mục mạng yêu cầu tên người dùng
+Open	Mở
+Owner	Chủ sở hữu
+Parallel jobs	Số tác vụ song song
+Parallel jobs: 1 to 16.	Số tác vụ song song: từ 1 đến 16.
+Passive mode	Chế độ passive
+Password	Mật khẩu
+Password changed. Sign in again.	Đã đổi mật khẩu. Hãy đăng nhập lại.
+Password of the file	Mật khẩu của tệp
+Paste the key instead of a file; it is stored protected and never shown again	Dán khóa thay cho tệp; khóa được lưu có bảo vệ và không bao giờ hiển thị lại
+Paused	Đã tạm dừng
+Pinned fingerprint	Dấu vân tay đã ghim
+Port	Cổng
+Power on after restore	Bật nguồn sau khi khôi phục
+Press Load to read the datacenters, datastores, folders and resource pools of the server.	Nhấn Tải để đọc các datacenter, datastore, thư mục và nhóm tài nguyên của máy chủ.
+Private key file	Tệp khóa riêng
+Private key text	Văn bản khóa riêng
+Quiesce the guest file system (needs VMware Tools in the VM)	Quiesce hệ thống tệp của máy khách (cần VMware Tools trong VM)
+Recovery code	Mã khôi phục
+Recovery codes	Mã khôi phục
+Recovery codes left	Số mã khôi phục còn lại
+Refresh	Làm mới
+Remove	Gỡ bỏ
+Remove window	Xóa khung giờ
+Repeat	Lặp lại
+Repeat every	Lặp lại mỗi
+Report	Báo cáo
+Require two-factor authentication for administrators	Yêu cầu xác thực hai yếu tố cho quản trị viên
+Resource pool	Nhóm tài nguyên
+Restore	Khôi phục
+Restore started.	Đã bắt đầu khôi phục.
+Restore to	Khôi phục vào
+Restore to folder	Khôi phục vào thư mục
+Restore...	Khôi phục...
+Restored as	Khôi phục thành
+Restoring "{0}" of {1}.	Đang khôi phục "{0}" của {1}.
+Result	Kết quả
+Resumable transfer	Truyền có thể tiếp tục
+Retries after a lost connection	Số lần thử lại sau khi mất kết nối
+Role	Vai trò
+Run now	Chạy ngay
+Running	Đang chạy
+Running jobs	Tác vụ đang chạy
+SCP (SSH)	SCP (SSH)
+SFTP (no longer supported)	SFTP (không còn được hỗ trợ)
+Sat	T7
+Saved.	Đã lưu.
+Scan the code with an authenticator app (or type the secret), then enter the 6-digit code it shows.	Quét mã bằng ứng dụng xác thực (hoặc nhập khóa bí mật), rồi nhập mã 6 chữ số mà ứng dụng hiển thị.
+Schedule	Lịch
+Scheduled Task Details	Chi tiết tác vụ theo lịch
+Scheduled Tasks	Tác vụ theo lịch
+Scheduler	Bộ lập lịch
+Secret	Khóa bí mật
+Security	Bảo mật
+Select	Chọn
+Select a drive first.	Hãy chọn ổ đĩa trước.
+Select a row first.	Hãy chọn một hàng trước.
+Self-signed	Tự ký
+Server	Máy chủ
+Server name	Tên máy chủ
+Session idle timeout, minutes	Thời gian chờ phiên không hoạt động, phút
+Set up two-factor authentication	Thiết lập xác thực hai yếu tố
+Set up two-factor...	Thiết lập xác thực hai yếu tố...
+Settings	Cài đặt
+Show	Hiện
+Sign in	Đăng nhập
+Sign out	Đăng xuất
+Sign-in failed.	Đăng nhập thất bại.
+Size	Kích thước
+Snapshot	Snapshot
+Source	Nguồn
+Source server	Máy chủ nguồn
+Speed	Tốc độ
+Speed limit, Mbit/s (0 = unlimited)	Giới hạn tốc độ, Mbit/s (0 = không giới hạn)
+Start	Bắt đầu
+Start time	Thời điểm bắt đầu
+Started	Bắt đầu lúc
+State	Trạng thái
+Status	Trạng thái
+Stop	Dừng
+Stopped.	Đã dừng.
+Stored	Đã lưu trữ
+Strong	Mạnh
+Subject	Chủ thể
+Success	Thành công
+Sun	CN
+Switch the scheduler off	Tắt bộ lập lịch
+Switch the scheduler on	Bật bộ lập lịch
+TLS 1.0 (weak)	TLS 1.0 (yếu)
+TLS 1.0 and 1.1 are weak. Use them only for old hosts (ESXi 6.0 / 6.5) that offer nothing newer.	TLS 1.0 và 1.1 là yếu. Chỉ dùng cho các host cũ (ESXi 6.0 / 6.5) không hỗ trợ phiên bản mới hơn.
+TLS 1.1 (weak)	TLS 1.1 (yếu)
+Target	Đích
+Target server	Máy chủ đích
+Task	Tác vụ
+Task History	Lịch sử tác vụ
+Task started.	Đã bắt đầu tác vụ.
+Test connection	Kiểm tra kết nối
+Testing...	Đang kiểm tra...
+The QR code is not available.	Mã QR không khả dụng.
+The certificate always includes this computer name, localhost, 127.0.0.1 and ::1. Add the DNS names and IP addresses under which the site is reached, one per line.	Chứng chỉ luôn bao gồm tên máy tính này, localhost, 127.0.0.1 và ::1. Thêm các tên DNS và địa chỉ IP dùng để truy cập trang, mỗi dòng một mục.
+The certificate was installed.	Đã cài đặt chứng chỉ.
+The connection is tested now. "Test connection" tests again; "Finish" saves the server.	Kết nối đang được kiểm tra. "Kiểm tra kết nối" sẽ kiểm tra lại; "Hoàn thành" lưu máy chủ.
+The connection test failed or has not finished. Save the server anyway?	Kiểm tra kết nối thất bại hoặc chưa hoàn tất. Vẫn lưu máy chủ?
+The connection works.	Kết nối hoạt động.
+The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	Datastore "{0}" còn trống {1}, bản sao lưu chiếm tối đa {2}. Vẫn khôi phục?
+The figures are approximate (typical data). More CPU cores make compression faster.	Các số liệu chỉ là ước tính (dữ liệu điển hình). Nhiều lõi CPU hơn giúp nén nhanh hơn.
+The file is larger than 1 MB.	Tệp lớn hơn 1 MB.
+The list is cut: only the first entries are shown.	Danh sách bị cắt bớt: chỉ hiển thị các mục đầu tiên.
+The longest wait cannot be shorter than the first one.	Thời gian chờ dài nhất không được ngắn hơn thời gian chờ đầu tiên.
+The name of the virtual machine must be at most 80 characters and cannot contain slashes or %.	Tên máy ảo tối đa 80 ký tự và không được chứa dấu gạch chéo hoặc %.
+The password is too simple.	Mật khẩu quá đơn giản.
+The password must be at least 10 characters long.	Mật khẩu phải dài ít nhất 10 ký tự.
+The password must not contain the user name.	Mật khẩu không được chứa tên người dùng.
+The passwords differ.	Mật khẩu không khớp.
+The port must be 1..65535.	Cổng phải nằm trong khoảng 1..65535.
+The schedule windows of a task can set another limit for its hours; the lowest one applies.	Các khung giờ của lịch trong một tác vụ có thể đặt giới hạn khác cho giờ của nó; giới hạn thấp nhất được áp dụng.
+The scheduler is off: scheduled tasks do not start by themselves.	Bộ lập lịch đang tắt: các tác vụ theo lịch không tự khởi động.
+The server did not answer in time; try again.	Máy chủ không phản hồi kịp thời; hãy thử lại.
+The server or share was not found.	Không tìm thấy máy chủ hoặc thư mục chia sẻ.
+The server presented an identity that is not known yet: {0}. If you recognise it, you can trust it.	Máy chủ đưa ra một danh tính chưa được biết: {0}. Nếu bạn nhận ra nó, bạn có thể tin cậy.
+The service cannot see drive letters. Enter the UNC path of the share.	Dịch vụ không thấy ký tự ổ đĩa. Nhập đường dẫn UNC của thư mục chia sẻ.
+The service cannot see drive letters. {0} is the network drive {1}: its UNC path is stored instead. Enter the user name and password that give access to it.	Dịch vụ không thấy ký tự ổ đĩa. {0} là ổ đĩa mạng {1}: đường dẫn UNC của nó được lưu thay thế. Nhập tên người dùng và mật khẩu để truy cập.
+The site always stays reachable on this computer (localhost): that is how a mistake here can be repaired.	Trang luôn truy cập được trên máy tính này (localhost): nhờ đó có thể sửa lỗi cấu hình tại đây.
+The site is moving to port {0}. Open {1} and sign in again.	Trang đang chuyển sang cổng {0}. Mở {1} và đăng nhập lại.
+The snapshot settings apply to ESXi and vCenter sources only.	Cài đặt snapshot chỉ áp dụng cho nguồn ESXi và vCenter.
+The speed limit cannot be negative.	Giới hạn tốc độ không được âm.
+The task may run only inside its windows. A window that ends before it starts goes over midnight.	Tác vụ chỉ được chạy trong các khung giờ của nó. Khung giờ kết thúc trước khi bắt đầu sẽ qua nửa đêm.
+The task was copied.	Đã sao chép tác vụ.
+The volume size cannot be negative.	Kích thước volume không được âm.
+The waits must be between 1 and 86400 seconds.	Thời gian chờ phải nằm trong khoảng từ 1 đến 86400 giây.
+There is no ESXi or vCenter server yet. Add one on the Datacenter page first.	Chưa có máy chủ ESXi hoặc vCenter. Hãy thêm một máy chủ ở trang Datacenter trước.
+This backup is encrypted: enter its password.	Bản sao lưu này được mã hóa: nhập mật khẩu của nó.
+This browser cannot read files.	Trình duyệt này không thể đọc tệp.
+This browser cannot save files.	Trình duyệt này không thể lưu tệp.
+This computer	Máy tính này
+This computer only (localhost)	Chỉ máy tính này (localhost)
+This is an unfinished backup.	Đây là bản sao lưu chưa hoàn tất.
+This server holds backups, not virtual machines.	Máy chủ này chứa bản sao lưu, không chứa máy ảo.
+Thu	T5
+Time windows	Khung giờ
+Title	Tiêu đề
+To	Đến
+Transfer: SSH encrypted	Truyền: mã hóa SSH
+Transfer: TLS encrypted (FTP over TLS)	Truyền: mã hóa TLS (FTP qua TLS)
+Transfer: local / network folder	Truyền: thư mục cục bộ / mạng
+Transfer: network folder (SMB; not encrypted unless the share requires it)	Truyền: thư mục mạng (SMB; không mã hóa trừ khi thư mục chia sẻ yêu cầu)
+Transfer: plain FTP (not encrypted - enable encryption of the backup!)	Truyền: FTP thường (không mã hóa - hãy bật mã hóa bản sao lưu!)
+Trigger	Điều kiện kích hoạt
+Trust X-Forwarded-For from a reverse proxy on this computer	Tin cậy X-Forwarded-For từ reverse proxy trên máy tính này
+Trust this identity and test again	Tin cậy danh tính này và kiểm tra lại
+Tue	T3
+Two-factor	Xác thực hai yếu tố
+Type	Loại
+Unfinished (resumable)	Chưa hoàn tất (có thể tiếp tục)
+Unit	Đơn vị
+Up	Lên
+Upload	Tải lên
+Upload PFX...	Tải lên PFX...
+Upload a certificate (PFX)	Tải lên chứng chỉ (PFX)
+Use	Dùng
+Use a recovery code	Dùng mã khôi phục
+Use the authenticator code	Dùng mã từ ứng dụng xác thực
+Use {VM} for the VM name	Dùng {VM} cho tên VM
+User	Người dùng
+User name	Tên người dùng
+Users	Người dùng
+VM folder	Thư mục VM
+VM folder (VMware Workstation / Player)	Thư mục VM (VMware Workstation / Player)
+VMware ESXi host	Máy chủ VMware ESXi
+VMware vCenter	VMware vCenter
+Valid from	Có hiệu lực từ
+Valid until	Có hiệu lực đến
+Verification started.	Đã bắt đầu xác minh.
+Verify	Xác minh
+Verify Backup	Xác minh bản sao lưu
+Verify the backup after it is made	Xác minh bản sao lưu sau khi tạo
+Verify the certificate	Xác minh chứng chỉ
+Version	Phiên bản
+Virtual Machine Backup	Virtual Machine Backup
+Virtual machine	Máy ảo
+Virtual machines	Máy ảo
+Virtual machines...	Máy ảo...
+Volume size	Kích thước volume
+Volume size, MiB (0 = one volume)	Kích thước volume, MiB (0 = một volume)
+Volumes	Volume
+Wait until the choices of the server are loaded.	Chờ cho đến khi các lựa chọn của máy chủ được tải xong.
+Waiting	Đang chờ
+Warning	Cảnh báo
+Warning: the password is stored encrypted and is not retrievable. Be sure to remember it or write it down in a safe place in order to be able to decrypt the backup.	Cảnh báo: mật khẩu được lưu ở dạng mã hóa và không thể truy xuất. Hãy nhớ nó hoặc ghi lại ở nơi an toàn để có thể giải mã bản sao lưu.
+Web access	Truy cập web
+Wed	T4
+Weekly	Hằng tuần
+Windows maps drives per user. The service sees only the drives mapped for users who are logged on and its own. The drive letter itself cannot be used by the service: its UNC path is stored, and the credentials must be entered.	Windows ánh xạ ổ đĩa theo từng người dùng. Dịch vụ chỉ thấy các ổ đĩa được ánh xạ cho những người dùng đang đăng nhập và của chính nó. Dịch vụ không thể dùng ký tự ổ đĩa: đường dẫn UNC của nó được lưu, và phải nhập thông tin xác thực.
+Write these one-time codes down now: they are shown only once.	Hãy ghi lại các mã dùng một lần này ngay: chúng chỉ hiển thị một lần.
+Yes	Có
+Your session has ended. Sign in again.	Phiên của bạn đã kết thúc. Hãy đăng nhập lại.
+admin	admin
+backup	sao lưu
+cdrom	ổ quang
+days	ngày
+down	xuống
+encrypted	đã mã hóa
+every month	hằng tháng
+every week	hằng tuần
+every {0} months	mỗi {0} tháng
+every {0} weeks	mỗi {0} tuần
+every {0} {1}	mỗi {0} {1}
+fixed	cố định
+folder	thư mục
+from {0}	từ {0}
+hours	giờ
+last	gần nhất
+limit {0} Mbit/s	giới hạn {0} Mbit/s
+listening	đang lắng nghe
+manual	thủ công
+minutes	phút
+network	mạng
+not confirmed	chưa xác nhận
+not listening	không lắng nghe
+off	tắt
+on	bật
+on day {0} at {1}	vào ngày {0} lúc {1}
+on {0} at {1}	vào {0} lúc {1}
+once at {0}	một lần lúc {0}
+operator	người vận hành
+optional	tùy chọn
+optional: the datacenter used when a backup does not name one	tùy chọn: datacenter dùng khi bản sao lưu không chỉ định
+other	khác
+read	đọc
+removable	di động
+required	bắt buộc
+restore	khôi phục
+restore_esxi	khôi phục vào ESXi
+running {0}	đang chạy {0}
+scheduled	theo lịch
+server	máy chủ
+sha256:... (optional)	sha256:... (tùy chọn)
+share	chia sẻ
+stored	đã lưu trữ
+task	tác vụ
+the service	dịch vụ
+transferred	đã truyền
+vCenter only; empty = the one of the server	chỉ vCenter; để trống = của máy chủ
+verify	xác minh
+viewer	người xem
+{0} datastore(s), {1} folder(s), {2} resource pool(s) found.	Đã tìm thấy {0} datastore, {1} thư mục, {2} nhóm tài nguyên.
+{0} free of {1}	Còn trống {0} trên {1}
+{0} virtual machine(s)	{0} máy ảo
+{0} volume(s)	{0} volume
+{0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: khoảng {1} MB/s trên mỗi lõi CPU; bản sao lưu lớn hơn khoảng {2}% so với mức 5.
+{0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: khoảng {1} MB/s trên mỗi lõi CPU; bản sao lưu nhỏ hơn khoảng {2}% so với mức 5.
+{0}: about {1} MB/s per CPU core; the baseline size (levels 1-4 are larger, 6-9 smaller).	{0}: khoảng {1} MB/s trên mỗi lõi CPU; kích thước cơ sở (mức 1-4 lớn hơn, 6-9 nhỏ hơn).

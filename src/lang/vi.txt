@@ -1,0 +1,63 @@
+# English text <TAB> translation (\n line break). Empty = show English. Run tools/gen_lang.py --update after changing the sources.
+- Installing VM2Backup -	- Đang cài đặt VM2Backup -
+- Removing VM2Backup -	- Đang gỡ VM2Backup -
+Backup of virtual machines to a folder, FTP, FTP over TLS and SCP	Sao lưu máy ảo vào thư mục, FTP, FTP over TLS và SCP
+Browse...	Duyệt...
+Close	Đóng
+Closing the running VM2Backup and stopping its service...	Đang đóng VM2Backup đang chạy và dừng dịch vụ của nó...
+Copying the files to %s	Đang sao chép tệp vào %s
+Could not open: %s	Không thể mở: %s
+Creating the shortcuts.	Đang tạo lối tắt.
+Data folder:	Thư mục dữ liệu:
+Desktop shortcut	Lối tắt trên màn hình nền
+Done.	Xong.
+Enabled, but not listening	Đã bật nhưng chưa lắng nghe
+Error: VM2Backup.exe was not found next to the installer.	Lỗi: không tìm thấy VM2Backup.exe cạnh trình cài đặt.
+Error: VM2BackupService.exe was not found next to the installer.	Lỗi: không tìm thấy VM2BackupService.exe cạnh trình cài đặt.
+Error: cannot copy %s (error %lu).	Lỗi: không sao chép được %s (lỗi %lu).
+Error: cannot find the Program Files folder.	Lỗi: không tìm thấy thư mục Program Files.
+Error: the installation folder is not valid (a full path such as C:\\Programs\\VM2Backup is needed).	Lỗi: thư mục cài đặt không hợp lệ (cần đường dẫn đầy đủ như C:\\Programs\\VM2Backup).
+Error: the service could not be registered (are you an administrator?).	Lỗi: không đăng ký được dịch vụ (bạn có phải quản trị viên không?).
+Exit	Thoát
+Failed.	Thất bại.
+Install	Cài đặt
+Install to:	Cài đặt vào:
+Installed: version %s, %s	Đã cài đặt: phiên bản %s, %s
+Language:	Ngôn ngữ:
+Launch	Khởi chạy
+Listening on %s:%lld	Đang lắng nghe trên %s:%lld
+Not installed	Chưa cài đặt
+Off	Tắt
+Open logs folder	Mở thư mục nhật ký
+Open web interface	Mở giao diện web
+Registering the program in Apps & features.	Đang đăng ký chương trình trong Ứng dụng đã cài đặt.
+Reinstall	Cài đặt lại
+Remove	Gỡ bỏ
+Remove VM2Backup from this computer?\n\nYour settings, the history and the backups you made are kept.	Gỡ VM2Backup khỏi máy tính này?\n\nCài đặt, lịch sử và các bản sao lưu đã tạo được giữ lại.
+Removing the shortcuts.	Đang xóa lối tắt.
+Restart service	Khởi động lại dịch vụ
+Restart the service? Running backups are paused and continue after the restart.	Khởi động lại dịch vụ? Các bản sao lưu đang chạy sẽ tạm dừng và tiếp tục sau khi khởi động lại.
+Running	Đang chạy
+Select the folder to install VM2Backup to	Chọn thư mục để cài đặt VM2Backup
+Service	Dịch vụ
+Service:	Dịch vụ:
+Start menu shortcut	Lối tắt trong menu Start
+Start service	Bật dịch vụ
+Start the backup service now	Bật dịch vụ sao lưu ngay
+Stop service	Dừng dịch vụ
+Stop the service? Running backups are paused and continue after the next start.	Dừng dịch vụ? Các bản sao lưu đang chạy sẽ tạm dừng và tiếp tục sau lần khởi động tới.
+Stopped	Đã dừng
+The VM2Backup service is not running, so there is no web site. Start the service first.	Dịch vụ VM2Backup không chạy nên không có trang web. Hãy khởi động dịch vụ trước.
+The VM2Backup service is not running. Start it with the "Start service" button.	Dịch vụ VM2Backup không chạy. Hãy khởi động bằng nút “Bật dịch vụ”.
+The backup service is installed (it starts with Windows).	Dịch vụ sao lưu đã được cài đặt (khởi động cùng Windows).
+The backup service is installed and started.	Dịch vụ sao lưu đã được cài đặt và khởi động.
+The backup service is installed but did not start; start it with the "Start service" button of the program.	Dịch vụ sao lưu đã được cài đặt nhưng không khởi động; hãy khởi động bằng nút “Bật dịch vụ” của chương trình.
+The service could not be started (is it installed? are you an administrator?).	Không khởi động được dịch vụ (đã cài đặt chưa? bạn có phải quản trị viên không?).
+The service could not be stopped (are you an administrator?).	Không thể dừng dịch vụ (bạn có phải quản trị viên không?).
+The web site is enabled, but not listening. Check the certificate and the port in the web interface.	Trang web đã bật nhưng không lắng nghe. Hãy kiểm tra chứng chỉ và cổng trong giao diện web.
+The web site is off. Switch it on in the web interface, or reset it with VM2BackupService.exe /reset-web.	Trang web đang tắt. Hãy bật trong giao diện web hoặc đặt lại bằng VM2BackupService.exe /reset-web.
+Update	Cập nhật
+Version:	Phiên bản:
+Web site:	Trang web:
+Windows language	Ngôn ngữ Windows
+Your settings, the history and the backups you made are kept.	Cài đặt, lịch sử và các bản sao lưu đã tạo được giữ lại.

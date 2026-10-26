@@ -1,0 +1,470 @@
+# English text <TAB> translation (\n line break). Empty = show English. Run tools/webui_strings.py --update after changing src/web/app.js.
+(chosen by the server)	(escolhido pelo servidor)
+(the default resource pool)	(o pool de recursos padrão)
+(the root VM folder)	(a pasta raiz das VMs)
+A PKCS#12 file (.pfx) with the certificate and its private key, 1 MB at most. Only the certificate itself is served, not the chain.	Um arquivo PKCS#12 (.pfx) com o certificado e sua chave privada, de no máximo 1 MB. Somente o certificado em si é fornecido, não a cadeia.
+A mapped drive letter (Z:) cannot be used: the service does not see it. Choose "Network drive..." to use its UNC path, or enter the UNC path.	Não é possível usar a letra de uma unidade de rede mapeada (Z:): o serviço não a enxerga. Escolha "Unidade de rede..." para usar o caminho UNC dela, ou informe o caminho UNC.
+A new certificate was created. Your browser will ask you to trust it again.	Um novo certificado foi criado. O navegador pedirá que você confie nele novamente.
+A new user needs a password.	Um novo usuário precisa de uma senha.
+A path on the server computer	Um caminho no computador do servidor
+A path on the server computer (the service reads it)	Um caminho no computador do servidor (o serviço o lê)
+A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	Uma VM ESXi / vCenter em execução é copiada a partir de um instantâneo temporário, que é removido depois. Sem o VMware Tools, o instantâneo com quiescência falha: desative a quiescência para essas VMs.
+A virtual machine with this name already exists on the server. Enter another name; an existing machine is never overwritten.	Já existe uma máquina virtual com este nome no servidor. Informe outro nome; uma máquina existente nunca é sobrescrita.
+Abort	Anular
+Add Scheduled Task	Adicionar tarefa agendada
+Add Server	Adicionar servidor
+Add address	Adicionar endereço
+Add at least one backup element.	Adicione pelo menos um elemento de backup.
+Add element...	Adicionar elemento...
+Add user	Adicionar usuário
+Add user...	Adicionar usuário...
+Add window	Adicionar janela
+Additional names	Nomes adicionais
+Address	Endereço
+Advanced	Avançado
+After a lost connection the program reconnects and goes on; nothing finished is sent again.	Após perder a conexão, o programa reconecta e continua; nada do que já foi concluído é enviado de novo.
+All	Todos
+All interfaces	Todas as interfaces
+All results	Todos os resultados
+Allow a copy of a running VM (the copy is consistent only at the crash level)	Permitir a cópia de uma VM em execução (a cópia é consistente apenas no nível de falha)
+An administrator needs two-factor authentication when it is required in the security settings.	Um administrador precisa de autenticação de dois fatores quando ela é exigida nas configurações de segurança.
+Apply	Aplicar
+Archive	Arquivo
+As in the backup (every file back to its original datastore)	Como no backup (cada arquivo volta ao datastore original)
+At least 10 characters	Pelo menos 10 caracteres
+At least 10 characters, not containing the user name.	Pelo menos 10 caracteres, sem conter o nome de usuário.
+Audit log	Log de auditoria
+Auto	Auto
+Back	Voltar
+Backup Explorer	Explorador de backups
+Backup of {0}	Backup de {0}
+Backup started.	Backup iniciado.
+Backup virtual machines...	Fazer backup de máquinas virtuais...
+Balanced (default)	Equilibrado (padrão)
+Browse network	Procurar na rede
+Browse network...	Procurar na rede...
+Browse...	Procurar...
+Cancel	Cancelar
+Cannot reach the server.	Não foi possível acessar o servidor.
+Cannot read: 	Não foi possível ler: 
+Certificate	Certificado
+Change	Alterar
+Change password	Alterar senha
+Change settings...	Alterar configurações...
+Check the user name and password in the form.	Verifique o nome de usuário e a senha no formulário.
+Choose a file	Escolher um arquivo
+Choose a file.	Escolha um arquivo.
+Choose a folder	Escolher uma pasta
+Choose a folder.	Escolha uma pasta.
+Choose a server with virtual machines.	Escolha um servidor com máquinas virtuais.
+Choose a share or a folder.	Escolha um compartilhamento ou uma pasta.
+Choose a source server.	Escolha um servidor de origem.
+Choose at least one day in every time window.	Escolha pelo menos um dia em cada janela de tempo.
+Choose at least one day of the week.	Escolha pelo menos um dia da semana.
+Choose at least one virtual machine.	Escolha pelo menos uma máquina virtual.
+Choose the ESXi or vCenter server to restore to.	Escolha o servidor ESXi ou vCenter para onde restaurar.
+Choose the datacenter.	Escolha o datacenter.
+Choose the datastore.	Escolha o datastore.
+Choose the date and time.	Escolha a data e a hora.
+Choose the file.	Escolha o arquivo.
+Choose the first start time.	Escolha a hora da primeira execução.
+Choose the kind of server to add.	Escolha o tipo de servidor a adicionar.
+Choose the start time.	Escolha a hora de início.
+Clear history	Limpar histórico
+Clear the whole history?	Limpar todo o histórico?
+Close	Fechar
+Code	Código
+Comment	Comentário
+Complete	Concluída
+Compression	Compactação
+Compression level	Nível de compactação
+Compression threads	Threads de compactação
+Confirm	Confirmar
+Connection	Conexão
+Continue an interrupted backup of this VM when there is one	Continuar um backup interrompido desta VM, quando houver
+Copy	Copiar
+Create	Criar
+Create a self-signed certificate	Criar um certificado autoassinado
+Create new self-signed...	Criar novo autoassinado...
+Create schedule...	Criar agendamento...
+Created	Criado
+Current password	Senha atual
+Data folder	Pasta de dados
+Datacenter	Datacenter
+Datastore	Datastore
+Date and time	Data e hora
+Day of the month	Dia do mês
+Default local folder	Pasta local padrão
+Delete	Excluir
+Delete backup	Excluir backup
+Delete server "{0}"? Backups already made stay where they are.	Excluir o servidor "{0}"? Os backups já feitos permanecem onde estão.
+Delete task "{0}"?	Excluir a tarefa "{0}"?
+Delete the backup "{0}"?	Excluir o backup "{0}"?
+Delete user "{0}"?	Excluir o usuário "{0}"?
+Details	Detalhes
+Disable two-factor	Desativar autenticação de dois fatores
+Disable two-factor authentication of "{0}"?	Desativar a autenticação de dois fatores de "{0}"?
+Disabled	Desativado
+Discard the unfinished backup "{0}"? What was already copied is deleted.	Descartar o backup inacabado "{0}"? O que já foi copiado é excluído.
+Domain user name or user@domain; empty = the account of the service	Nome de usuário do domínio ou usuário@domínio; vazio = a conta do serviço
+Down	Para baixo
+Drive	Unidade
+Drive {0} is not a network drive that the service can see. Enter the UNC path of the share or choose "Network drive...".	A unidade {0} não é uma unidade de rede que o serviço enxerga. Informe o caminho UNC do compartilhamento ou escolha "Unidade de rede...".
+Duration	Duração
+ESXi host or vCenter	Host ESXi ou vCenter
+Edit	Editar
+Edit Server	Editar servidor
+Edit user	Editar usuário
+Elements	Elementos
+Enable scheduler	Ativar o agendador
+Enable this only behind a reverse proxy that you control and that sets X-Forwarded-For itself; otherwise anybody can fake the address that is shown in the audit log and used for the login limits.	Ative isto apenas atrás de um proxy reverso que você controla e que define o X-Forwarded-For por conta própria; caso contrário, qualquer pessoa pode falsificar o endereço exibido no log de auditoria e usado nos limites de login.
+Enabled	Ativado
+Encrypt the backup (AES-256)	Criptografar o backup (AES-256)
+Encrypted	Criptografado
+Enter a name for the new virtual machine.	Informe um nome para a nova máquina virtual.
+Enter a password, a private key file or the private key text.	Informe uma senha, um arquivo de chave privada ou o texto da chave privada.
+Enter a whole number in every numeric field.	Informe um número inteiro em cada campo numérico.
+Enter the address of the server.	Informe o endereço do servidor.
+Enter the code from your authenticator app, or a recovery code.	Informe o código do seu aplicativo autenticador ou um código de recuperação.
+Enter the destination folder.	Informe a pasta de destino.
+Enter the interval (a number of 1 or more).	Informe o intervalo (um número igual ou maior que 1).
+Enter the password for the encryption.	Informe a senha da criptografia.
+Enter the user name.	Informe o nome de usuário.
+Every N minutes / hours / days	A cada N minutos / horas / dias
+Every N months	A cada N meses
+Every N weeks	A cada N semanas
+Every volume is read back from the target: its size and SHA-256 are compared with the ones recorded while it was written, and the data is decrypted and decompressed to prove that the backup can be restored.	Cada volume é relido do destino: o tamanho e o SHA-256 são comparados com os registrados durante a gravação, e os dados são descriptografados e descompactados para comprovar que o backup pode ser restaurado.
+FTP	FTP
+FTP over explicit TLS (FTPES)	FTP sobre TLS explícito (FTPES)
+FTP over implicit TLS (FTPS)	FTP sobre TLS implícito (FTPS)
+Failed	Falha
+Fast	Rápida
+Fastest	Mais rápida
+File	Arquivo
+Fingerprint	Impressão digital
+Finish	Concluir
+Finished	Concluída
+First start	Primeira execução
+First wait before a reconnect, s	Primeira espera antes de reconectar, s
+Folder	Pasta
+Folder on the server	Pasta no servidor
+Folder with VMs	Pasta com VMs
+For several virtual machines the folder must contain the {VM} tag.	Para várias máquinas virtuais, a pasta deve conter a marca {VM}.
+Fri	Sex
+From	De
+General	Geral
+Give the server a name.	Dê um nome ao servidor.
+Give the task a title.	Dê um título à tarefa.
+Go	Ir
+HTML report...	Relatório HTML...
+History entries kept	Entradas de histórico mantidas
+Host	Host
+Host key	Chave do host
+Imported	Importado
+Include the memory of the virtual machine in the snapshot	Incluir a memória da máquina virtual no instantâneo
+Job "{0}" finished: {1}	A tarefa "{0}" terminou: {1}
+Keep last backups	Manter os últimos backups
+Keep the computer awake while the scheduler is on	Manter o computador ativo enquanto o agendador estiver ativado
+Key passphrase	Frase secreta da chave
+Kind	Tipo
+Language	Idioma
+Last result	Último resultado
+Last run	Última execução
+Leave empty to keep the password.	Deixe vazio para manter a senha.
+Lines	Linhas
+Link	Link
+Listening interfaces	Interfaces de escuta
+Load	Carregar
+Loading...	Carregando...
+Loading... {0} s	Carregando... {0} s
+Local Computer	Computador local
+Local Computer cannot be changed.	O computador local não pode ser alterado.
+Local Computer cannot be deleted.	O computador local não pode ser excluído.
+Longest wait before a reconnect, s	Maior espera antes de reconectar, s
+Machine file	Arquivo da máquina
+Maximum	Máximo
+Message	Mensagem
+Minimum TLS version	Versão mínima do TLS
+Mon	Seg
+Monthly	Mensal
+Name	Nome
+Names	Nomes
+Needs about {0} GiB of memory per CPU core.	Precisa de cerca de {0} GiB de memória por núcleo de CPU.
+Network	Rede
+Network drive	Unidade de rede
+Network drive...	Unidade de rede...
+Network folder	Pasta de rede
+Network folder (SMB)	Pasta de rede (SMB)
+Network path	Caminho de rede
+Never	Nunca
+New VM name	Nome da nova VM
+New password	Nova senha
+Next	Avançar
+Next run	Próxima execução
+Next run: {0}	Próxima execução: {0}
+No	Não
+No computers were found. Type a server name below.	Nenhum computador encontrado. Digite um nome de servidor abaixo.
+No elements yet. Add a backup element.	Ainda não há elementos. Adicione um elemento de backup.
+No mapped network drives were found.	Nenhuma unidade de rede mapeada foi encontrada.
+No users are configured. On the server, run VM2BackupService.exe /reset-web as an administrator.	Nenhum usuário configurado. No servidor, execute VM2BackupService.exe /reset-web como administrador.
+No virtual machines found.	Nenhuma máquina virtual encontrada.
+Not scheduled	Não agendada
+Not scheduled (run manually)	Não agendada (execução manual)
+Nothing here yet.	Ainda não há nada aqui.
+Nothing here.	Nada aqui.
+OK	OK
+On error, go on with the next VM	Em caso de erro, continuar com a próxima VM
+Once	Uma vez
+One volume (no resuming)	Um volume (sem retomada)
+Only for a network folder that asks for a user name	Somente para uma pasta de rede que pede um nome de usuário
+Open	Abrir
+Owner	Proprietário
+Parallel jobs	Tarefas paralelas
+Parallel jobs: 1 to 16.	Tarefas paralelas: de 1 a 16.
+Passive mode	Modo passivo
+Password	Senha
+Password changed. Sign in again.	Senha alterada. Entre novamente.
+Password of the file	Senha do arquivo
+Paste the key instead of a file; it is stored protected and never shown again	Cole a chave em vez de um arquivo; ela é armazenada protegida e nunca mais é exibida
+Paused	Pausada
+Pinned fingerprint	Impressão digital fixada
+Port	Porta
+Power on after restore	Ligar após a restauração
+Press Load to read the datacenters, datastores, folders and resource pools of the server.	Clique em Carregar para ler os datacenters, datastores, pastas e pools de recursos do servidor.
+Private key file	Arquivo de chave privada
+Private key text	Texto da chave privada
+Quiesce the guest file system (needs VMware Tools in the VM)	Silenciar o sistema de arquivos do convidado (requer o VMware Tools na VM)
+Recovery code	Código de recuperação
+Recovery codes	Códigos de recuperação
+Recovery codes left	Códigos de recuperação restantes
+Refresh	Atualizar
+Remove	Remover
+Remove window	Remover janela
+Repeat	Repetir
+Repeat every	Repetir a cada
+Report	Relatório
+Require two-factor authentication for administrators	Exigir autenticação de dois fatores para administradores
+Resource pool	Pool de recursos
+Restore	Restaurar
+Restore started.	Restauração iniciada.
+Restore to	Restaurar em
+Restore to folder	Restaurar na pasta
+Restore...	Restaurar...
+Restored as	Restaurada como
+Restoring "{0}" of {1}.	Restaurando "{0}" de {1}.
+Result	Resultado
+Resumable transfer	Transferência retomável
+Retries after a lost connection	Novas tentativas após perder a conexão
+Role	Função
+Run now	Executar agora
+Running	Em execução
+Running jobs	Tarefas em execução
+SCP (SSH)	SCP (SSH)
+SFTP (no longer supported)	SFTP (não é mais suportado)
+Sat	Sáb
+Saved.	Salvo.
+Scan the code with an authenticator app (or type the secret), then enter the 6-digit code it shows.	Escaneie o código com um aplicativo autenticador (ou digite o segredo) e informe o código de 6 dígitos exibido.
+Schedule	Agendamento
+Scheduled Task Details	Detalhes da tarefa agendada
+Scheduled Tasks	Tarefas agendadas
+Scheduler	Agendador
+Secret	Segredo
+Security	Segurança
+Select	Selecionar
+Select a drive first.	Selecione uma unidade primeiro.
+Select a row first.	Selecione uma linha primeiro.
+Self-signed	Autoassinado
+Server	Servidor
+Server name	Nome do servidor
+Session idle timeout, minutes	Tempo limite de inatividade da sessão, minutos
+Set up two-factor authentication	Configurar autenticação de dois fatores
+Set up two-factor...	Configurar autenticação de dois fatores...
+Settings	Configurações
+Show	Mostrar
+Sign in	Entrar
+Sign out	Sair
+Sign-in failed.	Falha ao entrar.
+Size	Tamanho
+Snapshot	Instantâneo
+Source	Origem
+Source server	Servidor de origem
+Speed	Velocidade
+Speed limit, Mbit/s (0 = unlimited)	Limite de velocidade, Mbit/s (0 = ilimitada)
+Start	Iniciar
+Start time	Hora de início
+Started	Iniciada
+State	Estado
+Status	Status
+Stop	Parar
+Stopped.	Parada.
+Stored	Armazenado
+Strong	Forte
+Subject	Assunto
+Success	Sucesso
+Sun	Dom
+Switch the scheduler off	Desativar o agendador
+Switch the scheduler on	Ativar o agendador
+TLS 1.0 (weak)	TLS 1.0 (fraco)
+TLS 1.0 and 1.1 are weak. Use them only for old hosts (ESXi 6.0 / 6.5) that offer nothing newer.	TLS 1.0 e 1.1 são fracos. Use-os apenas em hosts antigos (ESXi 6.0 / 6.5) que não oferecem nada mais novo.
+TLS 1.1 (weak)	TLS 1.1 (fraco)
+Target	Destino
+Target server	Servidor de destino
+Task	Tarefa
+Task History	Histórico de tarefas
+Task started.	Tarefa iniciada.
+Test connection	Testar conexão
+Testing...	Testando...
+The QR code is not available.	O código QR não está disponível.
+The certificate always includes this computer name, localhost, 127.0.0.1 and ::1. Add the DNS names and IP addresses under which the site is reached, one per line.	O certificado sempre inclui o nome deste computador, localhost, 127.0.0.1 e ::1. Adicione os nomes DNS e endereços IP pelos quais o site é acessado, um por linha.
+The certificate was installed.	O certificado foi instalado.
+The connection is tested now. "Test connection" tests again; "Finish" saves the server.	A conexão está sendo testada agora. "Testar conexão" testa de novo; "Concluir" salva o servidor.
+The connection test failed or has not finished. Save the server anyway?	O teste de conexão falhou ou não terminou. Salvar o servidor mesmo assim?
+The connection works.	A conexão funciona.
+The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	O datastore "{0}" tem {1} livres, o backup ocupa até {2}. Restaurar mesmo assim?
+The figures are approximate (typical data). More CPU cores make compression faster.	Os números são aproximados (dados típicos). Mais núcleos de CPU deixam a compactação mais rápida.
+The file is larger than 1 MB.	O arquivo é maior que 1 MB.
+The list is cut: only the first entries are shown.	A lista foi cortada: somente as primeiras entradas são exibidas.
+The longest wait cannot be shorter than the first one.	A maior espera não pode ser menor que a primeira.
+The name of the virtual machine must be at most 80 characters and cannot contain slashes or %.	O nome da máquina virtual deve ter no máximo 80 caracteres e não pode conter barras nem %.
+The password is too simple.	A senha é simples demais.
+The password must be at least 10 characters long.	A senha deve ter pelo menos 10 caracteres.
+The password must not contain the user name.	A senha não deve conter o nome de usuário.
+The passwords differ.	As senhas são diferentes.
+The port must be 1..65535.	A porta deve estar entre 1 e 65535.
+The schedule windows of a task can set another limit for its hours; the lowest one applies.	As janelas de agendamento de uma tarefa podem definir outro limite para suas horas; vale o menor.
+The scheduler is off: scheduled tasks do not start by themselves.	O agendador está desativado: as tarefas agendadas não iniciam sozinhas.
+The server did not answer in time; try again.	O servidor não respondeu a tempo; tente novamente.
+The server or share was not found.	O servidor ou compartilhamento não foi encontrado.
+The server presented an identity that is not known yet: {0}. If you recognise it, you can trust it.	O servidor apresentou uma identidade ainda desconhecida: {0}. Se você a reconhece, pode confiar nela.
+The service cannot see drive letters. Enter the UNC path of the share.	O serviço não enxerga letras de unidade. Informe o caminho UNC do compartilhamento.
+The service cannot see drive letters. {0} is the network drive {1}: its UNC path is stored instead. Enter the user name and password that give access to it.	O serviço não enxerga letras de unidade. {0} é a unidade de rede {1}: o caminho UNC dela é armazenado no lugar. Informe o nome de usuário e a senha que dão acesso a ela.
+The site always stays reachable on this computer (localhost): that is how a mistake here can be repaired.	O site continua sempre acessível neste computador (localhost): assim um erro cometido aqui pode ser corrigido.
+The site is moving to port {0}. Open {1} and sign in again.	O site está mudando para a porta {0}. Abra {1} e entre novamente.
+The snapshot settings apply to ESXi and vCenter sources only.	As configurações de instantâneo valem somente para origens ESXi e vCenter.
+The speed limit cannot be negative.	O limite de velocidade não pode ser negativo.
+The task may run only inside its windows. A window that ends before it starts goes over midnight.	A tarefa só pode ser executada dentro de suas janelas. Uma janela que termina antes de começar atravessa a meia-noite.
+The task was copied.	A tarefa foi copiada.
+The volume size cannot be negative.	O tamanho do volume não pode ser negativo.
+The waits must be between 1 and 86400 seconds.	As esperas devem estar entre 1 e 86400 segundos.
+There is no ESXi or vCenter server yet. Add one on the Datacenter page first.	Ainda não há um servidor ESXi ou vCenter. Adicione um primeiro na página Datacenter.
+This backup is encrypted: enter its password.	Este backup está criptografado: informe a senha dele.
+This browser cannot read files.	Este navegador não consegue ler arquivos.
+This browser cannot save files.	Este navegador não consegue salvar arquivos.
+This computer	Este computador
+This computer only (localhost)	Somente este computador (localhost)
+This is an unfinished backup.	Este é um backup inacabado.
+This server holds backups, not virtual machines.	Este servidor contém backups, não máquinas virtuais.
+Thu	Qui
+Time windows	Janelas de tempo
+Title	Título
+To	Até
+Transfer: SSH encrypted	Transferência: criptografada por SSH
+Transfer: TLS encrypted (FTP over TLS)	Transferência: criptografada por TLS (FTP sobre TLS)
+Transfer: local / network folder	Transferência: pasta local / de rede
+Transfer: network folder (SMB; not encrypted unless the share requires it)	Transferência: pasta de rede (SMB; não criptografada, a menos que o compartilhamento exija)
+Transfer: plain FTP (not encrypted - enable encryption of the backup!)	Transferência: FTP simples (não criptografado - ative a criptografia do backup!)
+Trigger	Gatilho
+Trust X-Forwarded-For from a reverse proxy on this computer	Confiar no X-Forwarded-For de um proxy reverso neste computador
+Trust this identity and test again	Confiar nesta identidade e testar novamente
+Tue	Ter
+Two-factor	Dois fatores
+Type	Tipo
+Unfinished (resumable)	Inacabado (retomável)
+Unit	Unidade
+Up	Para cima
+Upload	Enviar
+Upload PFX...	Enviar PFX...
+Upload a certificate (PFX)	Enviar um certificado (PFX)
+Use	Usar
+Use a recovery code	Usar um código de recuperação
+Use the authenticator code	Usar o código do aplicativo autenticador
+Use {VM} for the VM name	Use {VM} para o nome da VM
+User	Usuário
+User name	Nome de usuário
+Users	Usuários
+VM folder	Pasta da VM
+VM folder (VMware Workstation / Player)	Pasta da VM (VMware Workstation / Player)
+VMware ESXi host	Host VMware ESXi
+VMware vCenter	VMware vCenter
+Valid from	Válido a partir de
+Valid until	Válido até
+Verification started.	Verificação iniciada.
+Verify	Verificar
+Verify Backup	Verificar backup
+Verify the backup after it is made	Verificar o backup depois de feito
+Verify the certificate	Verificar o certificado
+Version	Versão
+Virtual Machine Backup	Backup de máquinas virtuais
+Virtual machine	Máquina virtual
+Virtual machines	Máquinas virtuais
+Virtual machines...	Máquinas virtuais...
+Volume size	Tamanho do volume
+Volume size, MiB (0 = one volume)	Tamanho do volume, MiB (0 = um volume)
+Volumes	Volumes
+Wait until the choices of the server are loaded.	Aguarde o carregamento das opções do servidor.
+Waiting	Aguardando
+Warning	Aviso
+Warning: the password is stored encrypted and is not retrievable. Be sure to remember it or write it down in a safe place in order to be able to decrypt the backup.	Aviso: a senha é armazenada criptografada e não pode ser recuperada. Lembre-se dela ou anote-a em um lugar seguro para poder descriptografar o backup.
+Web access	Acesso web
+Wed	Qua
+Weekly	Semanal
+Windows maps drives per user. The service sees only the drives mapped for users who are logged on and its own. The drive letter itself cannot be used by the service: its UNC path is stored, and the credentials must be entered.	O Windows mapeia unidades por usuário. O serviço enxerga apenas as unidades mapeadas para os usuários conectados e as dele próprio. A letra da unidade em si não pode ser usada pelo serviço: o caminho UNC é armazenado e as credenciais precisam ser informadas.
+Write these one-time codes down now: they are shown only once.	Anote agora estes códigos de uso único: eles são exibidos apenas uma vez.
+Yes	Sim
+Your session has ended. Sign in again.	Sua sessão terminou. Entre novamente.
+admin	admin
+backup	backup
+cdrom	óptico
+days	dias
+down	inativo
+encrypted	criptografado
+every month	todo mês
+every week	toda semana
+every {0} months	a cada {0} meses
+every {0} weeks	a cada {0} semanas
+every {0} {1}	a cada {0} {1}
+fixed	fixo
+folder	pasta
+from {0}	de {0}
+hours	horas
+last	último
+limit {0} Mbit/s	limite de {0} Mbit/s
+listening	escutando
+manual	manual
+minutes	minutos
+network	rede
+not confirmed	não confirmado
+not listening	não escutando
+off	desativado
+on	ativado
+on day {0} at {1}	no dia {0} às {1}
+on {0} at {1}	em {0} às {1}
+once at {0}	uma vez às {0}
+operator	operador
+optional	opcional
+optional: the datacenter used when a backup does not name one	opcional: o datacenter usado quando um backup não indica nenhum
+other	outro
+read	lido
+removable	removível
+required	obrigatório
+restore	restauração
+restore_esxi	restauração para ESXi
+running {0}	em execução {0}
+scheduled	agendada
+server	servidor
+sha256:... (optional)	sha256:... (opcional)
+share	compartilhamento
+stored	armazenado
+task	tarefa
+the service	o serviço
+transferred	transferido
+vCenter only; empty = the one of the server	somente vCenter; vazio = o do servidor
+verify	verificação
+viewer	observador
+{0} datastore(s), {1} folder(s), {2} resource pool(s) found.	{0} datastore(s), {1} pasta(s), {2} pool(s) de recursos encontrados.
+{0} free of {1}	{0} livres de {1}
+{0} virtual machine(s)	{0} máquina(s) virtual(is)
+{0} volume(s)	{0} volume(s)
+{0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: cerca de {1} MB/s por núcleo de CPU; os backups ficam cerca de {2}% maiores que no nível 5.
+{0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: cerca de {1} MB/s por núcleo de CPU; os backups ficam cerca de {2}% menores que no nível 5.
+{0}: about {1} MB/s per CPU core; the baseline size (levels 1-4 are larger, 6-9 smaller).	{0}: cerca de {1} MB/s por núcleo de CPU; o tamanho de referência (os níveis 1-4 são maiores, os 6-9 menores).

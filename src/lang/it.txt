@@ -1,0 +1,63 @@
+# English text <TAB> translation (\n line break). Empty = show English. Run tools/gen_lang.py --update after changing the sources.
+- Installing VM2Backup -	- Installazione di VM2Backup -
+- Removing VM2Backup -	- Rimozione di VM2Backup -
+Backup of virtual machines to a folder, FTP, FTP over TLS and SCP	Backup di macchine virtuali in una cartella, FTP, FTP su TLS e SCP
+Browse...	Sfoglia...
+Close	Chiudi
+Closing the running VM2Backup and stopping its service...	Chiusura di VM2Backup in esecuzione e arresto del suo servizio...
+Copying the files to %s	Copia dei file in %s
+Could not open: %s	Impossibile aprire: %s
+Creating the shortcuts.	Creazione dei collegamenti.
+Data folder:	Cartella dei dati:
+Desktop shortcut	Collegamento sul desktop
+Done.	Fatto.
+Enabled, but not listening	Abilitato, ma non in ascolto
+Error: VM2Backup.exe was not found next to the installer.	Errore: VM2Backup.exe non trovato accanto al programma di installazione.
+Error: VM2BackupService.exe was not found next to the installer.	Errore: VM2BackupService.exe non trovato accanto al programma di installazione.
+Error: cannot copy %s (error %lu).	Errore: impossibile copiare %s (errore %lu).
+Error: cannot find the Program Files folder.	Errore: cartella Programmi non trovata.
+Error: the installation folder is not valid (a full path such as C:\\Programs\\VM2Backup is needed).	Errore: la cartella di installazione non è valida (serve un percorso completo come C:\\Programs\\VM2Backup).
+Error: the service could not be registered (are you an administrator?).	Errore: impossibile registrare il servizio (sei amministratore?).
+Exit	Esci
+Failed.	Non riuscito.
+Install	Installa
+Install to:	Installa in:
+Installed: version %s, %s	Installato: versione %s, %s
+Language:	Lingua:
+Launch	Avvia
+Listening on %s:%lld	In ascolto su %s:%lld
+Not installed	Non installato
+Off	Disattivato
+Open logs folder	Apri la cartella dei log
+Open web interface	Apri l'interfaccia web
+Registering the program in Apps & features.	Registrazione del programma in App e funzionalità.
+Reinstall	Reinstalla
+Remove	Rimuovi
+Remove VM2Backup from this computer?\n\nYour settings, the history and the backups you made are kept.	Rimuovere VM2Backup da questo computer?\n\nLe impostazioni, la cronologia e i backup creati vengono conservati.
+Removing the shortcuts.	Rimozione dei collegamenti.
+Restart service	Riavvia il servizio
+Restart the service? Running backups are paused and continue after the restart.	Riavviare il servizio? I backup in corso vengono sospesi e continuano dopo il riavvio.
+Running	In esecuzione
+Select the folder to install VM2Backup to	Seleziona la cartella in cui installare VM2Backup
+Service	Servizio
+Service:	Servizio:
+Start menu shortcut	Collegamento nel menu Start
+Start service	Avvia servizio
+Start the backup service now	Avvia ora il servizio di backup
+Stop service	Arresta servizio
+Stop the service? Running backups are paused and continue after the next start.	Arrestare il servizio? I backup in esecuzione vengono sospesi e continuano al prossimo avvio.
+Stopped	Arrestato
+The VM2Backup service is not running, so there is no web site. Start the service first.	Il servizio VM2Backup non è in esecuzione, quindi non c'è alcun sito web. Avviare prima il servizio.
+The VM2Backup service is not running. Start it with the "Start service" button.	Il servizio VM2Backup non è in esecuzione. Avviarlo con il pulsante «Avvia servizio».
+The backup service is installed (it starts with Windows).	Il servizio di backup è installato (si avvia con Windows).
+The backup service is installed and started.	Il servizio di backup è installato e avviato.
+The backup service is installed but did not start; start it with the "Start service" button of the program.	Il servizio di backup è installato ma non si è avviato; avviarlo con il pulsante «Avvia servizio» del programma.
+The service could not be started (is it installed? are you an administrator?).	Impossibile avviare il servizio (è installato? sei amministratore?).
+The service could not be stopped (are you an administrator?).	Impossibile arrestare il servizio (sei un amministratore?).
+The web site is enabled, but not listening. Check the certificate and the port in the web interface.	Il sito web è attivato, ma non è in ascolto. Controllare il certificato e la porta nell'interfaccia web.
+The web site is off. Switch it on in the web interface, or reset it with VM2BackupService.exe /reset-web.	Il sito web è disattivato. Attivarlo nell'interfaccia web o reimpostarlo con VM2BackupService.exe /reset-web.
+Update	Aggiorna
+Version:	Versione:
+Web site:	Sito web:
+Windows language	Lingua di Windows
+Your settings, the history and the backups you made are kept.	Le impostazioni, la cronologia e i backup creati vengono conservati.

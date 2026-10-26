@@ -1,0 +1,63 @@
+# English text <TAB> translation (\n line break). Empty = show English. Run tools/gen_lang.py --update after changing the sources.
+- Installing VM2Backup -	- Instalowanie VM2Backup -
+- Removing VM2Backup -	- Usuwanie VM2Backup -
+Backup of virtual machines to a folder, FTP, FTP over TLS and SCP	Kopia zapasowa maszyn wirtualnych do folderu, FTP, FTP over TLS i SCP
+Browse...	Przeglądaj...
+Close	Zamknij
+Closing the running VM2Backup and stopping its service...	Zamykanie działającego VM2Backup i zatrzymywanie jego usługi...
+Copying the files to %s	Kopiowanie plików do %s
+Could not open: %s	Nie można otworzyć: %s
+Creating the shortcuts.	Tworzenie skrótów.
+Data folder:	Folder danych:
+Desktop shortcut	Skrót na pulpicie
+Done.	Gotowe.
+Enabled, but not listening	Włączona, ale nie nasłuchuje
+Error: VM2Backup.exe was not found next to the installer.	Błąd: nie znaleziono VM2Backup.exe obok instalatora.
+Error: VM2BackupService.exe was not found next to the installer.	Błąd: nie znaleziono VM2BackupService.exe obok instalatora.
+Error: cannot copy %s (error %lu).	Błąd: nie można skopiować %s (błąd %lu).
+Error: cannot find the Program Files folder.	Błąd: nie znaleziono folderu Program Files.
+Error: the installation folder is not valid (a full path such as C:\\Programs\\VM2Backup is needed).	Błąd: folder instalacji jest nieprawidłowy (wymagana pełna ścieżka, np. C:\\Programs\\VM2Backup).
+Error: the service could not be registered (are you an administrator?).	Błąd: nie można zarejestrować usługi (czy jesteś administratorem?).
+Exit	Zakończ
+Failed.	Niepowodzenie.
+Install	Zainstaluj
+Install to:	Zainstaluj w:
+Installed: version %s, %s	Zainstalowano: wersja %s, %s
+Language:	Język:
+Launch	Uruchom
+Listening on %s:%lld	Nasłuchiwanie na %s:%lld
+Not installed	Nie zainstalowano
+Off	Wył.
+Open logs folder	Otwórz folder dzienników
+Open web interface	Otwórz interfejs WWW
+Registering the program in Apps & features.	Rejestrowanie programu w Aplikacjach i funkcjach.
+Reinstall	Zainstaluj ponownie
+Remove	Usuń
+Remove VM2Backup from this computer?\n\nYour settings, the history and the backups you made are kept.	Usunąć VM2Backup z tego komputera?\n\nTwoje ustawienia, historia i wykonane kopie zostaną zachowane.
+Removing the shortcuts.	Usuwanie skrótów.
+Restart service	Uruchom usługę ponownie
+Restart the service? Running backups are paused and continue after the restart.	Uruchomić usługę ponownie? Trwające kopie zostaną wstrzymane i będą kontynuowane po ponownym uruchomieniu.
+Running	Uruchomione
+Select the folder to install VM2Backup to	Wybierz folder instalacji VM2Backup
+Service	Usługa
+Service:	Usługa:
+Start menu shortcut	Skrót w menu Start
+Start service	Uruchom usługę
+Start the backup service now	Uruchom usługę kopii zapasowych teraz
+Stop service	Zatrzymaj usługę
+Stop the service? Running backups are paused and continue after the next start.	Zatrzymać usługę? Uruchomione kopie zostaną wstrzymane i wznowione po następnym starcie.
+Stopped	Zatrzymana
+The VM2Backup service is not running, so there is no web site. Start the service first.	Usługa VM2Backup nie działa, więc nie ma witryny WWW. Najpierw uruchom usługę.
+The VM2Backup service is not running. Start it with the "Start service" button.	Usługa VM2Backup nie działa. Uruchom ją przyciskiem „Uruchom usługę”.
+The backup service is installed (it starts with Windows).	Usługa kopii zapasowych jest zainstalowana (uruchamia się z Windows).
+The backup service is installed and started.	Usługa kopii zapasowych jest zainstalowana i uruchomiona.
+The backup service is installed but did not start; start it with the "Start service" button of the program.	Usługa kopii zapasowych jest zainstalowana, ale nie uruchomiła się; uruchom ją przyciskiem „Uruchom usługę” w programie.
+The service could not be started (is it installed? are you an administrator?).	Nie można uruchomić usługi (czy jest zainstalowana? czy jesteś administratorem?).
+The service could not be stopped (are you an administrator?).	Nie można zatrzymać usługi (czy jesteś administratorem?).
+The web site is enabled, but not listening. Check the certificate and the port in the web interface.	Witryna WWW jest włączona, ale nie nasłuchuje. Sprawdź certyfikat i port w interfejsie WWW.
+The web site is off. Switch it on in the web interface, or reset it with VM2BackupService.exe /reset-web.	Witryna WWW jest wyłączona. Włącz ją w interfejsie WWW lub zresetuj poleceniem VM2BackupService.exe /reset-web.
+Update	Aktualizuj
+Version:	Wersja:
+Web site:	Witryna WWW:
+Windows language	Język Windows
+Your settings, the history and the backups you made are kept.	Twoje ustawienia, historia i wykonane kopie zostaną zachowane.

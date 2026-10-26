@@ -1,0 +1,50 @@
+VM2Backup - backup of virtual machines (VMware ESXi / vCenter / folders) to a folder, FTP, FTP over TLS and SCP
+=====================================================================================================================
+
+1. Installation
+   - Run VM2Backup-Setup.exe (asks for administrator rights). It picks the 64- or 32-bit installer.
+   - Optional: "Desktop shortcut", "Start menu shortcut", "Start the backup service now".
+   - Click "Install" ("Update" when it is already installed). The program goes to C:\Program Files\VM2Backup\
+     (VM2Backup.exe = the control panel, VM2BackupService.exe = the Windows service "VM2Backup Service", which runs the
+     scheduled tasks also when nobody is logged on) and appears in Settings > Apps.
+   - For scripts: VM2Backup-Setup.exe /install /silent [/nostart] [/desktop-] [/startmenu-]   (the exit code is 0 on success)
+
+2. First use
+   - The program (VM2Backup.exe) is a small control panel: it shows whether the service runs, its version, the data folder and the web
+     site, starts / stops / restarts the service, opens the log folder and sets the language.
+   - The work is done in the web interface: press "Open web interface" or open https://127.0.0.1:8443/ in a browser (default login
+     admin / admin; change the password at once). The browser warns about the self-signed certificate. There you add the servers (VMware
+     ESXi / vCenter or a folder with virtual machines as sources; FTP / FTP over TLS / SCP / network folders as places for the backups;
+     "Local Computer" is built in), make backups (compression level xz 1 ... 9, encryption AES-256-GCM, volume size, speed limit), tasks with
+     schedules and time windows, restore and look at the history. A backup that is interrupted by a lost connection continues from the
+     last finished volume (also after a restart of the service); verification and restore continue the same way.
+   - A network folder is a "Network folder (SMB)" server: \\server\share[\folder], the user (DOMAIN\user, user@domain or a local user) and
+     the password (stored encrypted with DPAPI, never shown again). See section 5.
+   - Lost access to the web site (forgotten password, wrong port): VM2BackupService.exe /reset-web.
+
+3. Removal
+   - VM2Backup-Setup.exe > "Remove", or uninstall.cmd as administrator. The settings, the history and the backups are kept
+     (C:\ProgramData\VM2Backup).
+
+4. Logs and data
+   - C:\ProgramData\VM2Backup\ : config.json (passwords are encrypted with DPAPI), history.json, logs\ (service.log, program.log).
+
+5. Network folders (SMB) and network drives
+   - The service runs as SYSTEM (or the account you gave it) in its own logon session. It does NOT see the drive letters that you
+     mapped (Z:), and without a user name it reaches other computers as the computer account. Therefore a network target is a UNC path
+     (\\server\share\folder) with its own user and password: the service connects with WNetAddConnection2 (no drive letter),
+     writes through that connection and cancels it when the job object is gone. After a lost connection it connects again and the
+     backup continues from the last finished volume, like with FTP.
+   - Leave the user empty to use the rights of the service account. Windows allows one set of credentials per server and logon
+     session: if another connection to the same server with other credentials exists (made by someone else), the program reports it
+     (error 1219) and does not cancel it.
+   - A plain drive letter that the service cannot see gives the error "drive Z: is not available to the service: use the UNC path".
+   - "Test connection" connects, writes and deletes a small test file and shows the free space.
+   - Only the authentication is protected by Windows; the data is encrypted on the wire only when the share requires SMB 3
+     encryption: enable the encryption of the backup itself for sensitive data.
+   - Verified on a real Windows 10 (x86, 22H2) against a Samba share with a user and a password (docs/WINDOWS-TESTS.md, group smbreal): backup / verify /
+     restore, a wrong password (clear message, error 1326, no retries), an unreachable server (waits, retries), a share that does not exist
+     (error 67, no retries), the server stopped in the middle of a backup and started again (the backup continues), the network browse with
+     credentials, a drive mapped with "net use" (listed with its UNC path), the service commands. NOT verified: a domain share (DOMAIN\user and
+     user@domain), the service account against the program's user (a share that only your user may read), SMB 3 encryption, long paths and non-ASCII
+     names on the share.

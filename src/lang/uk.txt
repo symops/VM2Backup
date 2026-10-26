@@ -1,0 +1,63 @@
+# English text <TAB> translation (\n line break). Empty = show English. Run tools/gen_lang.py --update after changing the sources.
+- Installing VM2Backup -	- Встановлення VM2Backup -
+- Removing VM2Backup -	- Видалення VM2Backup -
+Backup of virtual machines to a folder, FTP, FTP over TLS and SCP	Резервне копіювання віртуальних машин у папку, FTP, FTP over TLS і SCP
+Browse...	Огляд...
+Close	Закрити
+Closing the running VM2Backup and stopping its service...	Закриття запущеної VM2Backup і зупинка її служби...
+Copying the files to %s	Копіювання файлів у %s
+Could not open: %s	Не вдалося відкрити: %s
+Creating the shortcuts.	Створення ярликів.
+Data folder:	Тека даних:
+Desktop shortcut	Ярлик на робочому столі
+Done.	Готово.
+Enabled, but not listening	Увімкнено, але не прослуховує
+Error: VM2Backup.exe was not found next to the installer.	Помилка: VM2Backup.exe не знайдено поруч зі встановлювачем.
+Error: VM2BackupService.exe was not found next to the installer.	Помилка: VM2BackupService.exe не знайдено поруч зі встановлювачем.
+Error: cannot copy %s (error %lu).	Помилка: не вдалося скопіювати %s (помилка %lu).
+Error: cannot find the Program Files folder.	Помилка: папку Program Files не знайдено.
+Error: the installation folder is not valid (a full path such as C:\\Programs\\VM2Backup is needed).	Помилка: неприпустима папка встановлення (потрібен повний шлях, наприклад C:\\Programs\\VM2Backup).
+Error: the service could not be registered (are you an administrator?).	Помилка: не вдалося зареєструвати службу (ви адміністратор?).
+Exit	Вихід
+Failed.	Збій.
+Install	Встановити
+Install to:	Встановити в:
+Installed: version %s, %s	Встановлено: версія %s, %s
+Language:	Мова:
+Launch	Запустити
+Listening on %s:%lld	Прослуховується %s:%lld
+Not installed	Не встановлено
+Off	Вимк.
+Open logs folder	Відкрити теку журналів
+Open web interface	Відкрити вебінтерфейс
+Registering the program in Apps & features.	Реєстрація програми в «Програми й функції».
+Reinstall	Перевстановити
+Remove	Вилучити
+Remove VM2Backup from this computer?\n\nYour settings, the history and the backups you made are kept.	Видалити VM2Backup з цього комп'ютера?\n\nВаші параметри, журнал і створені копії буде збережено.
+Removing the shortcuts.	Видалення ярликів.
+Restart service	Перезапустити службу
+Restart the service? Running backups are paused and continue after the restart.	Перезапустити службу? Виконувані копії призупиняються й продовжуються після перезапуску.
+Running	Виконується
+Select the folder to install VM2Backup to	Виберіть папку для встановлення VM2Backup
+Service	Служба
+Service:	Служба:
+Start menu shortcut	Ярлик у меню «Пуск»
+Start service	Запустити службу
+Start the backup service now	Запустити службу резервного копіювання зараз
+Stop service	Зупинити службу
+Stop the service? Running backups are paused and continue after the next start.	Зупинити службу? Виконувані копії призупиняються й продовжуються після наступного запуску.
+Stopped	Зупинена
+The VM2Backup service is not running, so there is no web site. Start the service first.	Службу VM2Backup не запущено, тому вебсайту немає. Спочатку запустіть службу.
+The VM2Backup service is not running. Start it with the "Start service" button.	Службу VM2Backup не запущено. Запустіть її кнопкою «Запустити службу».
+The backup service is installed (it starts with Windows).	Службу резервного копіювання встановлено (запускається разом із Windows).
+The backup service is installed and started.	Службу резервного копіювання встановлено й запущено.
+The backup service is installed but did not start; start it with the "Start service" button of the program.	Службу резервного копіювання встановлено, але вона не запустилася; запустіть її кнопкою «Запустити службу» у програмі.
+The service could not be started (is it installed? are you an administrator?).	Не вдалося запустити службу (її встановлено? ви адміністратор?).
+The service could not be stopped (are you an administrator?).	Не вдалося зупинити службу (ви адміністратор?).
+The web site is enabled, but not listening. Check the certificate and the port in the web interface.	Вебсайт увімкнено, але він не слухає. Перевірте сертифікат і порт у вебінтерфейсі.
+The web site is off. Switch it on in the web interface, or reset it with VM2BackupService.exe /reset-web.	Вебсайт вимкнено. Увімкніть його у вебінтерфейсі або скиньте командою VM2BackupService.exe /reset-web.
+Update	Оновити
+Version:	Версія:
+Web site:	Вебсайт:
+Windows language	Мова Windows
+Your settings, the history and the backups you made are kept.	Ваші параметри, журнал і створені копії буде збережено.

@@ -1,0 +1,470 @@
+# English text <TAB> translation (\n line break). Empty = show English. Run tools/webui_strings.py --update after changing src/web/app.js.
+(chosen by the server)	(서버에서 선택)
+(the default resource pool)	(기본 리소스 풀)
+(the root VM folder)	(루트 VM 폴더)
+A PKCS#12 file (.pfx) with the certificate and its private key, 1 MB at most. Only the certificate itself is served, not the chain.	인증서와 개인 키가 들어 있는 PKCS#12 파일(.pfx), 최대 1 MB. 인증서 자체만 사용되며 체인은 포함되지 않습니다.
+A mapped drive letter (Z:) cannot be used: the service does not see it. Choose "Network drive..." to use its UNC path, or enter the UNC path.	매핑된 드라이브 문자(Z:)는 사용할 수 없습니다. 서비스에서 보이지 않기 때문입니다. "네트워크 드라이브..."를 선택해 UNC 경로를 사용하거나 UNC 경로를 입력하십시오.
+A new certificate was created. Your browser will ask you to trust it again.	새 인증서가 생성되었습니다. 브라우저에서 다시 신뢰하도록 요청합니다.
+A new user needs a password.	새 사용자에게는 암호가 필요합니다.
+A path on the server computer	서버 컴퓨터의 경로
+A path on the server computer (the service reads it)	서버 컴퓨터의 경로(서비스가 읽음)
+A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	실행 중인 ESXi / vCenter VM은 임시 스냅숏에서 복사되며, 이후 스냅숏은 삭제됩니다. VMware Tools가 없으면 정지(quiesce) 스냅숏이 실패합니다. 이런 VM은 정지를 끄십시오.
+A virtual machine with this name already exists on the server. Enter another name; an existing machine is never overwritten.	이 이름의 가상 컴퓨터가 서버에 이미 있습니다. 다른 이름을 입력하십시오. 기존 컴퓨터는 덮어쓰지 않습니다.
+Abort	중단
+Add Scheduled Task	예약 작업 추가
+Add Server	서버 추가
+Add address	주소 추가
+Add at least one backup element.	백업 요소를 하나 이상 추가하십시오.
+Add element...	요소 추가...
+Add user	사용자 추가
+Add user...	사용자 추가...
+Add window	시간대 추가
+Additional names	추가 이름
+Address	주소
+Advanced	고급
+After a lost connection the program reconnects and goes on; nothing finished is sent again.	연결이 끊어지면 프로그램이 다시 연결하여 계속합니다. 완료된 부분은 다시 전송되지 않습니다.
+All	모두
+All interfaces	모든 인터페이스
+All results	모든 결과
+Allow a copy of a running VM (the copy is consistent only at the crash level)	실행 중인 VM의 복사 허용(복사본은 충돌 수준에서만 일관성이 있음)
+An administrator needs two-factor authentication when it is required in the security settings.	보안 설정에서 요구하는 경우 관리자에게 2단계 인증이 필요합니다.
+Apply	적용
+Archive	보관
+As in the backup (every file back to its original datastore)	백업과 동일(모든 파일을 원래 데이터스토어로)
+At least 10 characters	10자 이상
+At least 10 characters, not containing the user name.	10자 이상, 사용자 이름을 포함하지 않아야 합니다.
+Audit log	감사 로그
+Auto	자동
+Back	뒤로
+Backup Explorer	Backup Explorer
+Backup of {0}	{0} 백업
+Backup started.	백업이 시작되었습니다.
+Backup virtual machines...	가상 컴퓨터 백업...
+Balanced (default)	균형(기본값)
+Browse network	네트워크 찾아보기
+Browse network...	네트워크 찾아보기...
+Browse...	찾아보기...
+Cancel	취소
+Cannot reach the server.	서버에 연결할 수 없습니다.
+Cannot read: 	읽을 수 없음: 
+Certificate	인증서
+Change	변경
+Change password	암호 변경
+Change settings...	설정 변경...
+Check the user name and password in the form.	양식의 사용자 이름과 암호를 확인하십시오.
+Choose a file	파일 선택
+Choose a file.	파일을 선택하십시오.
+Choose a folder	폴더 선택
+Choose a folder.	폴더를 선택하십시오.
+Choose a server with virtual machines.	가상 컴퓨터가 있는 서버를 선택하십시오.
+Choose a share or a folder.	공유 또는 폴더를 선택하십시오.
+Choose a source server.	원본 서버를 선택하십시오.
+Choose at least one day in every time window.	모든 시간대에서 요일을 하나 이상 선택하십시오.
+Choose at least one day of the week.	요일을 하나 이상 선택하십시오.
+Choose at least one virtual machine.	가상 컴퓨터를 하나 이상 선택하십시오.
+Choose the ESXi or vCenter server to restore to.	복원할 ESXi 또는 vCenter 서버를 선택하십시오.
+Choose the datacenter.	데이터센터를 선택하십시오.
+Choose the datastore.	데이터스토어를 선택하십시오.
+Choose the date and time.	날짜와 시간을 선택하십시오.
+Choose the file.	파일을 선택하십시오.
+Choose the first start time.	첫 시작 시간을 선택하십시오.
+Choose the kind of server to add.	추가할 서버 종류를 선택하십시오.
+Choose the start time.	시작 시간을 선택하십시오.
+Clear history	기록 지우기
+Clear the whole history?	전체 기록을 지울까요?
+Close	닫기
+Code	코드
+Comment	설명
+Complete	완료
+Compression	압축
+Compression level	압축 수준
+Compression threads	압축 스레드
+Confirm	확인
+Connection	연결
+Continue an interrupted backup of this VM when there is one	이 VM의 중단된 백업이 있으면 계속
+Copy	복사
+Create	만들기
+Create a self-signed certificate	자체 서명 인증서 만들기
+Create new self-signed...	새 자체 서명 만들기...
+Create schedule...	일정 만들기...
+Created	생성됨
+Current password	현재 암호
+Data folder	데이터 폴더
+Datacenter	데이터센터
+Datastore	데이터스토어
+Date and time	날짜 및 시간
+Day of the month	월의 일
+Default local folder	기본 로컬 폴더
+Delete	삭제
+Delete backup	백업 삭제
+Delete server "{0}"? Backups already made stay where they are.	서버 "{0}"을(를) 삭제할까요? 이미 만든 백업은 그대로 남습니다.
+Delete task "{0}"?	작업 "{0}"을(를) 삭제할까요?
+Delete the backup "{0}"?	백업 "{0}"을(를) 삭제할까요?
+Delete user "{0}"?	사용자 "{0}"을(를) 삭제할까요?
+Details	세부 정보
+Disable two-factor	2단계 인증 끄기
+Disable two-factor authentication of "{0}"?	"{0}"의 2단계 인증을 끌까요?
+Disabled	사용 안 함
+Discard the unfinished backup "{0}"? What was already copied is deleted.	완료되지 않은 백업 "{0}"을(를) 버릴까요? 이미 복사된 내용은 삭제됩니다.
+Domain user name or user@domain; empty = the account of the service	도메인 사용자 이름 또는 user@domain, 비우면 = 서비스 계정
+Down	아래로
+Drive	드라이브
+Drive {0} is not a network drive that the service can see. Enter the UNC path of the share or choose "Network drive...".	드라이브 {0}은(는) 서비스에서 볼 수 있는 네트워크 드라이브가 아닙니다. 공유의 UNC 경로를 입력하거나 "네트워크 드라이브..."를 선택하십시오.
+Duration	소요 시간
+ESXi host or vCenter	ESXi 호스트 또는 vCenter
+Edit	편집
+Edit Server	서버 편집
+Edit user	사용자 편집
+Elements	요소
+Enable scheduler	스케줄러 사용
+Enable this only behind a reverse proxy that you control and that sets X-Forwarded-For itself; otherwise anybody can fake the address that is shown in the audit log and used for the login limits.	직접 제어하고 X-Forwarded-For를 스스로 설정하는 리버스 프록시 뒤에서만 사용하십시오. 그렇지 않으면 누구나 감사 로그에 표시되고 로그인 제한에 사용되는 주소를 위조할 수 있습니다.
+Enabled	사용
+Encrypt the backup (AES-256)	백업 암호화(AES-256)
+Encrypted	암호화됨
+Enter a name for the new virtual machine.	새 가상 컴퓨터의 이름을 입력하십시오.
+Enter a password, a private key file or the private key text.	암호, 개인 키 파일 또는 개인 키 텍스트를 입력하십시오.
+Enter a whole number in every numeric field.	모든 숫자 필드에 정수를 입력하십시오.
+Enter the address of the server.	서버 주소를 입력하십시오.
+Enter the code from your authenticator app, or a recovery code.	인증 앱의 코드 또는 복구 코드를 입력하십시오.
+Enter the destination folder.	대상 폴더를 입력하십시오.
+Enter the interval (a number of 1 or more).	간격(1 이상의 숫자)을 입력하십시오.
+Enter the password for the encryption.	암호화 암호를 입력하십시오.
+Enter the user name.	사용자 이름을 입력하십시오.
+Every N minutes / hours / days	N분 / 시간 / 일마다
+Every N months	N개월마다
+Every N weeks	N주마다
+Every volume is read back from the target: its size and SHA-256 are compared with the ones recorded while it was written, and the data is decrypted and decompressed to prove that the backup can be restored.	모든 볼륨을 대상에서 다시 읽습니다. 크기와 SHA-256을 기록할 때 저장한 값과 비교하고, 데이터를 암호 해독 및 압축 해제하여 백업을 복원할 수 있음을 확인합니다.
+FTP	FTP
+FTP over explicit TLS (FTPES)	명시적 TLS를 사용하는 FTP(FTPES)
+FTP over implicit TLS (FTPS)	암시적 TLS를 사용하는 FTP(FTPS)
+Failed	실패
+Fast	빠름
+Fastest	가장 빠름
+File	파일
+Fingerprint	지문
+Finish	마침
+Finished	완료됨
+First start	첫 시작
+First wait before a reconnect, s	재연결 전 첫 대기 시간(초)
+Folder	폴더
+Folder on the server	서버의 폴더
+Folder with VMs	VM이 있는 폴더
+For several virtual machines the folder must contain the {VM} tag.	가상 컴퓨터가 여러 개이면 폴더에 {VM} 태그가 포함되어야 합니다.
+Fri	금
+From	시작
+General	일반
+Give the server a name.	서버 이름을 지정하십시오.
+Give the task a title.	작업 제목을 지정하십시오.
+Go	이동
+HTML report...	HTML 보고서...
+History entries kept	보관할 기록 항목 수
+Host	호스트
+Host key	호스트 키
+Imported	가져옴
+Include the memory of the virtual machine in the snapshot	스냅숏에 가상 컴퓨터의 메모리 포함
+Job "{0}" finished: {1}	작업 "{0}" 종료: {1}
+Keep last backups	유지할 최근 백업 수
+Keep the computer awake while the scheduler is on	스케줄러가 켜져 있는 동안 컴퓨터를 절전 모드로 전환하지 않음
+Key passphrase	키 암호
+Kind	종류
+Language	언어
+Last result	마지막 결과
+Last run	마지막 실행
+Leave empty to keep the password.	암호를 유지하려면 비워 두십시오.
+Lines	줄
+Link	링크
+Listening interfaces	수신 대기 인터페이스
+Load	불러오기
+Loading...	불러오는 중...
+Loading... {0} s	불러오는 중... {0}초
+Local Computer	로컬 컴퓨터
+Local Computer cannot be changed.	로컬 컴퓨터는 변경할 수 없습니다.
+Local Computer cannot be deleted.	로컬 컴퓨터는 삭제할 수 없습니다.
+Longest wait before a reconnect, s	재연결 전 최장 대기 시간(초)
+Machine file	컴퓨터 파일
+Maximum	최대
+Message	메시지
+Minimum TLS version	최소 TLS 버전
+Mon	월
+Monthly	매월
+Name	이름
+Names	이름
+Needs about {0} GiB of memory per CPU core.	CPU 코어당 약 {0} GiB의 메모리가 필요합니다.
+Network	네트워크
+Network drive	네트워크 드라이브
+Network drive...	네트워크 드라이브...
+Network folder	네트워크 폴더
+Network folder (SMB)	네트워크 폴더(SMB)
+Network path	네트워크 경로
+Never	안 함
+New VM name	새 VM 이름
+New password	새 암호
+Next	다음
+Next run	다음 실행
+Next run: {0}	다음 실행: {0}
+No	아니요
+No computers were found. Type a server name below.	컴퓨터를 찾을 수 없습니다. 아래에 서버 이름을 입력하십시오.
+No elements yet. Add a backup element.	아직 요소가 없습니다. 백업 요소를 추가하십시오.
+No mapped network drives were found.	매핑된 네트워크 드라이브를 찾을 수 없습니다.
+No users are configured. On the server, run VM2BackupService.exe /reset-web as an administrator.	구성된 사용자가 없습니다. 서버에서 관리자 권한으로 VM2BackupService.exe /reset-web을 실행하십시오.
+No virtual machines found.	가상 컴퓨터를 찾을 수 없습니다.
+Not scheduled	예약되지 않음
+Not scheduled (run manually)	예약되지 않음(수동 실행)
+Nothing here yet.	아직 아무것도 없습니다.
+Nothing here.	여기에는 아무것도 없습니다.
+OK	확인
+On error, go on with the next VM	오류 발생 시 다음 VM으로 계속
+Once	한 번
+One volume (no resuming)	볼륨 하나(이어받기 불가)
+Only for a network folder that asks for a user name	사용자 이름을 요구하는 네트워크 폴더에만 해당
+Open	열기
+Owner	소유자
+Parallel jobs	병렬 작업
+Parallel jobs: 1 to 16.	병렬 작업: 1에서 16까지.
+Passive mode	수동 모드
+Password	암호
+Password changed. Sign in again.	암호가 변경되었습니다. 다시 로그인하십시오.
+Password of the file	파일 암호
+Paste the key instead of a file; it is stored protected and never shown again	파일 대신 키를 붙여넣습니다. 보호되어 저장되며 다시 표시되지 않습니다
+Paused	일시 중지됨
+Pinned fingerprint	고정된 지문
+Port	포트
+Power on after restore	복원 후 전원 켜기
+Press Load to read the datacenters, datastores, folders and resource pools of the server.	불러오기를 눌러 서버의 데이터센터, 데이터스토어, 폴더 및 리소스 풀을 읽으십시오.
+Private key file	개인 키 파일
+Private key text	개인 키 텍스트
+Quiesce the guest file system (needs VMware Tools in the VM)	게스트 파일 시스템 정지(VM에 VMware Tools 필요)
+Recovery code	복구 코드
+Recovery codes	복구 코드
+Recovery codes left	남은 복구 코드
+Refresh	새로 고침
+Remove	제거
+Remove window	시간대 제거
+Repeat	반복
+Repeat every	반복 간격
+Report	보고서
+Require two-factor authentication for administrators	관리자에게 2단계 인증 요구
+Resource pool	리소스 풀
+Restore	복원
+Restore started.	복원이 시작되었습니다.
+Restore to	복원 위치
+Restore to folder	복원할 폴더
+Restore...	복원...
+Restored as	복원된 이름
+Restoring "{0}" of {1}.	{1}의 "{0}"을(를) 복원하는 중입니다.
+Result	결과
+Resumable transfer	이어받기 가능 전송
+Retries after a lost connection	연결이 끊어진 후 재시도 횟수
+Role	역할
+Run now	지금 실행
+Running	실행 중
+Running jobs	실행 중인 작업
+SCP (SSH)	SCP (SSH)
+SFTP (no longer supported)	SFTP(더 이상 지원되지 않음)
+Sat	토
+Saved.	저장되었습니다.
+Scan the code with an authenticator app (or type the secret), then enter the 6-digit code it shows.	인증 앱으로 코드를 스캔하거나(또는 비밀 키를 입력하고) 표시되는 6자리 코드를 입력하십시오.
+Schedule	일정
+Scheduled Task Details	예약 작업 세부 정보
+Scheduled Tasks	예약 작업
+Scheduler	스케줄러
+Secret	비밀 키
+Security	보안
+Select	선택
+Select a drive first.	먼저 드라이브를 선택하십시오.
+Select a row first.	먼저 행을 선택하십시오.
+Self-signed	자체 서명
+Server	서버
+Server name	서버 이름
+Session idle timeout, minutes	세션 유휴 시간 제한(분)
+Set up two-factor authentication	2단계 인증 설정
+Set up two-factor...	2단계 인증 설정...
+Settings	설정
+Show	표시
+Sign in	로그인
+Sign out	로그아웃
+Sign-in failed.	로그인하지 못했습니다.
+Size	크기
+Snapshot	스냅숏
+Source	원본
+Source server	원본 서버
+Speed	속도
+Speed limit, Mbit/s (0 = unlimited)	속도 제한, Mbit/s(0 = 무제한)
+Start	시작
+Start time	시작 시간
+Started	시작됨
+State	상태
+Status	상태
+Stop	중지
+Stopped.	중지되었습니다.
+Stored	저장됨
+Strong	강함
+Subject	주체
+Success	성공
+Sun	일
+Switch the scheduler off	스케줄러 끄기
+Switch the scheduler on	스케줄러 켜기
+TLS 1.0 (weak)	TLS 1.0(취약)
+TLS 1.0 and 1.1 are weak. Use them only for old hosts (ESXi 6.0 / 6.5) that offer nothing newer.	TLS 1.0과 1.1은 취약합니다. 더 새로운 버전을 지원하지 않는 오래된 호스트(ESXi 6.0 / 6.5)에만 사용하십시오.
+TLS 1.1 (weak)	TLS 1.1(취약)
+Target	대상
+Target server	대상 서버
+Task	작업
+Task History	작업 기록
+Task started.	작업이 시작되었습니다.
+Test connection	연결 테스트
+Testing...	테스트 중...
+The QR code is not available.	QR 코드를 사용할 수 없습니다.
+The certificate always includes this computer name, localhost, 127.0.0.1 and ::1. Add the DNS names and IP addresses under which the site is reached, one per line.	인증서에는 항상 이 컴퓨터 이름, localhost, 127.0.0.1 및 ::1이 포함됩니다. 사이트에 접속하는 DNS 이름과 IP 주소를 한 줄에 하나씩 추가하십시오.
+The certificate was installed.	인증서가 설치되었습니다.
+The connection is tested now. "Test connection" tests again; "Finish" saves the server.	지금 연결을 테스트합니다. "연결 테스트"는 다시 테스트하고, "마침"은 서버를 저장합니다.
+The connection test failed or has not finished. Save the server anyway?	연결 테스트에 실패했거나 아직 끝나지 않았습니다. 그래도 서버를 저장할까요?
+The connection works.	연결이 정상입니다.
+The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	데이터스토어 "{0}"의 여유 공간은 {1}이고 백업은 최대 {2}입니다. 그래도 복원할까요?
+The figures are approximate (typical data). More CPU cores make compression faster.	수치는 근사치입니다(일반적인 데이터). CPU 코어가 많을수록 압축이 빨라집니다.
+The file is larger than 1 MB.	파일이 1 MB보다 큽니다.
+The list is cut: only the first entries are shown.	목록이 잘렸습니다. 처음 항목만 표시됩니다.
+The longest wait cannot be shorter than the first one.	최장 대기 시간은 첫 대기 시간보다 짧을 수 없습니다.
+The name of the virtual machine must be at most 80 characters and cannot contain slashes or %.	가상 컴퓨터 이름은 80자 이하여야 하며 슬래시나 %를 포함할 수 없습니다.
+The password is too simple.	암호가 너무 단순합니다.
+The password must be at least 10 characters long.	암호는 10자 이상이어야 합니다.
+The password must not contain the user name.	암호에 사용자 이름을 포함할 수 없습니다.
+The passwords differ.	암호가 일치하지 않습니다.
+The port must be 1..65535.	포트는 1..65535여야 합니다.
+The schedule windows of a task can set another limit for its hours; the lowest one applies.	작업의 일정 시간대로 해당 시간에 다른 제한을 설정할 수 있으며, 가장 낮은 제한이 적용됩니다.
+The scheduler is off: scheduled tasks do not start by themselves.	스케줄러가 꺼져 있습니다. 예약 작업이 자동으로 시작되지 않습니다.
+The server did not answer in time; try again.	서버가 제때 응답하지 않았습니다. 다시 시도하십시오.
+The server or share was not found.	서버 또는 공유를 찾을 수 없습니다.
+The server presented an identity that is not known yet: {0}. If you recognise it, you can trust it.	서버가 아직 알려지지 않은 ID를 제시했습니다: {0}. 알아보신다면 신뢰할 수 있습니다.
+The service cannot see drive letters. Enter the UNC path of the share.	서비스는 드라이브 문자를 볼 수 없습니다. 공유의 UNC 경로를 입력하십시오.
+The service cannot see drive letters. {0} is the network drive {1}: its UNC path is stored instead. Enter the user name and password that give access to it.	서비스는 드라이브 문자를 볼 수 없습니다. {0}은(는) 네트워크 드라이브 {1}이므로 대신 UNC 경로가 저장됩니다. 접근 권한이 있는 사용자 이름과 암호를 입력하십시오.
+The site always stays reachable on this computer (localhost): that is how a mistake here can be repaired.	사이트는 이 컴퓨터(localhost)에서 항상 접속할 수 있습니다. 이렇게 하면 여기서의 실수를 바로잡을 수 있습니다.
+The site is moving to port {0}. Open {1} and sign in again.	사이트가 포트 {0}(으)로 이동합니다. {1}을(를) 열고 다시 로그인하십시오.
+The snapshot settings apply to ESXi and vCenter sources only.	스냅숏 설정은 ESXi 및 vCenter 원본에만 적용됩니다.
+The speed limit cannot be negative.	속도 제한은 음수일 수 없습니다.
+The task may run only inside its windows. A window that ends before it starts goes over midnight.	작업은 시간대 안에서만 실행될 수 있습니다. 시작보다 먼저 끝나는 시간대는 자정을 넘깁니다.
+The task was copied.	작업이 복사되었습니다.
+The volume size cannot be negative.	볼륨 크기는 음수일 수 없습니다.
+The waits must be between 1 and 86400 seconds.	대기 시간은 1초에서 86400초 사이여야 합니다.
+There is no ESXi or vCenter server yet. Add one on the Datacenter page first.	ESXi 또는 vCenter 서버가 아직 없습니다. 먼저 데이터센터 페이지에서 추가하십시오.
+This backup is encrypted: enter its password.	이 백업은 암호화되어 있습니다. 암호를 입력하십시오.
+This browser cannot read files.	이 브라우저는 파일을 읽을 수 없습니다.
+This browser cannot save files.	이 브라우저는 파일을 저장할 수 없습니다.
+This computer	이 컴퓨터
+This computer only (localhost)	이 컴퓨터만(localhost)
+This is an unfinished backup.	완료되지 않은 백업입니다.
+This server holds backups, not virtual machines.	이 서버는 가상 컴퓨터가 아니라 백업을 보관합니다.
+Thu	목
+Time windows	시간대
+Title	제목
+To	종료
+Transfer: SSH encrypted	전송: SSH 암호화
+Transfer: TLS encrypted (FTP over TLS)	전송: TLS 암호화(FTP over TLS)
+Transfer: local / network folder	전송: 로컬 / 네트워크 폴더
+Transfer: network folder (SMB; not encrypted unless the share requires it)	전송: 네트워크 폴더(SMB, 공유에서 요구하지 않으면 암호화 안 됨)
+Transfer: plain FTP (not encrypted - enable encryption of the backup!)	전송: 일반 FTP(암호화 안 됨 - 백업 암호화를 켜십시오!)
+Trigger	트리거
+Trust X-Forwarded-For from a reverse proxy on this computer	이 컴퓨터의 리버스 프록시에서 오는 X-Forwarded-For 신뢰
+Trust this identity and test again	이 ID를 신뢰하고 다시 테스트
+Tue	화
+Two-factor	2단계 인증
+Type	유형
+Unfinished (resumable)	완료되지 않음(이어받기 가능)
+Unit	단위
+Up	위로
+Upload	업로드
+Upload PFX...	PFX 업로드...
+Upload a certificate (PFX)	인증서(PFX) 업로드
+Use	사용
+Use a recovery code	복구 코드 사용
+Use the authenticator code	인증 앱 코드 사용
+Use {VM} for the VM name	VM 이름에 {VM} 사용
+User	사용자
+User name	사용자 이름
+Users	사용자
+VM folder	VM 폴더
+VM folder (VMware Workstation / Player)	VM 폴더(VMware Workstation / Player)
+VMware ESXi host	VMware ESXi 호스트
+VMware vCenter	VMware vCenter
+Valid from	유효 시작일
+Valid until	유효 종료일
+Verification started.	검증이 시작되었습니다.
+Verify	검증
+Verify Backup	백업 검증
+Verify the backup after it is made	백업을 만든 후 검증
+Verify the certificate	인증서 확인
+Version	버전
+Virtual Machine Backup	Virtual Machine Backup
+Virtual machine	가상 컴퓨터
+Virtual machines	가상 컴퓨터
+Virtual machines...	가상 컴퓨터...
+Volume size	볼륨 크기
+Volume size, MiB (0 = one volume)	볼륨 크기, MiB(0 = 볼륨 하나)
+Volumes	볼륨
+Wait until the choices of the server are loaded.	서버의 선택 항목을 불러올 때까지 기다리십시오.
+Waiting	대기 중
+Warning	경고
+Warning: the password is stored encrypted and is not retrievable. Be sure to remember it or write it down in a safe place in order to be able to decrypt the backup.	경고: 암호는 암호화되어 저장되며 복구할 수 없습니다. 백업을 해독할 수 있도록 반드시 기억하거나 안전한 곳에 적어 두십시오.
+Web access	웹 액세스
+Wed	수
+Weekly	매주
+Windows maps drives per user. The service sees only the drives mapped for users who are logged on and its own. The drive letter itself cannot be used by the service: its UNC path is stored, and the credentials must be entered.	Windows는 사용자별로 드라이브를 매핑합니다. 서비스는 로그온한 사용자와 자신에게 매핑된 드라이브만 볼 수 있습니다. 서비스는 드라이브 문자 자체를 사용할 수 없으므로 UNC 경로가 저장되며 자격 증명을 입력해야 합니다.
+Write these one-time codes down now: they are shown only once.	이 일회용 코드를 지금 적어 두십시오. 한 번만 표시됩니다.
+Yes	예
+Your session has ended. Sign in again.	세션이 종료되었습니다. 다시 로그인하십시오.
+admin	admin
+backup	백업
+cdrom	CD-ROM
+days	일
+down	아래
+encrypted	암호화됨
+every month	매월
+every week	매주
+every {0} months	{0}개월마다
+every {0} weeks	{0}주마다
+every {0} {1}	{0} {1}마다
+fixed	고정
+folder	폴더
+from {0}	{0}부터
+hours	시간
+last	마지막
+limit {0} Mbit/s	제한 {0} Mbit/s
+listening	수신 대기 중
+manual	수동
+minutes	분
+network	네트워크
+not confirmed	확인되지 않음
+not listening	수신 대기 안 함
+off	끔
+on	켬
+on day {0} at {1}	{0}일 {1}
+on {0} at {1}	{0} {1}
+once at {0}	{0} 한 번
+operator	운영자
+optional	선택 사항
+optional: the datacenter used when a backup does not name one	선택 사항: 백업에 데이터센터가 지정되지 않았을 때 사용하는 데이터센터
+other	기타
+read	읽기
+removable	이동식
+required	필수
+restore	복원
+restore_esxi	ESXi로 복원
+running {0}	실행 중 {0}
+scheduled	예약됨
+server	서버
+sha256:... (optional)	sha256:...(선택 사항)
+share	공유
+stored	저장됨
+task	작업
+the service	서비스
+transferred	전송됨
+vCenter only; empty = the one of the server	vCenter 전용, 비우면 = 서버의 값
+verify	검증
+viewer	보기 전용
+{0} datastore(s), {1} folder(s), {2} resource pool(s) found.	데이터스토어 {0}개, 폴더 {1}개, 리소스 풀 {2}개를 찾았습니다.
+{0} free of {1}	{1} 중 {0} 사용 가능
+{0} virtual machine(s)	가상 컴퓨터 {0}대
+{0} volume(s)	볼륨 {0}개
+{0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: CPU 코어당 약 {1} MB/s, 백업이 수준 5보다 약 {2}% 큽니다.
+{0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: CPU 코어당 약 {1} MB/s, 백업이 수준 5보다 약 {2}% 작습니다.
+{0}: about {1} MB/s per CPU core; the baseline size (levels 1-4 are larger, 6-9 smaller).	{0}: CPU 코어당 약 {1} MB/s, 기준 크기(수준 1-4는 더 크고 6-9는 더 작음).

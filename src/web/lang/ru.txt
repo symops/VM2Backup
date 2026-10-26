@@ -1,0 +1,470 @@
+# English text <TAB> translation (\n line break). Empty = show English. Run tools/webui_strings.py --update after changing src/web/app.js.
+(chosen by the server)	(выбирает сервер)
+(the default resource pool)	(пул ресурсов по умолчанию)
+(the root VM folder)	(корневая папка ВМ)
+A PKCS#12 file (.pfx) with the certificate and its private key, 1 MB at most. Only the certificate itself is served, not the chain.	Файл PKCS#12 (.pfx) с сертификатом и закрытым ключом, не более 1 МБ. Отдаётся только сам сертификат, без цепочки.
+A mapped drive letter (Z:) cannot be used: the service does not see it. Choose "Network drive..." to use its UNC path, or enter the UNC path.	Букву сетевого диска (Z:) использовать нельзя: служба её не видит. Выберите «Сетевой диск...», чтобы взять его UNC-путь, или введите UNC-путь.
+A new certificate was created. Your browser will ask you to trust it again.	Создан новый сертификат. Браузер снова попросит ему доверять.
+A new user needs a password.	Новому пользователю нужен пароль.
+A path on the server computer	Путь на компьютере сервера
+A path on the server computer (the service reads it)	Путь на компьютере сервера (его читает служба)
+A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	Работающая ВМ ESXi / vCenter копируется с временного снимка, который потом удаляется. Без VMware Tools снимок с заморозкой файловой системы не удаётся: для таких ВМ отключите заморозку.
+A virtual machine with this name already exists on the server. Enter another name; an existing machine is never overwritten.	Виртуальная машина с таким именем уже есть на сервере. Введите другое имя; существующая машина никогда не перезаписывается.
+Abort	Прервать
+Add Scheduled Task	Добавить задачу в расписание
+Add Server	Добавить сервер
+Add address	Добавить адрес
+Add at least one backup element.	Добавьте хотя бы один элемент резервного копирования.
+Add element...	Добавить элемент...
+Add user	Добавить пользователя
+Add user...	Добавить пользователя...
+Add window	Добавить окно
+Additional names	Дополнительные имена
+Address	Адрес
+Advanced	Дополнительно
+After a lost connection the program reconnects and goes on; nothing finished is sent again.	После обрыва связи программа подключается заново и продолжает; готовое повторно не передаётся.
+All	Все
+All interfaces	Все интерфейсы
+All results	Все результаты
+Allow a copy of a running VM (the copy is consistent only at the crash level)	Разрешить копирование работающей ВМ (копия согласована только на уровне аварийного отключения)
+An administrator needs two-factor authentication when it is required in the security settings.	Администратору нужна двухфакторная проверка, если она требуется в настройках безопасности.
+Apply	Применить
+Archive	Архив
+As in the backup (every file back to its original datastore)	Как в копии (каждый файл в исходное хранилище данных)
+At least 10 characters	Не менее 10 символов
+At least 10 characters, not containing the user name.	Не менее 10 символов, без имени пользователя.
+Audit log	Журнал аудита
+Auto	Авто
+Back	Назад
+Backup Explorer	Обозреватель копий
+Backup of {0}	Копия {0}
+Backup started.	Резервное копирование запущено.
+Backup virtual machines...	Копировать виртуальные машины...
+Balanced (default)	Сбалансированное (по умолчанию)
+Browse network	Обзор сети
+Browse network...	Обзор сети...
+Browse...	Обзор...
+Cancel	Отмена
+Cannot reach the server.	Нет связи с сервером.
+Cannot read: 	Не удаётся прочитать: 
+Certificate	Сертификат
+Change	Изменить
+Change password	Смена пароля
+Change settings...	Изменить настройки...
+Check the user name and password in the form.	Проверьте имя пользователя и пароль в форме.
+Choose a file	Выбор файла
+Choose a file.	Выберите файл.
+Choose a folder	Выбор папки
+Choose a folder.	Выберите папку.
+Choose a server with virtual machines.	Выберите сервер с виртуальными машинами.
+Choose a share or a folder.	Выберите общий ресурс или папку.
+Choose a source server.	Выберите сервер-источник.
+Choose at least one day in every time window.	Выберите хотя бы один день в каждом окне времени.
+Choose at least one day of the week.	Выберите хотя бы один день недели.
+Choose at least one virtual machine.	Выберите хотя бы одну виртуальную машину.
+Choose the ESXi or vCenter server to restore to.	Выберите сервер ESXi или vCenter для восстановления.
+Choose the datacenter.	Выберите центр обработки данных.
+Choose the datastore.	Выберите хранилище данных.
+Choose the date and time.	Выберите дату и время.
+Choose the file.	Выберите файл.
+Choose the first start time.	Выберите время первого запуска.
+Choose the kind of server to add.	Выберите тип добавляемого сервера.
+Choose the start time.	Выберите время запуска.
+Clear history	Очистить историю
+Clear the whole history?	Очистить всю историю?
+Close	Закрыть
+Code	Код
+Comment	Комментарий
+Complete	Завершена
+Compression	Сжатие
+Compression level	Уровень сжатия
+Compression threads	Потоков сжатия
+Confirm	Подтвердить
+Connection	Подключение
+Continue an interrupted backup of this VM when there is one	Продолжать прерванную копию этой ВМ, если она есть
+Copy	Копировать
+Create	Создать
+Create a self-signed certificate	Создание самоподписанного сертификата
+Create new self-signed...	Создать новый самоподписанный...
+Create schedule...	Создать расписание...
+Created	Создана
+Current password	Текущий пароль
+Data folder	Папка данных
+Datacenter	Центр данных
+Datastore	Хранилище данных
+Date and time	Дата и время
+Day of the month	День месяца
+Default local folder	Локальная папка по умолчанию
+Delete	Удалить
+Delete backup	Удалить копию
+Delete server "{0}"? Backups already made stay where they are.	Удалить сервер «{0}»? Уже сделанные копии остаются на своих местах.
+Delete task "{0}"?	Удалить задачу «{0}»?
+Delete the backup "{0}"?	Удалить копию «{0}»?
+Delete user "{0}"?	Удалить пользователя «{0}»?
+Details	Подробности
+Disable two-factor	Отключить двухфакторную проверку
+Disable two-factor authentication of "{0}"?	Отключить двухфакторную проверку у «{0}»?
+Disabled	Отключена
+Discard the unfinished backup "{0}"? What was already copied is deleted.	Отбросить незавершённую копию «{0}»? Всё, что уже скопировано, будет удалено.
+Domain user name or user@domain; empty = the account of the service	Имя пользователя в домене или user@domain; пусто = учётная запись службы
+Down	Вниз
+Drive	Диск
+Drive {0} is not a network drive that the service can see. Enter the UNC path of the share or choose "Network drive...".	Диск {0} не является сетевым диском, который видит служба. Введите UNC-путь общего ресурса или выберите «Сетевой диск...».
+Duration	Длительность
+ESXi host or vCenter	Хост ESXi или vCenter
+Edit	Изменить
+Edit Server	Изменение сервера
+Edit user	Изменить пользователя
+Elements	Элементы
+Enable scheduler	Включить планировщик
+Enable this only behind a reverse proxy that you control and that sets X-Forwarded-For itself; otherwise anybody can fake the address that is shown in the audit log and used for the login limits.	Включайте только за обратным прокси, которым вы управляете и который сам задаёт X-Forwarded-For; иначе любой сможет подделать адрес в журнале аудита и в ограничениях входа.
+Enabled	Включена
+Encrypt the backup (AES-256)	Шифровать копию (AES-256)
+Encrypted	Шифрование
+Enter a name for the new virtual machine.	Введите имя новой виртуальной машины.
+Enter a password, a private key file or the private key text.	Введите пароль, файл закрытого ключа или текст закрытого ключа.
+Enter a whole number in every numeric field.	Введите целое число в каждом числовом поле.
+Enter the address of the server.	Введите адрес сервера.
+Enter the code from your authenticator app, or a recovery code.	Введите код из приложения-аутентификатора или код восстановления.
+Enter the destination folder.	Укажите папку назначения.
+Enter the interval (a number of 1 or more).	Укажите интервал (число от 1).
+Enter the password for the encryption.	Введите пароль для шифрования.
+Enter the user name.	Введите имя пользователя.
+Every N minutes / hours / days	Каждые N минут / часов / дней
+Every N months	Каждые N месяцев
+Every N weeks	Каждые N недель
+Every volume is read back from the target: its size and SHA-256 are compared with the ones recorded while it was written, and the data is decrypted and decompressed to prove that the backup can be restored.	Каждый том читается обратно с целевого хранилища: его размер и SHA-256 сравниваются с записанными при создании, данные расшифровываются и распаковываются, чтобы доказать возможность восстановления.
+FTP	FTP
+FTP over explicit TLS (FTPES)	FTP через явный TLS (FTPES)
+FTP over implicit TLS (FTPS)	FTP через неявный TLS (FTPS)
+Failed	Ошибка
+Fast	Быстрое
+Fastest	Самое быстрое
+File	Файл
+Fingerprint	Отпечаток
+Finish	Готово
+Finished	Завершено
+First start	Первый запуск
+First wait before a reconnect, s	Первая пауза перед переподключением, с
+Folder	Папка
+Folder on the server	Папка на сервере
+Folder with VMs	Папка с ВМ
+For several virtual machines the folder must contain the {VM} tag.	Для нескольких виртуальных машин папка должна содержать метку {VM}.
+Fri	Пт
+From	С
+General	Общие
+Give the server a name.	Дайте серверу имя.
+Give the task a title.	Дайте задаче название.
+Go	Перейти
+HTML report...	HTML-отчёт...
+History entries kept	Записей истории хранить
+Host	Узел
+Host key	Ключ узла
+Imported	Импортирован
+Include the memory of the virtual machine in the snapshot	Включить в снимок память виртуальной машины
+Job "{0}" finished: {1}	Задание «{0}» завершено: {1}
+Keep last backups	Хранить последних копий
+Keep the computer awake while the scheduler is on	Не давать компьютеру засыпать, пока включён планировщик
+Key passphrase	Парольная фраза ключа
+Kind	Вид
+Language	Язык
+Last result	Последний результат
+Last run	Последний запуск
+Leave empty to keep the password.	Оставьте пустым, чтобы сохранить пароль.
+Lines	Строк
+Link	Ссылка
+Listening interfaces	Интерфейсы, на которых сайт слушает
+Load	Загрузить
+Loading...	Загрузка...
+Loading... {0} s	Загрузка... {0} с
+Local Computer	Локальный компьютер
+Local Computer cannot be changed.	Локальный компьютер изменить нельзя.
+Local Computer cannot be deleted.	Локальный компьютер нельзя удалить.
+Longest wait before a reconnect, s	Самая длинная пауза перед переподключением, с
+Machine file	Файл машины
+Maximum	Максимальное
+Message	Сообщение
+Minimum TLS version	Минимальная версия TLS
+Mon	Пн
+Monthly	Ежемесячно
+Name	Имя
+Names	Имена
+Needs about {0} GiB of memory per CPU core.	Нужно около {0} ГиБ памяти на одно ядро.
+Network	Сеть
+Network drive	Сетевой диск
+Network drive...	Сетевой диск...
+Network folder	Сетевая папка
+Network folder (SMB)	Сетевая папка (SMB)
+Network path	Сетевой путь
+Never	Никогда
+New VM name	Имя новой ВМ
+New password	Новый пароль
+Next	Далее
+Next run	Следующий запуск
+Next run: {0}	Следующий запуск: {0}
+No	Нет
+No computers were found. Type a server name below.	Компьютеры не найдены. Введите имя сервера ниже.
+No elements yet. Add a backup element.	Элементов пока нет. Добавьте элемент резервного копирования.
+No mapped network drives were found.	Подключённых сетевых дисков не найдено.
+No users are configured. On the server, run VM2BackupService.exe /reset-web as an administrator.	Пользователи не настроены. На сервере запустите от имени администратора VM2BackupService.exe /reset-web.
+No virtual machines found.	Виртуальные машины не найдены.
+Not scheduled	Без расписания
+Not scheduled (run manually)	Без расписания (запуск вручную)
+Nothing here yet.	Здесь пока ничего нет.
+Nothing here.	Здесь пусто.
+OK	OK
+On error, go on with the next VM	При ошибке продолжать со следующей ВМ
+Once	Однократно
+One volume (no resuming)	Один том (без возобновления)
+Only for a network folder that asks for a user name	Только для сетевой папки, которая запрашивает имя пользователя
+Open	Открыть
+Owner	Владелец
+Parallel jobs	Параллельных заданий
+Parallel jobs: 1 to 16.	Одновременных заданий: от 1 до 16.
+Passive mode	Пассивный режим
+Password	Пароль
+Password changed. Sign in again.	Пароль изменён. Войдите снова.
+Password of the file	Пароль файла
+Paste the key instead of a file; it is stored protected and never shown again	Вставьте ключ вместо файла; он хранится в защищённом виде и больше не показывается
+Paused	Приостановлено
+Pinned fingerprint	Закреплённый отпечаток
+Port	Порт
+Power on after restore	Включить после восстановления
+Press Load to read the datacenters, datastores, folders and resource pools of the server.	Нажмите «Загрузить», чтобы прочитать центры обработки данных, хранилища данных, папки и пулы ресурсов сервера.
+Private key file	Файл закрытого ключа
+Private key text	Текст закрытого ключа
+Quiesce the guest file system (needs VMware Tools in the VM)	Заморозить файловую систему гостя (нужны VMware Tools в ВМ)
+Recovery code	Код восстановления
+Recovery codes	Коды восстановления
+Recovery codes left	Осталось кодов восстановления
+Refresh	Обновить
+Remove	Убрать
+Remove window	Убрать окно
+Repeat	Повтор
+Repeat every	Повторять каждые
+Report	Отчёт
+Require two-factor authentication for administrators	Требовать двухфакторную проверку для администраторов
+Resource pool	Пул ресурсов
+Restore	Восстановление
+Restore started.	Восстановление запущено.
+Restore to	Восстановить в
+Restore to folder	Восстановить в папку
+Restore...	Восстановить...
+Restored as	Восстановлено как
+Restoring "{0}" of {1}.	Восстановление «{0}» ВМ {1}.
+Result	Результат
+Resumable transfer	Возобновляемая передача
+Retries after a lost connection	Повторов после обрыва связи
+Role	Роль
+Run now	Запустить сейчас
+Running	Выполняется
+Running jobs	Выполняемые задания
+SCP (SSH)	SCP (SSH)
+SFTP (no longer supported)	SFTP (больше не поддерживается)
+Sat	Сб
+Saved.	Сохранено.
+Scan the code with an authenticator app (or type the secret), then enter the 6-digit code it shows.	Отсканируйте код приложением-аутентификатором (или введите секрет), затем введите показанный им 6-значный код.
+Schedule	Расписание
+Scheduled Task Details	Сведения о задаче расписания
+Scheduled Tasks	Задачи по расписанию
+Scheduler	Планировщик
+Secret	Секрет
+Security	Безопасность
+Select	Выбрать
+Select a drive first.	Сначала выберите диск.
+Select a row first.	Сначала выберите строку.
+Self-signed	Самоподписанный
+Server	Сервер
+Server name	Имя сервера
+Session idle timeout, minutes	Тайм-аут бездействия сеанса, минут
+Set up two-factor authentication	Настройка двухфакторной проверки
+Set up two-factor...	Настроить двухфакторную проверку...
+Settings	Настройки
+Show	Показать
+Sign in	Войти
+Sign out	Выйти
+Sign-in failed.	Не удалось войти.
+Size	Размер
+Snapshot	Снимок
+Source	Источник
+Source server	Сервер-источник
+Speed	Скорость
+Speed limit, Mbit/s (0 = unlimited)	Ограничение скорости, Мбит/с (0 = без ограничения)
+Start	Начать
+Start time	Время запуска
+Started	Начато
+State	Состояние
+Status	Состояние
+Stop	Остановить
+Stopped.	Остановлено.
+Stored	Сохранено
+Strong	Сильное
+Subject	Субъект
+Success	Успешно
+Sun	Вс
+Switch the scheduler off	Выключить планировщик
+Switch the scheduler on	Включить планировщик
+TLS 1.0 (weak)	TLS 1.0 (слабый)
+TLS 1.0 and 1.1 are weak. Use them only for old hosts (ESXi 6.0 / 6.5) that offer nothing newer.	TLS 1.0 и 1.1 слабые. Используйте их только для старых узлов (ESXi 6.0 / 6.5), которые не предлагают ничего новее.
+TLS 1.1 (weak)	TLS 1.1 (слабый)
+Target	Хранилище
+Target server	Целевой сервер
+Task	Задача
+Task History	История задач
+Task started.	Задача запущена.
+Test connection	Проверить подключение
+Testing...	Проверка...
+The QR code is not available.	QR-код недоступен.
+The certificate always includes this computer name, localhost, 127.0.0.1 and ::1. Add the DNS names and IP addresses under which the site is reached, one per line.	В сертификат всегда входят имя этого компьютера, localhost, 127.0.0.1 и ::1. Добавьте DNS-имена и IP-адреса, по которым открывается сайт, по одному в строке.
+The certificate was installed.	Сертификат установлен.
+The connection is tested now. "Test connection" tests again; "Finish" saves the server.	Соединение проверяется сейчас. «Проверить подключение» повторяет проверку; «Готово» сохраняет сервер.
+The connection test failed or has not finished. Save the server anyway?	Проверка соединения не удалась или не закончилась. Всё равно сохранить сервер?
+The connection works.	Соединение работает.
+The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	На хранилище «{0}» свободно {1}, а копия занимает до {2}. Всё равно восстановить?
+The figures are approximate (typical data). More CPU cores make compression faster.	Цифры приблизительные (типичные данные). Чем больше ядер процессора, тем быстрее сжатие.
+The file is larger than 1 MB.	Файл больше 1 МБ.
+The list is cut: only the first entries are shown.	Список обрезан: показаны только первые записи.
+The longest wait cannot be shorter than the first one.	Самая длинная пауза не может быть короче первой.
+The name of the virtual machine must be at most 80 characters and cannot contain slashes or %.	Имя виртуальной машины — не более 80 символов, без косых черт и %.
+The password is too simple.	Пароль слишком простой.
+The password must be at least 10 characters long.	Пароль должен быть не короче 10 символов.
+The password must not contain the user name.	Пароль не должен содержать имя пользователя.
+The passwords differ.	Пароли не совпадают.
+The port must be 1..65535.	Порт должен быть от 1 до 65535.
+The schedule windows of a task can set another limit for its hours; the lowest one applies.	Окна расписания задачи могут задавать другой предел на свои часы; действует наименьший.
+The scheduler is off: scheduled tasks do not start by themselves.	Планировщик выключен: задачи по расписанию сами не запускаются.
+The server did not answer in time; try again.	Сервер не ответил вовремя; повторите попытку.
+The server or share was not found.	Сервер или общий ресурс не найден.
+The server presented an identity that is not known yet: {0}. If you recognise it, you can trust it.	Сервер предъявил пока неизвестную идентичность: {0}. Если вы её узнаёте, ей можно доверять.
+The service cannot see drive letters. Enter the UNC path of the share.	Служба не видит буквы дисков. Введите UNC-путь общего ресурса.
+The service cannot see drive letters. {0} is the network drive {1}: its UNC path is stored instead. Enter the user name and password that give access to it.	Служба не видит буквы дисков. {0} — это сетевой диск {1}: вместо буквы сохраняется его UNC-путь. Введите имя пользователя и пароль, дающие к нему доступ.
+The site always stays reachable on this computer (localhost): that is how a mistake here can be repaired.	Сайт всегда остаётся доступен на этом компьютере (localhost): так можно исправить ошибку в настройках.
+The site is moving to port {0}. Open {1} and sign in again.	Сайт переходит на порт {0}. Откройте {1} и войдите снова.
+The snapshot settings apply to ESXi and vCenter sources only.	Настройки снимка относятся только к источникам ESXi и vCenter.
+The speed limit cannot be negative.	Ограничение скорости не может быть отрицательным.
+The task may run only inside its windows. A window that ends before it starts goes over midnight.	Задача может выполняться только внутри своих окон. Окно, которое заканчивается раньше начала, переходит через полночь.
+The task was copied.	Задача скопирована.
+The volume size cannot be negative.	Размер тома не может быть отрицательным.
+The waits must be between 1 and 86400 seconds.	Паузы должны быть от 1 до 86400 секунд.
+There is no ESXi or vCenter server yet. Add one on the Datacenter page first.	Сервера ESXi или vCenter пока нет. Сначала добавьте его на странице «Центр обработки данных».
+This backup is encrypted: enter its password.	Эта копия зашифрована: введите её пароль.
+This browser cannot read files.	Этот браузер не умеет читать файлы.
+This browser cannot save files.	Этот браузер не умеет сохранять файлы.
+This computer	Этот компьютер
+This computer only (localhost)	Только этот компьютер (localhost)
+This is an unfinished backup.	Это незавершённая копия.
+This server holds backups, not virtual machines.	На этом сервере хранятся копии, а не виртуальные машины.
+Thu	Чт
+Time windows	Окна времени
+Title	Название
+To	До
+Transfer: SSH encrypted	Передача: шифрование SSH
+Transfer: TLS encrypted (FTP over TLS)	Передача: шифрование TLS (FTP через TLS)
+Transfer: local / network folder	Передача: локальная / сетевая папка
+Transfer: network folder (SMB; not encrypted unless the share requires it)	Передача: сетевая папка (SMB; не шифруется, если этого не требует общий ресурс)
+Transfer: plain FTP (not encrypted - enable encryption of the backup!)	Передача: обычный FTP (без шифрования - включите шифрование копии!)
+Trigger	Запуск
+Trust X-Forwarded-For from a reverse proxy on this computer	Доверять X-Forwarded-For от обратного прокси на этом компьютере
+Trust this identity and test again	Доверять этой идентичности и проверить снова
+Tue	Вт
+Two-factor	Двухфакторная проверка
+Type	Тип
+Unfinished (resumable)	Не завершена (можно продолжить)
+Unit	Единица
+Up	Вверх
+Upload	Загрузить
+Upload PFX...	Загрузить PFX...
+Upload a certificate (PFX)	Загрузка сертификата (PFX)
+Use	Использовать
+Use a recovery code	Использовать код восстановления
+Use the authenticator code	Использовать код аутентификатора
+Use {VM} for the VM name	{VM} подставляет имя ВМ
+User	Пользователь
+User name	Имя пользователя
+Users	Пользователи
+VM folder	Папка ВМ
+VM folder (VMware Workstation / Player)	Папка с ВМ (VMware Workstation / Player)
+VMware ESXi host	Узел VMware ESXi
+VMware vCenter	VMware vCenter
+Valid from	Действителен с
+Valid until	Действителен до
+Verification started.	Проверка запущена.
+Verify	Проверить
+Verify Backup	Проверка копии
+Verify the backup after it is made	Проверять копию после создания
+Verify the certificate	Проверять сертификат
+Version	Версия
+Virtual Machine Backup	Резервное копирование виртуальной машины
+Virtual machine	Виртуальная машина
+Virtual machines	Виртуальные машины
+Virtual machines...	Виртуальные машины...
+Volume size	Размер тома
+Volume size, MiB (0 = one volume)	Размер тома, МиБ (0 = один том)
+Volumes	Тома
+Wait until the choices of the server are loaded.	Дождитесь загрузки вариантов с сервера.
+Waiting	Ожидание
+Warning	Предупреждение
+Warning: the password is stored encrypted and is not retrievable. Be sure to remember it or write it down in a safe place in order to be able to decrypt the backup.	Внимание: пароль хранится в зашифрованном виде и не восстанавливается. Запомните его или запишите в надёжном месте, иначе копию нельзя будет расшифровать.
+Web access	Веб-доступ
+Wed	Ср
+Weekly	Еженедельно
+Windows maps drives per user. The service sees only the drives mapped for users who are logged on and its own. The drive letter itself cannot be used by the service: its UNC path is stored, and the credentials must be entered.	Windows подключает диски для каждого пользователя отдельно. Служба видит только диски вошедших в систему пользователей и свои собственные. Саму букву диска служба использовать не может: сохраняется UNC-путь, а имя пользователя и пароль нужно ввести.
+Write these one-time codes down now: they are shown only once.	Запишите эти одноразовые коды сейчас: они показываются только один раз.
+Yes	Да
+Your session has ended. Sign in again.	Сеанс завершён. Войдите снова.
+admin	администратор
+backup	копирование
+cdrom	оптический
+days	дн.
+down	отключён
+encrypted	зашифровано
+every month	каждый месяц
+every week	каждую неделю
+every {0} months	каждые {0} мес.
+every {0} weeks	каждые {0} нед.
+every {0} {1}	каждые {0} {1}
+fixed	жёсткий
+folder	папка
+from {0}	с {0}
+hours	ч
+last	последний
+limit {0} Mbit/s	предел {0} Мбит/с
+listening	слушает
+manual	вручную
+minutes	мин.
+network	сетевой
+not confirmed	не подтверждена
+not listening	не слушает
+off	выключен
+on	включён
+on day {0} at {1}	в день {0} в {1}
+on {0} at {1}	в {0} в {1}
+once at {0}	однократно {0}
+operator	оператор
+optional	необязательно
+optional: the datacenter used when a backup does not name one	необязательно: центр обработки данных, если копия не указывает свой
+other	прочий
+read	прочитано
+removable	съёмный
+required	обязательно
+restore	восстановление
+restore_esxi	восстановление в ESXi
+running {0}	идёт {0}
+scheduled	по расписанию
+server	сервер
+sha256:... (optional)	sha256:... (необязательно)
+share	общий ресурс
+stored	сохранён
+task	задача
+the service	служба
+transferred	передано
+vCenter only; empty = the one of the server	только vCenter; пусто = центр обработки данных сервера
+verify	проверка
+viewer	наблюдатель
+{0} datastore(s), {1} folder(s), {2} resource pool(s) found.	Найдено: хранилищ данных — {0}, папок — {1}, пулов ресурсов — {2}.
+{0} free of {1}	свободно {0} из {1}
+{0} virtual machine(s)	Виртуальных машин: {0}
+{0} volume(s)	томов: {0}
+{0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: около {1} МБ/с на одно ядро; копии примерно на {2}% больше, чем на уровне 5.
+{0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: около {1} МБ/с на одно ядро; копии примерно на {2}% меньше, чем на уровне 5.
+{0}: about {1} MB/s per CPU core; the baseline size (levels 1-4 are larger, 6-9 smaller).	{0}: около {1} МБ/с на одно ядро; базовый размер (уровни 1-4 дают больше, 6-9 меньше).

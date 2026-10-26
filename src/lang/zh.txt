@@ -1,0 +1,63 @@
+# English text <TAB> translation (\n line break). Empty = show English. Run tools/gen_lang.py --update after changing the sources.
+- Installing VM2Backup -	- 正在安装 VM2Backup -
+- Removing VM2Backup -	- 正在删除 VM2Backup -
+Backup of virtual machines to a folder, FTP, FTP over TLS and SCP	将虚拟机备份到文件夹、FTP、FTP over TLS 和 SCP
+Browse...	浏览...
+Close	关闭
+Closing the running VM2Backup and stopping its service...	正在关闭运行中的 VM2Backup 并停止其服务...
+Copying the files to %s	正在将文件复制到 %s
+Could not open: %s	无法打开：%s
+Creating the shortcuts.	正在创建快捷方式。
+Data folder:	数据文件夹：
+Desktop shortcut	桌面快捷方式
+Done.	完成。
+Enabled, but not listening	已启用,但未监听
+Error: VM2Backup.exe was not found next to the installer.	错误: 在安装程序旁未找到 VM2Backup.exe。
+Error: VM2BackupService.exe was not found next to the installer.	错误: 在安装程序旁未找到 VM2BackupService.exe。
+Error: cannot copy %s (error %lu).	错误: 无法复制 %s (错误 %lu)。
+Error: cannot find the Program Files folder.	错误: 找不到 Program Files 文件夹。
+Error: the installation folder is not valid (a full path such as C:\\Programs\\VM2Backup is needed).	错误: 安装文件夹无效(需要完整路径,如 C:\\Programs\\VM2Backup)。
+Error: the service could not be registered (are you an administrator?).	错误: 无法注册服务(您是管理员吗?)。
+Exit	退出
+Failed.	失败。
+Install	安装
+Install to:	安装到:
+Installed: version %s, %s	已安装: 版本 %s, %s
+Language:	语言:
+Launch	启动
+Listening on %s:%lld	正在监听 %s:%lld
+Not installed	未安装
+Off	关闭
+Open logs folder	打开日志文件夹
+Open web interface	打开网页界面
+Registering the program in Apps & features.	正在在“应用和功能”中注册程序。
+Reinstall	重新安装
+Remove	删除
+Remove VM2Backup from this computer?\n\nYour settings, the history and the backups you made are kept.	从此计算机删除 VM2Backup?\n\n您的设置、历史记录和已创建的备份将保留。
+Removing the shortcuts.	正在删除快捷方式。
+Restart service	重启服务
+Restart the service? Running backups are paused and continue after the restart.	重启服务？正在运行的备份将被暂停，并在重启后继续。
+Running	运行中
+Select the folder to install VM2Backup to	选择 VM2Backup 的安装文件夹
+Service	服务
+Service:	服务：
+Start menu shortcut	“开始”菜单快捷方式
+Start service	启动服务
+Start the backup service now	立即启动备份服务
+Stop service	停止服务
+Stop the service? Running backups are paused and continue after the next start.	停止服务?运行中的备份将暂停,并在下次启动后继续。
+Stopped	已停止
+The VM2Backup service is not running, so there is no web site. Start the service first.	VM2Backup 服务未运行，因此没有网站。请先启动服务。
+The VM2Backup service is not running. Start it with the "Start service" button.	VM2Backup 服务未运行。请用“启动服务”按钮启动它。
+The backup service is installed (it starts with Windows).	备份服务已安装(随 Windows 启动)。
+The backup service is installed and started.	备份服务已安装并启动。
+The backup service is installed but did not start; start it with the "Start service" button of the program.	备份服务已安装但未启动；请用程序中的“启动服务”按钮启动它。
+The service could not be started (is it installed? are you an administrator?).	无法启动服务(是否已安装?您是管理员吗?)。
+The service could not be stopped (are you an administrator?).	无法停止服务（您是管理员吗？）。
+The web site is enabled, but not listening. Check the certificate and the port in the web interface.	网站已启用，但未在监听。请在网页界面中检查证书和端口。
+The web site is off. Switch it on in the web interface, or reset it with VM2BackupService.exe /reset-web.	网站已关闭。请在网页界面中开启，或用 VM2BackupService.exe /reset-web 重置。
+Update	更新
+Version:	版本：
+Web site:	网站：
+Windows language	Windows 语言
+Your settings, the history and the backups you made are kept.	您的设置、历史记录和已创建的备份将保留。

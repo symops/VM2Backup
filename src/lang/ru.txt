@@ -1,0 +1,63 @@
+# English text <TAB> translation (\n line break). Empty = show English. Run tools/gen_lang.py --update after changing the sources.
+- Installing VM2Backup -	- Установка VM2Backup -
+- Removing VM2Backup -	- Удаление VM2Backup -
+Backup of virtual machines to a folder, FTP, FTP over TLS and SCP	Резервное копирование виртуальных машин в папку, FTP, FTP over TLS и SCP
+Browse...	Обзор...
+Close	Закрыть
+Closing the running VM2Backup and stopping its service...	Закрытие запущенной VM2Backup и остановка её службы...
+Copying the files to %s	Копирование файлов в %s
+Could not open: %s	Не удалось открыть: %s
+Creating the shortcuts.	Создание ярлыков.
+Data folder:	Папка данных:
+Desktop shortcut	Ярлык на рабочем столе
+Done.	Готово.
+Enabled, but not listening	Включён, но не прослушивает
+Error: VM2Backup.exe was not found next to the installer.	Ошибка: VM2Backup.exe не найден рядом с установщиком.
+Error: VM2BackupService.exe was not found next to the installer.	Ошибка: VM2BackupService.exe не найден рядом с установщиком.
+Error: cannot copy %s (error %lu).	Ошибка: не удалось скопировать %s (ошибка %lu).
+Error: cannot find the Program Files folder.	Ошибка: папка Program Files не найдена.
+Error: the installation folder is not valid (a full path such as C:\\Programs\\VM2Backup is needed).	Ошибка: неверная папка установки (нужен полный путь, например C:\\Programs\\VM2Backup).
+Error: the service could not be registered (are you an administrator?).	Ошибка: не удалось зарегистрировать службу (вы администратор?).
+Exit	Выход
+Failed.	Сбой.
+Install	Установить
+Install to:	Установить в:
+Installed: version %s, %s	Установлено: версия %s, %s
+Language:	Язык:
+Launch	Запустить
+Listening on %s:%lld	Прослушивается %s:%lld
+Not installed	Не установлено
+Off	Выкл.
+Open logs folder	Открыть папку журналов
+Open web interface	Открыть веб-интерфейс
+Registering the program in Apps & features.	Регистрация программы в «Приложения и возможности».
+Reinstall	Переустановить
+Remove	Удалить
+Remove VM2Backup from this computer?\n\nYour settings, the history and the backups you made are kept.	Удалить VM2Backup с этого компьютера?\n\nВаши параметры, журнал и созданные копии сохранятся.
+Removing the shortcuts.	Удаление ярлыков.
+Restart service	Перезапустить службу
+Restart the service? Running backups are paused and continue after the restart.	Перезапустить службу? Выполняемые копии приостанавливаются и продолжаются после перезапуска.
+Running	Выполняется
+Select the folder to install VM2Backup to	Выберите папку для установки VM2Backup
+Service	Служба
+Service:	Служба:
+Start menu shortcut	Ярлык в меню «Пуск»
+Start service	Запустить службу
+Start the backup service now	Запустить службу резервного копирования сейчас
+Stop service	Остановить службу
+Stop the service? Running backups are paused and continue after the next start.	Остановить службу? Выполняемые копии приостанавливаются и продолжаются после следующего запуска.
+Stopped	Остановлена
+The VM2Backup service is not running, so there is no web site. Start the service first.	Служба VM2Backup не запущена, поэтому веб-сайта нет. Сначала запустите службу.
+The VM2Backup service is not running. Start it with the "Start service" button.	Служба VM2Backup не запущена. Запустите её кнопкой «Запустить службу».
+The backup service is installed (it starts with Windows).	Служба резервного копирования установлена (запускается вместе с Windows).
+The backup service is installed and started.	Служба резервного копирования установлена и запущена.
+The backup service is installed but did not start; start it with the "Start service" button of the program.	Служба резервного копирования установлена, но не запустилась; запустите её кнопкой «Запустить службу» в программе.
+The service could not be started (is it installed? are you an administrator?).	Не удалось запустить службу (она установлена? вы администратор?).
+The service could not be stopped (are you an administrator?).	Не удалось остановить службу (вы администратор?).
+The web site is enabled, but not listening. Check the certificate and the port in the web interface.	Веб-сайт включён, но не слушает. Проверьте сертификат и порт в веб-интерфейсе.
+The web site is off. Switch it on in the web interface, or reset it with VM2BackupService.exe /reset-web.	Веб-сайт выключен. Включите его в веб-интерфейсе или сбросьте командой VM2BackupService.exe /reset-web.
+Update	Обновить
+Version:	Версия:
+Web site:	Веб-сайт:
+Windows language	Язык Windows
+Your settings, the history and the backups you made are kept.	Ваши параметры, журнал и созданные копии сохранятся.

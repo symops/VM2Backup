@@ -1,0 +1,63 @@
+# English text <TAB> translation (\n line break). Empty = show English. Run tools/gen_lang.py --update after changing the sources.
+- Installing VM2Backup -	- VM2Backup installeren -
+- Removing VM2Backup -	- VM2Backup verwijderen -
+Backup of virtual machines to a folder, FTP, FTP over TLS and SCP	Back-up van virtuele machines naar een map, FTP, FTP over TLS en SCP
+Browse...	Bladeren...
+Close	Sluiten
+Closing the running VM2Backup and stopping its service...	Het actieve VM2Backup sluiten en de service stoppen...
+Copying the files to %s	Bestanden kopiëren naar %s
+Could not open: %s	Kan niet openen: %s
+Creating the shortcuts.	Snelkoppelingen maken.
+Data folder:	Gegevensmap:
+Desktop shortcut	Snelkoppeling op bureaublad
+Done.	Klaar.
+Enabled, but not listening	Ingeschakeld, maar luistert niet
+Error: VM2Backup.exe was not found next to the installer.	Fout: VM2Backup.exe is niet gevonden naast het installatieprogramma.
+Error: VM2BackupService.exe was not found next to the installer.	Fout: VM2BackupService.exe is niet gevonden naast het installatieprogramma.
+Error: cannot copy %s (error %lu).	Fout: kan %s niet kopiëren (fout %lu).
+Error: cannot find the Program Files folder.	Fout: de map Program Files is niet gevonden.
+Error: the installation folder is not valid (a full path such as C:\\Programs\\VM2Backup is needed).	Fout: de installatiemap is ongeldig (een volledig pad zoals C:\\Programs\\VM2Backup is nodig).
+Error: the service could not be registered (are you an administrator?).	Fout: de service kon niet worden geregistreerd (bent u beheerder?).
+Exit	Afsluiten
+Failed.	Mislukt.
+Install	Installeren
+Install to:	Installeren in:
+Installed: version %s, %s	Geïnstalleerd: versie %s, %s
+Language:	Taal:
+Launch	Starten
+Listening on %s:%lld	Luistert op %s:%lld
+Not installed	Niet geïnstalleerd
+Off	Uit
+Open logs folder	Logmap openen
+Open web interface	Webinterface openen
+Registering the program in Apps & features.	Het programma registreren in Apps en onderdelen.
+Reinstall	Opnieuw installeren
+Remove	Verwijderen
+Remove VM2Backup from this computer?\n\nYour settings, the history and the backups you made are kept.	VM2Backup van deze computer verwijderen?\n\nUw instellingen, de geschiedenis en de gemaakte back-ups blijven behouden.
+Removing the shortcuts.	Snelkoppelingen verwijderen.
+Restart service	Service opnieuw starten
+Restart the service? Running backups are paused and continue after the restart.	De service opnieuw starten? Lopende back-ups worden onderbroken en gaan na het herstarten verder.
+Running	Actief
+Select the folder to install VM2Backup to	Selecteer de map om VM2Backup in te installeren
+Service	Service
+Service:	Service:
+Start menu shortcut	Snelkoppeling in menu Start
+Start service	Service starten
+Start the backup service now	De back-upservice nu starten
+Stop service	Service stoppen
+Stop the service? Running backups are paused and continue after the next start.	De service stoppen? Actieve back-ups worden gepauzeerd en gaan door na de volgende start.
+Stopped	Gestopt
+The VM2Backup service is not running, so there is no web site. Start the service first.	De VM2Backup-service draait niet, dus er is geen website. Start eerst de service.
+The VM2Backup service is not running. Start it with the "Start service" button.	De VM2Backup-service draait niet. Start hem met de knop ‘Service starten’.
+The backup service is installed (it starts with Windows).	De back-upservice is geïnstalleerd (start met Windows).
+The backup service is installed and started.	De back-upservice is geïnstalleerd en gestart.
+The backup service is installed but did not start; start it with the "Start service" button of the program.	De back-upservice is geïnstalleerd maar is niet gestart; start hem met de knop ‘Service starten’ van het programma.
+The service could not be started (is it installed? are you an administrator?).	De service kon niet worden gestart (is hij geïnstalleerd? bent u beheerder?).
+The service could not be stopped (are you an administrator?).	De service kon niet worden gestopt (bent u beheerder?).
+The web site is enabled, but not listening. Check the certificate and the port in the web interface.	De website is ingeschakeld, maar luistert niet. Controleer het certificaat en de poort in de webinterface.
+The web site is off. Switch it on in the web interface, or reset it with VM2BackupService.exe /reset-web.	De website staat uit. Schakel hem in via de webinterface of reset hem met VM2BackupService.exe /reset-web.
+Update	Bijwerken
+Version:	Versie:
+Web site:	Website:
+Windows language	Windows-taal
+Your settings, the history and the backups you made are kept.	Uw instellingen, de geschiedenis en de gemaakte back-ups blijven behouden.

@@ -1,0 +1,470 @@
+# English text <TAB> translation (\n line break). Empty = show English. Run tools/webui_strings.py --update after changing src/web/app.js.
+(chosen by the server)	(サーバーが選択)
+(the default resource pool)	(既定のリソースプール)
+(the root VM folder)	(ルートの VM フォルダー)
+A PKCS#12 file (.pfx) with the certificate and its private key, 1 MB at most. Only the certificate itself is served, not the chain.	証明書とその秘密キーを含む PKCS#12 ファイル (.pfx)。最大 1 MB。証明書本体のみが使用され、チェーンは含まれません。
+A mapped drive letter (Z:) cannot be used: the service does not see it. Choose "Network drive..." to use its UNC path, or enter the UNC path.	マップされたドライブ文字 (Z:) は使用できません。サービスから見えないためです。「ネットワークドライブ...」を選んで UNC パスを使うか、UNC パスを入力してください。
+A new certificate was created. Your browser will ask you to trust it again.	新しい証明書を作成しました。ブラウザーで再度信頼する必要があります。
+A new user needs a password.	新しいユーザーにはパスワードが必要です。
+A path on the server computer	サーバーコンピューター上のパス
+A path on the server computer (the service reads it)	サーバーコンピューター上のパス (サービスが読み取ります)
+A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	実行中の ESXi / vCenter の VM は一時的なスナップショットからコピーされ、その後スナップショットは削除されます。VMware Tools がないと静止スナップショットは失敗します。そのような VM では静止をオフにしてください。
+A virtual machine with this name already exists on the server. Enter another name; an existing machine is never overwritten.	この名前の仮想マシンはサーバー上に既にあります。別の名前を入力してください。既存のマシンが上書きされることはありません。
+Abort	中止
+Add Scheduled Task	スケジュールタスクの追加
+Add Server	サーバーの追加
+Add address	アドレスを追加
+Add at least one backup element.	バックアップ要素を少なくとも 1 つ追加してください。
+Add element...	要素を追加...
+Add user	ユーザーを追加
+Add user...	ユーザーを追加...
+Add window	時間帯を追加
+Additional names	追加の名前
+Address	アドレス
+Advanced	詳細
+After a lost connection the program reconnects and goes on; nothing finished is sent again.	接続が切れた後、プログラムは再接続して続行します。完了した分は再送されません。
+All	すべて
+All interfaces	すべてのインターフェース
+All results	すべての結果
+Allow a copy of a running VM (the copy is consistent only at the crash level)	実行中の VM のコピーを許可する (コピーはクラッシュレベルでのみ整合性があります)
+An administrator needs two-factor authentication when it is required in the security settings.	セキュリティ設定で必須にした場合、管理者には二要素認証が必要です。
+Apply	適用
+Archive	アーカイブ
+As in the backup (every file back to its original datastore)	バックアップ時と同じ (すべてのファイルを元のデータストアへ)
+At least 10 characters	10 文字以上
+At least 10 characters, not containing the user name.	10 文字以上で、ユーザー名を含まないこと。
+Audit log	監査ログ
+Auto	自動
+Back	戻る
+Backup Explorer	Backup Explorer
+Backup of {0}	{0} のバックアップ
+Backup started.	バックアップを開始しました。
+Backup virtual machines...	仮想マシンをバックアップ...
+Balanced (default)	バランス (既定)
+Browse network	ネットワークを参照
+Browse network...	ネットワークを参照...
+Browse...	参照...
+Cancel	キャンセル
+Cannot reach the server.	サーバーに接続できません。
+Cannot read: 	読み取れません: 
+Certificate	証明書
+Change	変更
+Change password	パスワードの変更
+Change settings...	設定の変更...
+Check the user name and password in the form.	フォームのユーザー名とパスワードを確認してください。
+Choose a file	ファイルを選択
+Choose a file.	ファイルを選択してください。
+Choose a folder	フォルダーを選択
+Choose a folder.	フォルダーを選択してください。
+Choose a server with virtual machines.	仮想マシンのあるサーバーを選択してください。
+Choose a share or a folder.	共有またはフォルダーを選択してください。
+Choose a source server.	ソースサーバーを選択してください。
+Choose at least one day in every time window.	すべての時間帯で少なくとも 1 日を選択してください。
+Choose at least one day of the week.	曜日を少なくとも 1 つ選択してください。
+Choose at least one virtual machine.	仮想マシンを少なくとも 1 つ選択してください。
+Choose the ESXi or vCenter server to restore to.	復元先の ESXi または vCenter サーバーを選択してください。
+Choose the datacenter.	データセンターを選択してください。
+Choose the datastore.	データストアを選択してください。
+Choose the date and time.	日付と時刻を選択してください。
+Choose the file.	ファイルを選択してください。
+Choose the first start time.	最初の開始時刻を選択してください。
+Choose the kind of server to add.	追加するサーバーの種類を選択してください。
+Choose the start time.	開始時刻を選択してください。
+Clear history	履歴を消去
+Clear the whole history?	履歴をすべて消去しますか?
+Close	閉じる
+Code	コード
+Comment	コメント
+Complete	完了
+Compression	圧縮
+Compression level	圧縮レベル
+Compression threads	圧縮スレッド数
+Confirm	確認
+Connection	接続
+Continue an interrupted backup of this VM when there is one	この VM の中断されたバックアップがあれば続行する
+Copy	コピー
+Create	作成
+Create a self-signed certificate	自己署名証明書を作成
+Create new self-signed...	新しい自己署名を作成...
+Create schedule...	スケジュールを作成...
+Created	作成日時
+Current password	現在のパスワード
+Data folder	データフォルダー
+Datacenter	データセンター
+Datastore	データストア
+Date and time	日付と時刻
+Day of the month	月の日
+Default local folder	既定のローカルフォルダー
+Delete	削除
+Delete backup	バックアップの削除
+Delete server "{0}"? Backups already made stay where they are.	サーバー "{0}" を削除しますか? 作成済みのバックアップはそのまま残ります。
+Delete task "{0}"?	タスク "{0}" を削除しますか?
+Delete the backup "{0}"?	バックアップ "{0}" を削除しますか?
+Delete user "{0}"?	ユーザー "{0}" を削除しますか?
+Details	詳細
+Disable two-factor	二要素認証を無効にする
+Disable two-factor authentication of "{0}"?	"{0}" の二要素認証を無効にしますか?
+Disabled	無効
+Discard the unfinished backup "{0}"? What was already copied is deleted.	未完了のバックアップ "{0}" を破棄しますか? コピー済みのデータは削除されます。
+Domain user name or user@domain; empty = the account of the service	ドメインのユーザー名または user@domain。空 = サービスのアカウント
+Down	下へ
+Drive	ドライブ
+Drive {0} is not a network drive that the service can see. Enter the UNC path of the share or choose "Network drive...".	ドライブ {0} はサービスから見えるネットワークドライブではありません。共有の UNC パスを入力するか、「ネットワークドライブ...」を選択してください。
+Duration	所要時間
+ESXi host or vCenter	ESXi ホストまたは vCenter
+Edit	編集
+Edit Server	サーバーの編集
+Edit user	ユーザーの編集
+Elements	要素
+Enable scheduler	スケジューラを有効にする
+Enable this only behind a reverse proxy that you control and that sets X-Forwarded-For itself; otherwise anybody can fake the address that is shown in the audit log and used for the login limits.	これは、自分で管理し X-Forwarded-For を自身で設定するリバースプロキシの背後でのみ有効にしてください。そうしないと、監査ログに表示されログイン制限に使われるアドレスを誰でも偽装できます。
+Enabled	有効
+Encrypt the backup (AES-256)	バックアップを暗号化する (AES-256)
+Encrypted	暗号化済み
+Enter a name for the new virtual machine.	新しい仮想マシンの名前を入力してください。
+Enter a password, a private key file or the private key text.	パスワード、秘密キーファイル、または秘密キーのテキストを入力してください。
+Enter a whole number in every numeric field.	すべての数値フィールドに整数を入力してください。
+Enter the address of the server.	サーバーのアドレスを入力してください。
+Enter the code from your authenticator app, or a recovery code.	認証アプリのコード、または回復コードを入力してください。
+Enter the destination folder.	保存先フォルダーを入力してください。
+Enter the interval (a number of 1 or more).	間隔 (1 以上の数) を入力してください。
+Enter the password for the encryption.	暗号化のパスワードを入力してください。
+Enter the user name.	ユーザー名を入力してください。
+Every N minutes / hours / days	N 分 / 時間 / 日ごと
+Every N months	N か月ごと
+Every N weeks	N 週間ごと
+Every volume is read back from the target: its size and SHA-256 are compared with the ones recorded while it was written, and the data is decrypted and decompressed to prove that the backup can be restored.	すべてのボリュームをターゲットから読み戻します。サイズと SHA-256 を書き込み時に記録した値と比較し、データを復号して展開して、バックアップを復元できることを確認します。
+FTP	FTP
+FTP over explicit TLS (FTPES)	明示的 TLS 上の FTP (FTPES)
+FTP over implicit TLS (FTPS)	暗黙的 TLS 上の FTP (FTPS)
+Failed	失敗
+Fast	高速
+Fastest	最速
+File	ファイル
+Fingerprint	フィンガープリント
+Finish	完了
+Finished	終了
+First start	最初の開始
+First wait before a reconnect, s	再接続までの最初の待機時間 (秒)
+Folder	フォルダー
+Folder on the server	サーバー上のフォルダー
+Folder with VMs	VM のフォルダー
+For several virtual machines the folder must contain the {VM} tag.	複数の仮想マシンの場合、フォルダーに {VM} タグを含める必要があります。
+Fri	金
+From	開始
+General	全般
+Give the server a name.	サーバーに名前を付けてください。
+Give the task a title.	タスクにタイトルを付けてください。
+Go	移動
+HTML report...	HTML レポート...
+History entries kept	保持する履歴の件数
+Host	ホスト
+Host key	ホストキー
+Imported	インポート済み
+Include the memory of the virtual machine in the snapshot	スナップショットに仮想マシンのメモリを含める
+Job "{0}" finished: {1}	ジョブ "{0}" が終了しました: {1}
+Keep last backups	保持する最新バックアップ数
+Keep the computer awake while the scheduler is on	スケジューラがオンの間コンピューターをスリープさせない
+Key passphrase	キーのパスフレーズ
+Kind	種類
+Language	言語
+Last result	前回の結果
+Last run	前回の実行
+Leave empty to keep the password.	パスワードを変更しない場合は空のままにしてください。
+Lines	行
+Link	リンク
+Listening interfaces	待ち受けインターフェース
+Load	読み込み
+Loading...	読み込み中...
+Loading... {0} s	読み込み中... {0} 秒
+Local Computer	ローカルコンピューター
+Local Computer cannot be changed.	ローカルコンピューターは変更できません。
+Local Computer cannot be deleted.	ローカルコンピューターは削除できません。
+Longest wait before a reconnect, s	再接続までの最長待機時間 (秒)
+Machine file	マシンファイル
+Maximum	最大
+Message	メッセージ
+Minimum TLS version	最小 TLS バージョン
+Mon	月
+Monthly	毎月
+Name	名前
+Names	名前
+Needs about {0} GiB of memory per CPU core.	CPU コアあたり約 {0} GiB のメモリが必要です。
+Network	ネットワーク
+Network drive	ネットワークドライブ
+Network drive...	ネットワークドライブ...
+Network folder	ネットワークフォルダー
+Network folder (SMB)	ネットワークフォルダー (SMB)
+Network path	ネットワークパス
+Never	なし
+New VM name	新しい VM 名
+New password	新しいパスワード
+Next	次へ
+Next run	次回の実行
+Next run: {0}	次回の実行: {0}
+No	いいえ
+No computers were found. Type a server name below.	コンピューターが見つかりません。下にサーバー名を入力してください。
+No elements yet. Add a backup element.	要素がまだありません。バックアップ要素を追加してください。
+No mapped network drives were found.	マップされたネットワークドライブが見つかりません。
+No users are configured. On the server, run VM2BackupService.exe /reset-web as an administrator.	ユーザーが構成されていません。サーバーで管理者として VM2BackupService.exe /reset-web を実行してください。
+No virtual machines found.	仮想マシンが見つかりません。
+Not scheduled	スケジュールなし
+Not scheduled (run manually)	スケジュールなし (手動で実行)
+Nothing here yet.	まだ何もありません。
+Nothing here.	ここには何もありません。
+OK	OK
+On error, go on with the next VM	エラー時は次の VM に進む
+Once	1 回
+One volume (no resuming)	単一ボリューム (再開不可)
+Only for a network folder that asks for a user name	ユーザー名を要求するネットワークフォルダーの場合のみ
+Open	開く
+Owner	所有者
+Parallel jobs	並列ジョブ数
+Parallel jobs: 1 to 16.	並列ジョブ数: 1 ～ 16。
+Passive mode	パッシブモード
+Password	パスワード
+Password changed. Sign in again.	パスワードを変更しました。再度サインインしてください。
+Password of the file	ファイルのパスワード
+Paste the key instead of a file; it is stored protected and never shown again	ファイルの代わりにキーを貼り付けます。保護して保存され、再表示されません
+Paused	一時停止中
+Pinned fingerprint	固定したフィンガープリント
+Port	ポート
+Power on after restore	復元後に電源をオンにする
+Press Load to read the datacenters, datastores, folders and resource pools of the server.	「読み込み」を押すと、サーバーのデータセンター、データストア、フォルダー、リソースプールを読み取ります。
+Private key file	秘密キーファイル
+Private key text	秘密キーのテキスト
+Quiesce the guest file system (needs VMware Tools in the VM)	ゲストファイルシステムを静止する (VM に VMware Tools が必要)
+Recovery code	回復コード
+Recovery codes	回復コード
+Recovery codes left	残りの回復コード
+Refresh	更新
+Remove	削除
+Remove window	時間帯を削除
+Repeat	繰り返し
+Repeat every	繰り返し間隔
+Report	レポート
+Require two-factor authentication for administrators	管理者に二要素認証を必須にする
+Resource pool	リソースプール
+Restore	復元
+Restore started.	復元を開始しました。
+Restore to	復元先
+Restore to folder	復元先フォルダー
+Restore...	復元...
+Restored as	復元名
+Restoring "{0}" of {1}.	{1} の "{0}" を復元しています。
+Result	結果
+Resumable transfer	再開可能な転送
+Retries after a lost connection	接続が切れた後の再試行回数
+Role	ロール
+Run now	今すぐ実行
+Running	実行中
+Running jobs	実行中のジョブ
+SCP (SSH)	SCP (SSH)
+SFTP (no longer supported)	SFTP (サポート終了)
+Sat	土
+Saved.	保存しました。
+Scan the code with an authenticator app (or type the secret), then enter the 6-digit code it shows.	認証アプリでコードをスキャンするか (またはシークレットを入力して)、表示される 6 桁のコードを入力してください。
+Schedule	スケジュール
+Scheduled Task Details	スケジュールタスクの詳細
+Scheduled Tasks	スケジュールタスク
+Scheduler	スケジューラ
+Secret	シークレット
+Security	セキュリティ
+Select	選択
+Select a drive first.	先にドライブを選択してください。
+Select a row first.	先に行を選択してください。
+Self-signed	自己署名
+Server	サーバー
+Server name	サーバー名
+Session idle timeout, minutes	セッションのアイドルタイムアウト (分)
+Set up two-factor authentication	二要素認証を設定
+Set up two-factor...	二要素認証を設定...
+Settings	設定
+Show	表示
+Sign in	サインイン
+Sign out	サインアウト
+Sign-in failed.	サインインに失敗しました。
+Size	サイズ
+Snapshot	スナップショット
+Source	ソース
+Source server	ソースサーバー
+Speed	速度
+Speed limit, Mbit/s (0 = unlimited)	速度制限 (Mbit/s、0 = 無制限)
+Start	開始
+Start time	開始時刻
+Started	開始日時
+State	状態
+Status	ステータス
+Stop	停止
+Stopped.	停止しました。
+Stored	保存済み
+Strong	強
+Subject	サブジェクト
+Success	成功
+Sun	日
+Switch the scheduler off	スケジューラをオフにする
+Switch the scheduler on	スケジューラをオンにする
+TLS 1.0 (weak)	TLS 1.0 (脆弱)
+TLS 1.0 and 1.1 are weak. Use them only for old hosts (ESXi 6.0 / 6.5) that offer nothing newer.	TLS 1.0 と 1.1 は脆弱です。より新しいバージョンに対応しない古いホスト (ESXi 6.0 / 6.5) にのみ使用してください。
+TLS 1.1 (weak)	TLS 1.1 (脆弱)
+Target	ターゲット
+Target server	ターゲットサーバー
+Task	タスク
+Task History	タスク履歴
+Task started.	タスクを開始しました。
+Test connection	接続テスト
+Testing...	テスト中...
+The QR code is not available.	QR コードは利用できません。
+The certificate always includes this computer name, localhost, 127.0.0.1 and ::1. Add the DNS names and IP addresses under which the site is reached, one per line.	証明書には常にこのコンピューター名、localhost、127.0.0.1、::1 が含まれます。サイトへのアクセスに使う DNS 名と IP アドレスを 1 行に 1 つずつ追加してください。
+The certificate was installed.	証明書をインストールしました。
+The connection is tested now. "Test connection" tests again; "Finish" saves the server.	接続をテストしています。「接続テスト」で再テストし、「完了」でサーバーを保存します。
+The connection test failed or has not finished. Save the server anyway?	接続テストに失敗したか、完了していません。それでもサーバーを保存しますか?
+The connection works.	接続は正常です。
+The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	データストア "{0}" の空きは {1} で、バックアップは最大 {2} になります。それでも復元しますか?
+The figures are approximate (typical data). More CPU cores make compression faster.	数値は概算です (一般的なデータ)。CPU コアが多いほど圧縮は速くなります。
+The file is larger than 1 MB.	ファイルが 1 MB を超えています。
+The list is cut: only the first entries are shown.	一覧は省略されています。最初の項目のみ表示しています。
+The longest wait cannot be shorter than the first one.	最長の待機時間を最初の待機時間より短くすることはできません。
+The name of the virtual machine must be at most 80 characters and cannot contain slashes or %.	仮想マシン名は 80 文字以内で、スラッシュや % を含められません。
+The password is too simple.	パスワードが単純すぎます。
+The password must be at least 10 characters long.	パスワードは 10 文字以上にしてください。
+The password must not contain the user name.	パスワードにユーザー名を含めることはできません。
+The passwords differ.	パスワードが一致しません。
+The port must be 1..65535.	ポートは 1..65535 にしてください。
+The schedule windows of a task can set another limit for its hours; the lowest one applies.	タスクのスケジュール時間帯でその時間に別の制限を設定できます。最も低い制限が適用されます。
+The scheduler is off: scheduled tasks do not start by themselves.	スケジューラがオフです。スケジュールされたタスクは自動的に開始されません。
+The server did not answer in time; try again.	サーバーが時間内に応答しませんでした。もう一度お試しください。
+The server or share was not found.	サーバーまたは共有が見つかりません。
+The server presented an identity that is not known yet: {0}. If you recognise it, you can trust it.	サーバーがまだ知らない ID を提示しました: {0}。心当たりがあれば信頼できます。
+The service cannot see drive letters. Enter the UNC path of the share.	サービスにはドライブ文字が見えません。共有の UNC パスを入力してください。
+The service cannot see drive letters. {0} is the network drive {1}: its UNC path is stored instead. Enter the user name and password that give access to it.	サービスにはドライブ文字が見えません。{0} はネットワークドライブ {1} であり、代わりに UNC パスが保存されます。アクセスできるユーザー名とパスワードを入力してください。
+The site always stays reachable on this computer (localhost): that is how a mistake here can be repaired.	このサイトはこのコンピューター (localhost) から常にアクセスできます。ここでの設定ミスを修復できるようにするためです。
+The site is moving to port {0}. Open {1} and sign in again.	サイトはポート {0} に移動します。{1} を開いて再度サインインしてください。
+The snapshot settings apply to ESXi and vCenter sources only.	スナップショットの設定は ESXi と vCenter のソースにのみ適用されます。
+The speed limit cannot be negative.	速度制限を負の値にすることはできません。
+The task may run only inside its windows. A window that ends before it starts goes over midnight.	タスクは時間帯の内側でのみ実行できます。開始より前に終了する時間帯は日付をまたぎます。
+The task was copied.	タスクをコピーしました。
+The volume size cannot be negative.	ボリュームサイズを負の値にすることはできません。
+The waits must be between 1 and 86400 seconds.	待機時間は 1 ～ 86400 秒にしてください。
+There is no ESXi or vCenter server yet. Add one on the Datacenter page first.	ESXi または vCenter サーバーがまだありません。先に「データセンター」ページで追加してください。
+This backup is encrypted: enter its password.	このバックアップは暗号化されています。パスワードを入力してください。
+This browser cannot read files.	このブラウザーはファイルを読み取れません。
+This browser cannot save files.	このブラウザーはファイルを保存できません。
+This computer	このコンピューター
+This computer only (localhost)	このコンピューターのみ (localhost)
+This is an unfinished backup.	これは未完了のバックアップです。
+This server holds backups, not virtual machines.	このサーバーはバックアップを保持するもので、仮想マシンはありません。
+Thu	木
+Time windows	時間帯
+Title	タイトル
+To	終了
+Transfer: SSH encrypted	転送: SSH で暗号化
+Transfer: TLS encrypted (FTP over TLS)	転送: TLS で暗号化 (FTP over TLS)
+Transfer: local / network folder	転送: ローカル / ネットワークフォルダー
+Transfer: network folder (SMB; not encrypted unless the share requires it)	転送: ネットワークフォルダー (SMB。共有が要求しない限り暗号化なし)
+Transfer: plain FTP (not encrypted - enable encryption of the backup!)	転送: 平文の FTP (暗号化なし - バックアップの暗号化を有効にしてください!)
+Trigger	トリガー
+Trust X-Forwarded-For from a reverse proxy on this computer	このコンピューター上のリバースプロキシからの X-Forwarded-For を信頼する
+Trust this identity and test again	この ID を信頼して再テスト
+Tue	火
+Two-factor	二要素認証
+Type	種類
+Unfinished (resumable)	未完了 (再開可能)
+Unit	単位
+Up	上へ
+Upload	アップロード
+Upload PFX...	PFX をアップロード...
+Upload a certificate (PFX)	証明書 (PFX) をアップロード
+Use	使用
+Use a recovery code	回復コードを使用
+Use the authenticator code	認証アプリのコードを使用
+Use {VM} for the VM name	VM 名には {VM} を使用
+User	ユーザー
+User name	ユーザー名
+Users	ユーザー
+VM folder	VM フォルダー
+VM folder (VMware Workstation / Player)	VM フォルダー (VMware Workstation / Player)
+VMware ESXi host	VMware ESXi ホスト
+VMware vCenter	VMware vCenter
+Valid from	有効開始日
+Valid until	有効期限
+Verification started.	検証を開始しました。
+Verify	検証
+Verify Backup	バックアップの検証
+Verify the backup after it is made	作成後にバックアップを検証する
+Verify the certificate	証明書を検証する
+Version	バージョン
+Virtual Machine Backup	Virtual Machine Backup
+Virtual machine	仮想マシン
+Virtual machines	仮想マシン
+Virtual machines...	仮想マシン...
+Volume size	ボリュームサイズ
+Volume size, MiB (0 = one volume)	ボリュームサイズ (MiB、0 = 単一ボリューム)
+Volumes	ボリューム
+Wait until the choices of the server are loaded.	サーバーの選択肢が読み込まれるまでお待ちください。
+Waiting	待機中
+Warning	警告
+Warning: the password is stored encrypted and is not retrievable. Be sure to remember it or write it down in a safe place in order to be able to decrypt the backup.	警告: パスワードは暗号化して保存され、取り出せません。バックアップを復号できるよう、必ず覚えておくか安全な場所に書き留めてください。
+Web access	Web アクセス
+Wed	水
+Weekly	毎週
+Windows maps drives per user. The service sees only the drives mapped for users who are logged on and its own. The drive letter itself cannot be used by the service: its UNC path is stored, and the credentials must be entered.	Windows はドライブをユーザーごとにマップします。サービスから見えるのは、ログオン中のユーザーと自身にマップされたドライブのみです。サービスはドライブ文字自体を使えないため、UNC パスが保存され、資格情報の入力が必要です。
+Write these one-time codes down now: they are shown only once.	この 1 回限りのコードを今すぐ書き留めてください。表示されるのは一度だけです。
+Yes	はい
+Your session has ended. Sign in again.	セッションが終了しました。再度サインインしてください。
+admin	admin
+backup	バックアップ
+cdrom	CD-ROM
+days	日
+down	下
+encrypted	暗号化済み
+every month	毎月
+every week	毎週
+every {0} months	{0} か月ごと
+every {0} weeks	{0} 週間ごと
+every {0} {1}	{0} {1}ごと
+fixed	固定
+folder	フォルダー
+from {0}	{0} から
+hours	時間
+last	最後
+limit {0} Mbit/s	制限 {0} Mbit/s
+listening	待ち受け中
+manual	手動
+minutes	分
+network	ネットワーク
+not confirmed	未確認
+not listening	待ち受けなし
+off	オフ
+on	オン
+on day {0} at {1}	毎月 {0} 日の {1}
+on {0} at {1}	{0} の {1}
+once at {0}	{0} に 1 回
+operator	オペレーター
+optional	オプション
+optional: the datacenter used when a backup does not name one	オプション: バックアップで指定がない場合に使うデータセンター
+other	その他
+read	読み取り
+removable	リムーバブル
+required	必須
+restore	復元
+restore_esxi	ESXi への復元
+running {0}	実行中 {0}
+scheduled	スケジュール済み
+server	サーバー
+sha256:... (optional)	sha256:... (オプション)
+share	共有
+stored	保存済み
+task	タスク
+the service	サービス
+transferred	転送済み
+vCenter only; empty = the one of the server	vCenter のみ。空 = サーバーの設定
+verify	検証
+viewer	閲覧者
+{0} datastore(s), {1} folder(s), {2} resource pool(s) found.	データストア {0} 件、フォルダー {1} 件、リソースプール {2} 件が見つかりました。
+{0} free of {1}	{1} 中 {0} 空き
+{0} virtual machine(s)	仮想マシン {0} 台
+{0} volume(s)	ボリューム {0} 個
+{0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: CPU コアあたり約 {1} MB/s。バックアップはレベル 5 より約 {2}% 大きくなります。
+{0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: CPU コアあたり約 {1} MB/s。バックアップはレベル 5 より約 {2}% 小さくなります。
+{0}: about {1} MB/s per CPU core; the baseline size (levels 1-4 are larger, 6-9 smaller).	{0}: CPU コアあたり約 {1} MB/s。基準サイズ (レベル 1-4 は大きく、6-9 は小さくなります)。
