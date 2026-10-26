@@ -75,7 +75,14 @@ def stop():
         if not proc or proc.poll() is not None: proc = None; return "not running"
         try: os.killpg(proc.pid, signal.SIGKILL)
         except ProcessLookupError: pass
-        proc.wait(); proc = None; return "stopped"
+        proc.wait(); proc = None
+        # smbd убит SIGKILL: в базах блокировок остаются записи (оплоки / аренды) мёртвого процесса; следующий smbd ждёт ответа на их "перехват" по таймауту (30-60 с, "defer_open_done"
+        # NT_STATUS_IO_TIMEOUT), и обращения гостя к шаре зависают. Для тестов "сервер пропал и вернулся" состояние блокировок чистим при каждой остановке.
+        for n in os.listdir(DIR):
+            if n in ("locking.tdb", "brlock.tdb", "leases.tdb", "smbd_cleanupd.tdb", "mutex.tdb") or n.startswith("smbXsrv_") or n.startswith("notify"):
+                try: os.remove(os.path.join(DIR, n))
+                except OSError: pass
+        return "stopped"
 
 def handle(c):
     try:
