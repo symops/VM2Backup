@@ -363,7 +363,7 @@ VM2B_TEST("winreal", attributes_and_times_after_restore)
     // существующий файл только для чтения в папке назначения: восстановление либо заменяет его, либо останавливается с ПОНЯТНОЙ ошибкой (молча пропускать нельзя)
     { Str d2 = tmp.sub("restored2"); PutF(JoinPath(d2, "vm1\\ro.vmx"), "old", 3); SetFileAttributesW(FilePath(JoinPath(d2, "vm1\\ro.vmx")), FILE_ATTRIBUTE_READONLY);
       Str e2; bool ok = RestoreBackup(*t, r.m.archive, d2, "", nullptr, nullptr, e2); c_.note("restore over a read-only file: ok=%d [%s]", ok ? 1 : 0, e2.c_str());
-      if (ok) T_CHECK(SameBytes(JoinPath(d2, "vm1\\ro.vmx"), a)); else { T_CHECK(e2.find("ro.vmx") >= 0); T_CHECK(e2.find("denied") >= 0 || e2.find("Access") >= 0); }
+      if (ok) T_CHECK(SameBytes(JoinPath(d2, "vm1\\ro.vmx"), a)); else { T_CHECK(e2.find("ro.vmx") >= 0); T_CHECK(e2.find("denied") >= 0 || e2.find("Access") >= 0 || e2.find("(5)") >= 0); }       // текст системы локализован («Отказано в доступе»), код (5) есть всегда
       SetFileAttributesW(FilePath(JoinPath(d2, "vm1\\ro.vmx")), FILE_ATTRIBUTE_NORMAL); }
     delete t;
     return true;

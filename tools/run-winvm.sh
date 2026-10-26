@@ -18,6 +18,8 @@
 #   winreal   tests that only make sense on REAL Windows (src/tests_winreal.cpp): links, locks, scanner, NTFS names, attributes, DPAPI, unreadable config
 #   svcacct   the service under other accounts (admin / unknown to Samba / standard), data-folder rights, DPAPI scope, own-rights SMB (guest/svcacct.ps1)
 #   smbsign   SMB signing REQUIRED on both sides (Samba mandatory + Windows RequireSecuritySignature): smbreal over the signed session
+#   aclreal   права папки данных (SDDL) и канала службы от обычного пользователя с кириллическим именем (guest/aclreal.ps1)
+#   speedlimit  ограничение скорости на реальных данных: время записи без лимита / с лимитом элемента, настройки, окна расписания (guest/speedlimit.ps1)
 #   restartjob  shutdown /r in the middle of a long backup: the service resumes the job after the boot, the result verifies
 #   verify    the local groups again (core engine resume restore xz smb panel) with the product installed
 #   unicode   a local account with a Cyrillic name: native autotests (core) under its profile (C:\Users\<cyrillic>)
@@ -32,7 +34,7 @@ fi
 R=$(cd "$VM2B_RUNWINVM_DIR/.." && pwd); W=$R/.winvm; RES=$W/shared/results
 OS=${1:-}; shift || true
 case "$OS" in x86|w10|w11) ;; *) sed -n 2,30p "$0"; exit 2;; esac
-KEEP=0; CREATE=1; BUILD=1; PHASES=sysinfo,autotest,winreal,install,installer,panel,web,net,smb,smbsign,svcacct,restartjob,unicode,verify,big,winbig; [ "$OS" = w11 ] && PHASES=sysinfo,win11,autotest,install,installer,panel,web,net,smb,smartscreen; SEED=$(( (RANDOM << 15 | RANDOM) % 1000000000 ))
+KEEP=0; CREATE=1; BUILD=1; PHASES=sysinfo,autotest,winreal,install,installer,panel,web,net,smb,smbsign,svcacct,aclreal,speedlimit,restartjob,unicode,verify,big,winbig; [ "$OS" = w11 ] && PHASES=sysinfo,win11,autotest,install,installer,panel,web,net,smb,smartscreen; SEED=$(( (RANDOM << 15 | RANDOM) % 1000000000 ))
 while [ $# -gt 0 ]; do case "$1" in
   --keep) KEEP=1; shift;; --no-create) CREATE=0; shift;; --no-build) BUILD=0; shift;; --phases) PHASES=$2; shift 2;; --seed) SEED=$2; shift 2;;
   *) echo "unknown argument $1"; exit 2;; esac; done
@@ -67,6 +69,7 @@ json_smb() { # json_smb <file> [drive]: servers.json for group smbreal as the gu
   local drive=${2:-}
   cat > "$1" <<EOF
 { "smb": { "unc": "\\\\\\\\$SMB1\\\\vm2b", "alt_unc": "\\\\\\\\$SMB2\\\\vm2b", "enc_unc": "\\\\\\\\$SMB1\\\\vm2benc", "unreachable_unc": "\\\\\\\\$SMBX\\\\vm2b",
+           "cyr_unc": "\\\\\\\\$SMB1\\\\резерв", "cyr_user": "юзер-смб", "cyr_password": "Пар0ль-Смб!42",
            "user": "vm2buser", "password": "Sm8 Real&Pw!42", "wrong_password": "Wr0ng-Pa55-not", "control": "$SMBCTL"${drive:+, \"drive\": \"$drive\"} } }
 EOF
 }
@@ -140,7 +143,8 @@ fi
 if want installer; then
   cp "$W/pkg-old/"*.exe "$W/shared/pkg/old.exe" 2>/dev/null
   gj 08-installer 1800 'call C:\vm2b\guest\uninstall-update.cmd' > /dev/null; RC=$?
-  tr -d '\r' < "$RES/08-installer.out" | grep -aE '_RC=|service pid|FileVersion|^[0-9]+\.[0-9]+\.[0-9]+|STATE' | tee -a "$SUM"
+  tr -d '\r' < "$RES/08-installer.out" | grep -aE '_RC=|service pid|FileVersion|^[0-9]+\.[0-9]+\.[0-9]+|STATE|^INFO \[old\]' | tee -a "$SUM"
+  tally installer-acl $RC 08-installer
   RESULT[installer]="rc=$RC"
 fi
 
@@ -231,6 +235,18 @@ if want svcacct; then
   gj 13-svcacct 3600 "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\vm2b\\guest\\svcacct.ps1 \\\\$SMB1\\vm2b vm2buser \"Sm8 Real&Pw!42\" \\\\$SMB2\\vm2b" > /dev/null; RC=$?
   tr -d '\r' < "$RES/13-svcacct.out" | grep -aE '^INFO' | head -40 | tee -a "$SUM"
   tally svcacct $RC 13-svcacct
+fi
+
+if want aclreal; then
+  gj 13b-aclreal 1800 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\aclreal.ps1' > /dev/null; RC=$?
+  tr -d '\r' < "$RES/13b-aclreal.out" | grep -aE '^INFO' | head -20 | tee -a "$SUM"
+  tally aclreal $RC 13b-aclreal
+fi
+
+if want speedlimit; then
+  gj 13c-speedlimit 3600 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\speedlimit.ps1' > /dev/null; RC=$?
+  tr -d '\r' < "$RES/13c-speedlimit.out" | grep -aE '^INFO case' | tee -a "$SUM"
+  tally speedlimit $RC 13c-speedlimit
 fi
 
 if want restartjob; then

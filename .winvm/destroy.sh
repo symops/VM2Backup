@@ -2,6 +2,8 @@
 # destroy.sh [os]: copies the results (shared/results, screenshots, job outputs) to /home/symo/Claude/VM2Backup/.winvm-results/<os>-<timestamp>/ and then
 # removes the container vm2b-win AND the storage dir (absolute paths!) and the custom ISOs.  Run it after EVERY test run, whatever the result.
 W=/home/symo/Claude/VM2Backup/.winvm
+# файл .winvm/hold: ничего не удалять (нужен, чтобы дочинить / перепроверить фазы на той же ВМ; потом файл убрать и запустить destroy.sh ещё раз)
+[ -f "$(dirname "$0")/hold" ] && { echo "destroy.sh: the file .winvm/hold exists: the VM is NOT deleted yet"; exit 0; }
 OS=${1:-$(cat $W/current-os 2>/dev/null || echo unknown)}
 D=/home/symo/Claude/VM2Backup/.winvm-results/$OS-$(date +%Y%m%d-%H%M%S)
 mkdir -p "$D"

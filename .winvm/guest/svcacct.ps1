@@ -23,7 +23,7 @@ function Grant-LogonRight($user) {
 }
 function Make-User($user, $pw, $admin) {
     & net.exe user $user /delete 2>&1 | Out-Null; & net.exe user $user $pw /add /y /expires:never | Out-Null
-    if ($admin) { & net.exe localgroup Administrators $user /add | Out-Null }
+    if ($admin) { Add-LocalGroupMember -SID 'S-1-5-32-544' -Member $user -ErrorAction SilentlyContinue }      # по SID: на русской Windows группа называется «Администраторы»
     Grant-LogonRight $user
 }
 function Switch-Account($user, $pw) {
@@ -95,6 +95,35 @@ if ($w) {
     $h = Run-Backup $w 'acct-smb-explicit' 'C:\vm2b\acctdata' 'vmS' $id1 '{VM}'; Check 'backup to the SMB share with an explicit account: Success' ($h -and $h.status -eq 'Success') ($h | ConvertTo-Json -Compress)
     $h = Run-Backup $w 'acct-smb-own' 'C:\vm2b\acctdata' 'vmS' $id2 '{VM}'; Write-Output ("INFO smb own rights: " + ($h | ConvertTo-Json -Compress)); Check 'backup to the SMB share with the service account''s own rights (empty user): Success' ($h -and $h.status -eq 'Success') ($h | ConvertTo-Json -Compress)
 }
+# ---- 2b. кириллическое имя учётной записи службы (русская Windows): служба стартует, секреты DPAPI работают, копия на локальную папку идёт
+$cyr = -join ([char[]](0x421, 0x43B, 0x443, 0x436, 0x431, 0x430, 0x2D, 0x412, 0x41C)); $cyrPw = 'Cyr-Svc-123!x'          # Служба-ВМ
+Make-User $cyr $cyrPw $true
+Switch-Account $cyr $cyrPw
+Check 'service RUNNING under an account with a Cyrillic name' (Wait-State 'RUNNING' 60000) (St)
+$i = Svc-Info; Write-Output ("INFO " + ($i | Out-String).Trim()); Check 'the process owner is the Cyrillic account' ($i.Owner -match [regex]::Escape($cyr)) ($i | Out-String)
+$w = Web-Ready; Check 'web site up under the Cyrillic account' ($null -ne $w) ''
+if ($w) {
+    $l = Api $w 'servers.list' @{}; Check 'the servers are all still there (Cyrillic account)' (Has-All $w) $l.Text
+    $t = Api $w 'servers.test' @{ id = $id1 }; Check 'DPAPI secret works under the Cyrillic account' ($t.Status -eq 200) $t.Text
+    Make-Data 'C:\vm2b\acctdata' 3
+    $h = Run-Backup $w 'acct-cyr-local' 'C:\vm2b\acctdata' 'vmS' 'local' 'C:\vm2b\acctstore\{VM}'
+    Write-Output ("INFO Cyrillic account backup: " + ($h | ConvertTo-Json -Compress)); Check 'backup under the Cyrillic account: Success' ($h -and $h.status -eq 'Success') ($h | ConvertTo-Json -Compress)
+    Remove-Item -Recurse -Force 'C:\vm2b\acctstore' -ErrorAction SilentlyContinue
+}
+# ---- 2c. NT AUTHORITY\NetworkService (S-1-5-20): право входа как служба у встроенной записи есть, но прав на папку данных нет -> STOPPED с понятной причиной;
+#          после выдачи прав по SID (*S-1-5-20) служба работает и расшифровывает секреты (область «компьютер»)
+& net.exe stop $svc 2>&1 | Out-Null; Wait-State 'STOPPED' 60000 | Out-Null
+$o = & sc.exe config $svc obj= 'NT AUTHORITY\NetworkService' 2>&1; Write-Output ("sc config NetworkService: " + ($o -join ' '))
+$o = & sc.exe start $svc 2>&1; Start-Sleep -Seconds 10; $state = St; Write-Output "INFO NetworkService without rights to the data folder: $state"
+Check 'NetworkService without rights to the data folder: the service does not run half-working' ($state -match 'STOPPED') $state
+$log = Get-Content "$data\logs\service.log" -Tail 6 -ErrorAction SilentlyContinue; Write-Output ("INFO service.log:`n" + ($log -join "`n"))
+& icacls.exe $data /grant '*S-1-5-20:(OI)(CI)M' /t /c 2>&1 | Out-Null
+& sc.exe start $svc 2>&1 | Out-Null
+Check 'NetworkService with the rights granted by SID: RUNNING' (Wait-State 'RUNNING' 60000) (St)
+$w = Web-Ready
+if ($w) { $l = Api $w 'servers.list' @{}; Check 'the servers are all still there (NetworkService)' (Has-All $w) $l.Text; $t = Api $w 'servers.test' @{ id = $id1 }; Check 'DPAPI machine-scope secret works under NetworkService' ($t.Status -eq 200) $t.Text }
+else { Check 'web site up under NetworkService' $false '' }
+
 # ---- 3. администратор, которого Samba не знает: понятная ошибка
 Make-User 'vm2nonet' 'Non-Pass-123!x' $true
 Switch-Account 'vm2nonet' 'Non-Pass-123!x'
@@ -133,7 +162,8 @@ Check 'StartName LocalSystem' ((Svc-Info).StartName -match 'LocalSystem') (Svc-I
 $w = Web-Ready
 if ($w) { $l = Api $w 'servers.list' @{}; Check 'servers all there after returning to LocalSystem' (Has-All $w) $l.Text; $t = Api $w 'servers.test' @{ id = $id1 }; Check 'DPAPI secret still works' ($t.Status -eq 200) $t.Text
     foreach ($x in @($l.Result)) { if ($x.name -like 'acct*' -or $x.name -like 'src acct*') { Api $w 'servers.delete' @{ id = $x.id } | Out-Null } } }
-foreach ($u in 'vm2svc', 'vm2nonet', 'vm2plain') { & net.exe user $u /delete 2>&1 | Out-Null }
+& icacls.exe $data /remove:g '*S-1-5-20' /t /c 2>&1 | Out-Null      # выданные NetworkService права убираем (служба при запуске всё равно закрывает папку)
+foreach ($u in 'vm2svc', 'vm2nonet', 'vm2plain', $cyr) { & net.exe user $u /delete 2>&1 | Out-Null }
 Remove-Item -Recurse -Force 'C:\vm2b\acctdata' -ErrorAction SilentlyContinue
 & takeown.exe /f 'C:\vm2b\svc-only' /r /d y 2>&1 | Out-Null; & icacls.exe 'C:\vm2b\svc-only' /grant 'Administrators:(OI)(CI)F' /t 2>&1 | Out-Null; Remove-Item -Recurse -Force 'C:\vm2b\svc-only' -ErrorAction SilentlyContinue
 Write-Output ("FAILED=" + $global:Failed)

@@ -8,6 +8,7 @@ echo OLD_INSTALL_RC=%ERRORLEVEL%
 echo ==== ACL of the data folder with the OLD package (round 2: Users had Modify on the whole folder)
 icacls "%ProgramData%\VM2Backup"
 icacls "%ProgramData%\VM2Backup\config.json"
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\aclcheck.ps1 old
 "%B%\VM2BackupService.exe" /?  2>nul
 powershell -NoProfile -Command "(Get-Item '%B%\VM2BackupService.exe').VersionInfo.FileVersion"
 sc query VM2BackupService | findstr /r "RUNNING STOPPED PENDING"
@@ -23,6 +24,7 @@ echo ==== ACL of the data folder after the UPDATE (the new service closes the fo
 icacls "%ProgramData%\VM2Backup"
 icacls "%ProgramData%\VM2Backup\config.json"
 icacls "%ProgramData%\VM2Backup\logs"
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\aclcheck.ps1 new
 powershell -NoProfile -Command "(Get-Item '%B%\VM2BackupService.exe').VersionInfo.FileVersion"
 for /f %%p in ('powershell -NoProfile -Command "(Get-Process VM2BackupService).Id"') do set NEWPID=%%p
 echo service pid after the update: %NEWPID%

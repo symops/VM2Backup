@@ -294,6 +294,8 @@ void ServiceCore::backupElement(Job* j, const Json& el, const Str& taskName, Jso
     Json sj, tj; Str err;
     const Json& vms = el.get("source").get("vms");
     if (!el.get("enabled").boolean(true)) { for (size_t i = 0; i < vms.size(); ++i) { Json r = Json::object(); r["vm"] = vms.at(i).str(); r["status"] = "Disabled"; results.push(r); } return; }
+    // Ограничение скорости элемента задачи (speed_mbit) действует и при запуске всей задачи: раньше его учитывал только запуск одного элемента (startElementJob)
+    j->elementMbit = el.get("speed_mbit").num(0); j->limiter.setMbit(effectiveMbit(j, now()));
     Json settings = m_cfg.settings();
     bool haveSrc = m_cfg.server(el.get("source").get("server").str(), true, sj);
     if (haveSrc && el.get("snapshot").is_object()) sj["snapshot"] = el.get("snapshot");      // quiesce / memory options of an ESXi source

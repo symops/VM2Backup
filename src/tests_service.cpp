@@ -105,6 +105,26 @@ VM2B_TEST("service", scheduler_fake_clock)
     return true;
 }
 
+// Ограничение скорости в записи элемента задачи (speed_mbit) должно действовать при запуске ЗАДАЧИ (ошибка найдена на Windows 10 x64, фаза speedlimit): измеряем время записи на цель с лимитом и без.
+VM2B_TEST("service", task_element_speed_limit_is_applied)
+{
+    Svc s(c_, "svc_spd", true); if (!s.up) return false;
+    Str root = s.tmp.sub("vms"); Bytes disk = Random(c_, 4200000); WriteBytes(JoinPath(root, "vm1\\disk.vmdk"), disk); Str srv = s.addDirServer(root);
+    auto runTimed = [&](const char* name, double mbit, double& limitSeen) -> i64 {
+        Json el = Svc::Element(srv, "vm1", JoinPath(s.tmp.sub(name), "{VM}"), "xz", 0); el["verify"] = false; if (mbit > 0) el["speed_mbit"] = mbit;
+        Str task = s.saveTask(name, el); Json ra = Json::object(); ra["id"] = task;
+        DWORD t0 = GetTickCount(); Json run = s.ok("tasks.run", ra); Str jid = run.get("job").str(); limitSeen = 0;
+        while (GetTickCount() - t0 < 60000) { Json jobs = s.ok("jobs.list", Json::object()); bool live = false; for (size_t i = 0; i < jobs.size(); ++i) if (jobs.at(i).get("id").str() == jid) { Str stt = jobs.at(i).get("status").str(); live = stt == "Waiting" || stt == "Running"; double l = jobs.at(i).get("limit_mbit").num(); if (live && l > limitSeen) limitSeen = l; } if (!live && GetTickCount() - t0 > 300) break; Sleep(40); }
+        Str st = s.waitJob(jid, 60000); if (st != "Success" && st != "Gone" && !st.empty()) return -1;
+        return (i64)(GetTickCount() - t0);
+    };
+    double l0 = 0, l1 = 0; i64 free_ms = runTimed("free", 0, l0); i64 slow_ms = runTimed("slow", 8.0, l1);        // 8 Mbit/s = 1 MB/s: 4,2 MB of incompressible data need several seconds
+    c_.note("task without a limit: %d ms (limit seen %.2f), with speed_mbit=8: %d ms (limit seen %.2f)", (int)free_ms, l0, (int)slow_ms, l1);
+    T_CHECK(free_ms >= 0 && slow_ms >= 0); T_CHECK(l0 == 0); T_CHECK(l1 > 7.5 && l1 < 8.5);
+    T_CHECK(slow_ms >= 2500 && slow_ms > free_ms + 1500);
+    return true;
+}
+
 VM2B_TEST("service", windows_pause_and_continue)
 {
     Svc s(c_, "svc4", true); if (!s.up) return false;

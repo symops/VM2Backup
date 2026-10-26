@@ -6,6 +6,7 @@
 //            "unreachable_unc": "\\\\10.0.2.77\\vm2b", (nothing answers there)
 //            "control": "10.0.2.2:4456",               (one-line commands: stop | start | restart | status | wipe | ls  -> "ok ...")
 //            "enc_unc": "\\\\10.0.2.50\\vm2benc", (optional: a share the server marks "smb encrypt = required": SMB3 encryption)
+//            "cyr_unc": "\\\\10.0.2.50\\резерв", "cyr_user": "юзер-смб", "cyr_password": "..."   (optional: a share and an account with CYRILLIC names, group smbreal real_cyrillic_share_and_account_names)
 //            "drive": "Z:" }                          (a drive the job mapped with `net use Z: <unc>` in the interactive session; optional)
 // Under Wine there is no SMB client: the tests are skipped there (servers.json has no "smb").
 #include "autotest.h"
@@ -20,13 +21,14 @@ namespace vm2b {
 namespace {
 
 struct RealCfg {
-    Str unc, user, pw, wrongPw, altUnc, badUnc, control, drive, encUnc;
+    Str unc, user, pw, wrongPw, altUnc, badUnc, control, drive, encUnc, cyrUnc, cyrUser, cyrPw;
     bool ok;
     explicit RealCfg(Ctx& c) : ok(false) {
         const Json& s = c.servers.get("smb");
         if (!s.is_object()) return;
         unc = s.get("unc").str(); user = s.get("user").str(); pw = s.get("password").str(); wrongPw = s.get("wrong_password").str("not-the-password-1");
         altUnc = s.get("alt_unc").str(); badUnc = s.get("unreachable_unc").str(); control = s.get("control").str(); drive = s.get("drive").str(); encUnc = s.get("enc_unc").str();
+        cyrUnc = s.get("cyr_unc").str(); cyrUser = s.get("cyr_user").str(); cyrPw = s.get("cyr_password").str();
         ok = !unc.empty() && !user.empty();
     }
 };
@@ -271,6 +273,27 @@ VM2B_TEST("smbreal", real_unicode_names_and_unc_paths_over_260)
         DeleteBackup(*t, m.archive, err);
     }
     delete t; T_CHECK(SmbOpenConnections() == 0);
+    return true;
+}
+
+// Кириллическое имя САМОЙ шары и (если есть) кириллическое имя учётной записи на русской Windows: копия / проверка / восстановление, и список шар сервера показывает шару по имени.
+VM2B_TEST("smbreal", real_cyrillic_share_and_account_names)
+{
+    NEED_REAL_SMB();
+    if (rc.cyrUnc.empty()) { c_.skip("no cyr_unc in the \"smb\" servers (a share with a Cyrillic name)"); return true; }
+    RealCfg cy = rc; cy.unc = rc.cyrUnc; if (!rc.cyrUser.empty()) { cy.user = rc.cyrUser; cy.pw = rc.cyrPw; }
+    Tmp tmp(c_, "smbrealcyr"); Str why;
+    VmData d; d.make(c_, JoinPath(tmp.sub("w"), "vms"), "vm-real", (size_t)c_.range(200000, 600000));
+    bool ok = RoundTrip(cy, d, Unique(c_, "cyr"), tmp.sub("w"), 512 * 100, nullptr, FastRetry(), why, nullptr);
+    if (!ok) c_.note("round trip over the share with a Cyrillic name: %s", why.c_str());
+    T_CHECK(ok);
+    int cut = rc.cyrUnc.rfind('\\'); Str server = rc.cyrUnc.substr(0, (size_t)cut), shareName = rc.cyrUnc.substr((size_t)cut + 1);
+    Json r; Str e; bool bo = NetBrowse(server, cy.user, cy.pw, r, e);
+    if (!bo) c_.note("browse server: %s", e.c_str());
+    T_CHECK(bo);
+    bool sh = false; for (size_t i = 0; i < r.get("entries").size(); ++i) if (r.get("entries").at(i).get("name").str() == shareName) sh = true;
+    c_.note("the share list contains \"%s\": %d", shareName.c_str(), sh ? 1 : 0); T_CHECK(sh);
+    T_CHECK(SmbOpenConnections() == 0);
     return true;
 }
 

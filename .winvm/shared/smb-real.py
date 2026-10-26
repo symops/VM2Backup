@@ -6,22 +6,25 @@
  connection:  stop (kill smbd and every session), start, restart, status, wipe (empty the share), ls (list the share)  -> answer 'ok ...'."""
 import os, signal, socket, subprocess, sys, shutil, threading
 USER, PW = "vm2buser", "Sm8 Real&Pw!42"
-EXTRA = {"vm2svc": "Svc-Pass-123!x"}                     # учётная запись службы из svcacct.ps1: пустой пользователь в записи сервера = права самой службы
+CYR_USER, CYR_PW = "юзер-смб", "Пар0ль-Смб!42"             # кириллическая учётная запись SMB (smbreal/real_cyrillic_share_and_account_names; unix-пользователь создаётся с --badname)
+EXTRA = {"vm2svc": "Svc-Pass-123!x", CYR_USER: CYR_PW}                     # учётная запись службы из svcacct.ps1: пустой пользователь в записи сервера = права самой службы
 SIGNING = "auto"                                           # команда control "signing on|off" -> mandatory | auto (подпись SMB обязательна на стороне сервера)
 SHARE = "/srv/vm2b"; CONF = "/tmp/smbreal/smb.conf"; DIR = "/tmp/smbreal"
 proc = None; lock = threading.Lock()
 
 def write_conf():
-    open(CONF, "w").write(CONF_TEXT.format(DIR=DIR, SHARE=SHARE, USER=USER, SIGN=SIGNING, ALL=USER + " " + " ".join(EXTRA)))
+    open(CONF, "w", encoding="utf-8").write(CONF_TEXT.format(DIR=DIR, SHARE=SHARE, USER=USER, SIGN=SIGNING, ALL=USER + " " + " ".join(EXTRA)))
 
 def setup():
     os.makedirs(DIR, exist_ok=True); os.makedirs(SHARE, exist_ok=True); os.chmod(SHARE, 0o777)
     if subprocess.call(["id", USER], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) != 0:
         subprocess.check_call(["useradd", "-M", "-s", "/usr/sbin/nologin", USER])
+    for u in list(EXTRA):                                  # кириллическая учётная запись: если useradd её не принимает, обходимся без неё (тест пропустит кириллическое имя пользователя)
+        if subprocess.call(["id", u], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) != 0 and subprocess.call(["useradd", "-M", "--badname", "-s", "/usr/sbin/nologin", u]) != 0:
+            print("cannot create the unix user", u); del EXTRA[u]
     write_conf()
     for u, pw in [(USER, PW)] + list(EXTRA.items()):
-        if subprocess.call(["id", u], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) != 0: subprocess.check_call(["useradd", "-M", "-s", "/usr/sbin/nologin", u])
-        p = subprocess.Popen(["smbpasswd", "-a", "-s", "-c", CONF, u], stdin=subprocess.PIPE); p.communicate((pw + "\n" + pw + "\n").encode())
+        p = subprocess.Popen(["smbpasswd", "-a", "-s", "-c", CONF, u], stdin=subprocess.PIPE); p.communicate((pw + "\n" + pw + "\n").encode("utf-8"))
 
 CONF_TEXT = """[global]
 interfaces = 127.0.0.1
@@ -49,6 +52,13 @@ valid users = {ALL}
 force user = root
 browseable = yes
 comment = VM2Backup real SMB test share
+[резерв]
+path = {SHARE}
+read only = no
+valid users = {ALL}
+force user = root
+browseable = yes
+comment = Cyrillic share name
 [vm2benc]
 path = {SHARE}
 read only = no
