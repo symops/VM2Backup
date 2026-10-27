@@ -88,6 +88,7 @@ Create a self-signed certificate	Tạo chứng chỉ tự ký
 Create new self-signed...	Tạo mới chứng chỉ tự ký...
 Create schedule...	Tạo lịch...
 Created	Đã tạo
+Credentials rejected since {0}: {1}	Thông tin đăng nhập bị từ chối từ {0}: {1}
 Current password	Mật khẩu hiện tại
 Data folder	Thư mục dữ liệu
 Datacenter	Datacenter
@@ -233,6 +234,7 @@ Power on after restore	Bật nguồn sau khi khôi phục
 Press Load to read the datacenters, datastores, folders and resource pools of the server.	Nhấn Tải để đọc các datacenter, datastore, thư mục và nhóm tài nguyên của máy chủ.
 Private key file	Tệp khóa riêng
 Private key text	Văn bản khóa riêng
+Problem	Sự cố
 Quiesce the guest file system (needs VMware Tools in the VM)	Quiesce hệ thống tệp của máy khách (cần VMware Tools trong VM)
 Recovery code	Mã khôi phục
 Recovery codes	Mã khôi phục
@@ -285,6 +287,7 @@ Sign in	Đăng nhập
 Sign out	Đăng xuất
 Sign-in failed.	Đăng nhập thất bại.
 Size	Kích thước
+Skipped: credentials rejected	Đã bỏ qua: thông tin đăng nhập bị từ chối
 Snapshot	Snapshot
 Source	Nguồn
 Source server	Máy chủ nguồn
@@ -320,12 +323,14 @@ The certificate was installed.	Đã cài đặt chứng chỉ.
 The connection is tested now. "Test connection" tests again; "Finish" saves the server.	Kết nối đang được kiểm tra. "Kiểm tra kết nối" sẽ kiểm tra lại; "Hoàn thành" lưu máy chủ.
 The connection test failed or has not finished. Save the server anyway?	Kiểm tra kết nối thất bại hoặc chưa hoàn tất. Vẫn lưu máy chủ?
 The connection works.	Kết nối hoạt động.
+The credentials of this server were not rejected.	Thông tin đăng nhập của máy chủ này chưa bị từ chối.
 The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	Datastore "{0}" còn trống {1}, bản sao lưu chiếm tối đa {2}. Vẫn khôi phục?
 The figures are approximate (typical data). More CPU cores make compression faster.	Các số liệu chỉ là ước tính (dữ liệu điển hình). Nhiều lõi CPU hơn giúp nén nhanh hơn.
 The file is larger than 1 MB.	Tệp lớn hơn 1 MB.
 The list is cut: only the first entries are shown.	Danh sách bị cắt bớt: chỉ hiển thị các mục đầu tiên.
 The longest wait cannot be shorter than the first one.	Thời gian chờ dài nhất không được ngắn hơn thời gian chờ đầu tiên.
 The name of the virtual machine must be at most 80 characters and cannot contain slashes or %.	Tên máy ảo tối đa 80 ký tự và không được chứa dấu gạch chéo hoặc %.
+The next run will contact the server again.	Lần chạy tiếp theo sẽ kết nối lại với máy chủ.
 The password is too simple.	Mật khẩu quá đơn giản.
 The password must be at least 10 characters long.	Mật khẩu phải dài ít nhất 10 ký tự.
 The password must not contain the user name.	Mật khẩu không được chứa tên người dùng.
@@ -366,6 +371,7 @@ Transfer: plain FTP (not encrypted - enable encryption of the backup!)	Truyền:
 Trigger	Điều kiện kích hoạt
 Trust X-Forwarded-For from a reverse proxy on this computer	Tin cậy X-Forwarded-For từ reverse proxy trên máy tính này
 Trust this identity and test again	Tin cậy danh tính này và kiểm tra lại
+Try again	Thử lại
 Tue	T3
 Two-factor	Xác thực hai yếu tố
 Type	Loại
@@ -463,6 +469,7 @@ verify	xác minh
 viewer	người xem
 {0} datastore(s), {1} folder(s), {2} resource pool(s) found.	Đã tìm thấy {0} datastore, {1} thư mục, {2} nhóm tài nguyên.
 {0} free of {1}	Còn trống {0} trên {1}
+{0} skipped: credentials rejected	Đã bỏ qua {0}: thông tin đăng nhập bị từ chối
 {0} virtual machine(s)	{0} máy ảo
 {0} volume(s)	{0} volume
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: khoảng {1} MB/s trên mỗi lõi CPU; bản sao lưu lớn hơn khoảng {2}% so với mức 5.

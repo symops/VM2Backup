@@ -93,7 +93,7 @@ VM2B_TEST("web", policy_roles_bind_entries)
     T_CHECK(WebAuth::PasswordOk("alice", "ab1234567890", why));
     const char* viewer[] = { "state", "servers.list", "tasks.list", "tasks.next", "jobs.list", "history.list", "history.get", "backups.list" };
     const char* opx[] = { "tasks.run", "jobs.abort", "backup.run", "backups.verify" };
-    const char* adm[] = { "tasks.save", "tasks.delete", "servers.save", "servers.delete", "servers.test", "servers.vms", "settings.get", "settings.set", "scheduler.set", "history.clear", "backups.restore", "backups.delete", "resumable.discard" };
+    const char* adm[] = { "tasks.save", "tasks.delete", "servers.save", "servers.delete", "servers.unblock", "servers.test", "servers.vms", "settings.get", "settings.set", "scheduler.set", "history.clear", "backups.restore", "backups.delete", "resumable.discard" };
     for (const char* c : viewer) { T_CHECK(WebAuth::RoleAllows("viewer", c)); T_CHECK(WebAuth::RoleAllows("operator", c)); T_CHECK(WebAuth::RoleAllows("admin", c)); }
     for (const char* c : opx) { T_CHECK(!WebAuth::RoleAllows("viewer", c)); T_CHECK(WebAuth::RoleAllows("operator", c)); T_CHECK(WebAuth::RoleAllows("admin", c)); }
     for (const char* c : adm) { T_CHECK(!WebAuth::RoleAllows("viewer", c)); T_CHECK(!WebAuth::RoleAllows("operator", c)); T_CHECK(WebAuth::RoleAllows("admin", c)); }
@@ -115,7 +115,7 @@ VM2B_TEST("web", role_matrix_classifies_every_service_command)
     static const Cl kTable[] = {
         { "state", 'V' }, { "servers.list", 'V' }, { "tasks.list", 'V' }, { "tasks.next", 'V' }, { "jobs.list", 'V' }, { "history.list", 'V' }, { "history.get", 'V' }, { "backups.list", 'V' },
         { "tasks.run", 'O' }, { "jobs.abort", 'O' }, { "backup.run", 'O' }, { "backups.verify", 'O' },
-        { "tasks.save", 'A' }, { "tasks.copy", 'A' }, { "tasks.delete", 'A' }, { "servers.save", 'A' }, { "servers.delete", 'A' }, { "servers.test", 'A' }, { "servers.vms", 'A' },
+        { "tasks.save", 'A' }, { "tasks.copy", 'A' }, { "tasks.delete", 'A' }, { "servers.save", 'A' }, { "servers.delete", 'A' }, { "servers.unblock", 'A' }, { "servers.test", 'A' }, { "servers.vms", 'A' },
         { "settings.get", 'A' }, { "settings.set", 'A' }, { "scheduler.set", 'A' }, { "history.clear", 'A' }, { "backups.restore", 'A' }, { "backups.delete", 'A' }, { "resumable.discard", 'A' },
         // restore to ESXi / vCenter and the network drive / browse helpers write or connect as SYSTEM: admin only
         { "backups.restore_esxi", 'A' }, { "esxi.restore_options", 'A' }, { "net.drives", 'A' }, { "net.browse", 'A' }, { "fs.browse", 'A' }, { "service.shutdown", 'F' },

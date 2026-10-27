@@ -40,6 +40,8 @@ VM2Backup - backup of virtual machines (VMware ESXi / vCenter / folders) to a fo
      (error 1219) and does not cancel it.
    - A plain drive letter that the service cannot see gives the error "drive Z: is not available to the service: use the UNC path".
    - "Test connection" connects, writes and deletes a small test file and shows the free space.
+   - Lock-out protection: a server that refuses the credentials (wrong / locked / disabled / expired password) is not contacted again by a scheduled run until its record is changed or
+     "Try again" is pressed on the Datacenter page (one wrong password costs a domain account two failed logons, so a stale password would lock it within a few runs).
    - Only the authentication is protected by Windows; the data is encrypted on the wire only when the share requires SMB 3
      encryption: enable the encryption of the backup itself for sensitive data.
    - Verified on a real Windows 10 (x86, 22H2) against a Samba share with a user and a password (docs/WINDOWS-TESTS.md, group smbreal): backup / verify /

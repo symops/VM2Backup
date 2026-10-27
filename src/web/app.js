@@ -45,7 +45,7 @@ function createApp(env) {
     // ---------- permissions (the service enforces them; this only hides what would be refused) ----------
     var VIEWER = ['state', 'servers.list', 'tasks.list', 'tasks.next', 'jobs.list', 'history.list', 'history.get', 'backups.list'];
     var OPERATOR = VIEWER.concat(['tasks.run', 'jobs.abort', 'backup.run', 'backups.verify']);
-    var ADMIN = OPERATOR.concat(['scheduler.set', 'settings.get', 'settings.set', 'servers.save', 'servers.delete', 'servers.test', 'servers.vms', 'tasks.save', 'tasks.copy', 'tasks.delete', 'history.clear', 'backups.restore', 'backups.restore_esxi', 'esxi.restore_options', 'net.drives', 'net.browse', 'fs.browse', 'backups.delete', 'resumable.discard',
+    var ADMIN = OPERATOR.concat(['scheduler.set', 'settings.get', 'settings.set', 'servers.save', 'servers.delete', 'servers.unblock', 'servers.test', 'servers.vms', 'tasks.save', 'tasks.copy', 'tasks.delete', 'history.clear', 'backups.restore', 'backups.restore_esxi', 'esxi.restore_options', 'net.drives', 'net.browse', 'fs.browse', 'backups.delete', 'resumable.discard',
         'web.status', 'web.settings.get', 'web.settings.set', 'web.interfaces.list', 'web.cert.generate', 'web.cert.import', 'web.users.list', 'web.users.save', 'web.users.delete', 'web.users.totp_enroll', 'web.users.totp_confirm', 'web.users.totp_disable', 'web.audit.tail']);
     function can(cmd) {
         if (S.role === 'admin') return ADMIN.indexOf(cmd) >= 0;
@@ -284,6 +284,7 @@ function createApp(env) {
         pageEl.appendChild(h('div', { class: 'toolbar' },
             btn('Add Server', 'servers.save', function () { serverWizard(null); }, 'primary'),
             btn('Edit', 'servers.save', needSel(function (r) { editServer(r); })),
+            btn('Try again', 'servers.unblock', needSel(function (r) { if (!r.auth_blocked) { toast(T('The credentials of this server were not rejected.')); return; } api('servers.unblock', { id: r.id }).then(function () { toast(T('The next run will contact the server again.')); refreshView(); }, fail); })),
             btn('Test connection', 'servers.test', needSel(function (r) { api('servers.test', { id: r.id }).then(function (x) { testResultDialog(r, x); }, fail); })),
             btn('Virtual machines...', 'servers.vms', needSel(function (r) { if (!isSourceType(r.type)) { toast(T('This server holds backups, not virtual machines.')); return; } api('servers.vms', { id: r.id }).then(function (x) { testResultDialog(r, { message: T('{0} virtual machine(s)', (x.vms || []).length), vms: x.vms || [] }); }, fail); })),
             btn('Create schedule...', 'tasks.save', needSel(function (r) { if (!isSourceType(r.type)) { toast(T('Choose a server with virtual machines.')); return; } vmBackupDialog({ server: r.id, onOk: function (e) { taskDialog({ name: T('Backup of {0}', (e.source.vms || []).join(', ')), enabled: true, schedule: { enabled: true, mode: 'weekly', start_time: '22:00', weekdays: [0, 1, 2, 3, 4], week_interval: 1 }, windows: [], elements: [e] }, true); } }); })),
@@ -297,7 +298,8 @@ function createApp(env) {
                 { title: 'Name', get: function (r) { return r.name; } }, { title: 'Type', get: function (r) { return serverTypeName(r.type); } },
                 { title: 'Address', get: function (r) { return r.host ? r.host + (r.port ? ':' + r.port : '') : (r.path || r.directory || ''); } },
                 { title: 'User', get: function (r) { return r.user || ''; } },
-                { title: 'Password', get: function (r) { return r.has_password ? T('stored') : ''; } }
+                { title: 'Password', get: function (r) { return r.has_password ? T('stored') : ''; } },
+                { title: 'Problem', get: function (r) { return r.auth_blocked ? h('span', { class: 'bad', text: T('Credentials rejected since {0}: {1}', fmtTime(r.auth_blocked.time), r.auth_blocked.text || '') }) : ''; } }
             ], l, function (r) { return r.id; }, null, can('servers.save') ? editServer : null));
         }, fail);
     }
@@ -890,7 +892,7 @@ function createApp(env) {
             box.appendChild(grid([
                 { title: 'Task', get: function (r) { return r.name || r.kind; } }, { title: 'Kind', get: function (r) { return T(r.kind || ''); } }, { title: 'Started', get: function (r) { return fmtTime(r.started); } },
                 { title: 'Duration', get: function (r) { return r.ended && r.started ? fmtDur(r.ended - r.started) : ''; } },
-                { title: 'Result', get: function (r) { return T(r.status); }, cls: function (r) { return 'st-' + r.status; } },
+                { title: 'Result', get: function (r) { return T(r.status) + (r.summary && r.summary.skipped ? ' (' + T('{0} skipped: credentials rejected', r.summary.skipped) + ')' : ''); }, cls: function (r) { return 'st-' + r.status; } },
                 { title: 'Virtual machines', get: function (r) { return r.summary && r.summary.count !== undefined ? r.summary.count : ''; } },
                 { title: 'Source', get: function (r) { return fmtSize(r.raw_bytes); } }, { title: 'Stored', get: function (r) { return fmtSize(r.archive_bytes); } }, { title: 'Trigger', get: function (r) { return T(r.trigger || ''); } }
             ], l, function (r) { return r.id; }, null, can('history.get') ? function (r) { historyDetails(r.id); } : null));
@@ -902,7 +904,7 @@ function createApp(env) {
     function historyDetails(id) {
         api('history.get', { id: id }).then(function (rec) {
             var rows = recordRows(rec), shown = rows, box = h('div'), fsel = sel([['', T('All results')]].concat(HSTAT.concat(['Disabled']).map(function (x) { return [x, T(x)]; })), '');
-            var cols = [{ title: 'Virtual machine', get: function (r) { return r.vm || ''; } }, { title: 'Result', get: function (r) { return T(r.status || ''); }, cls: function (r) { return 'st-' + r.status; } },
+            var cols = [{ title: 'Virtual machine', get: function (r) { return r.vm || ''; } }, { title: 'Result', get: function (r) { return T(r.status || '') + (r.skipped ? ' (' + T('Skipped: credentials rejected') + ')' : ''); }, cls: function (r) { return 'st-' + r.status; } },
                 { title: 'Duration', get: function (r) { return r.duration ? fmtDur(r.duration) : ''; } }, { title: 'Speed', get: function (r) { return r.rate ? fmtSpeed(r.rate) : ''; } },
                 { title: 'Source', get: function (r) { return r.raw ? fmtSize(r.raw) : ''; } }, { title: 'Stored', get: function (r) { return r.size ? fmtSize(r.size) : ''; } }, { title: 'Volumes', get: function (r) { return r.volumes || ''; } },
                 { title: 'Encrypted', get: function (r) { return r.encrypted ? T('Yes') : ''; } }, { title: 'Archive', get: function (r) { return r.archive || ''; } }]
@@ -932,7 +934,7 @@ function createApp(env) {
         out.push('<tr><td>' + esc(T('Result')) + '</td><td style="color:' + (STCOLOR[rec.status] || '#1b2733') + ';font-weight:600">' + esc(T(rec.status || '')) + '</td></tr></table>');
         out.push('<table><tr>' + [T('Virtual machine'), T('Result'), T('Archive'), T('Source'), T('Stored'), T('Duration'), T('Speed'), T('Message')].map(function (x) { return '<th>' + esc(x) + '</th>'; }).join('') + '</tr>');
         rows.forEach(function (r) {
-            out.push('<tr><td>' + esc(r.vm) + (r.restored_vm ? '<br>' + esc(T('Restored as') + ': ' + r.restored_vm) : '') + '</td><td style="color:' + (STCOLOR[r.status] || '#1b2733') + ';font-weight:600">' + esc(T(r.status || '')) + '</td><td>' + esc(r.archive) + '</td><td class="n">' + esc(r.raw ? fmtSize(r.raw) : '') +
+            out.push('<tr><td>' + esc(r.vm) + (r.restored_vm ? '<br>' + esc(T('Restored as') + ': ' + r.restored_vm) : '') + '</td><td style="color:' + (STCOLOR[r.status] || '#1b2733') + ';font-weight:600">' + esc(T(r.status || '') + (r.skipped ? ' (' + T('Skipped: credentials rejected') + ')' : '')) + '</td><td>' + esc(r.archive) + '</td><td class="n">' + esc(r.raw ? fmtSize(r.raw) : '') +
                 '</td><td class="n">' + esc(r.size ? fmtSize(r.size) : '') + '</td><td class="n">' + esc(r.duration ? fmtDur(r.duration) : '') + '</td><td class="n">' + esc(r.rate ? fmtSpeed(r.rate) : '') + '</td><td>' + esc(r.message) + '</td></tr>');
         });
         out.push('</table></body></html>');

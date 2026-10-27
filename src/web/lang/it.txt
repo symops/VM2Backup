@@ -88,6 +88,7 @@ Create a self-signed certificate	Crea un certificato autofirmato
 Create new self-signed...	Crea nuovo autofirmato...
 Create schedule...	Crea pianificazione...
 Created	Creato
+Credentials rejected since {0}: {1}	Credenziali rifiutate dal {0}: {1}
 Current password	Password attuale
 Data folder	Cartella dei dati
 Datacenter	Datacenter
@@ -233,6 +234,7 @@ Power on after restore	Accendi dopo il ripristino
 Press Load to read the datacenters, datastores, folders and resource pools of the server.	Premere Carica per leggere datacenter, datastore, cartelle e pool di risorse del server.
 Private key file	File della chiave privata
 Private key text	Testo della chiave privata
+Problem	Problema
 Quiesce the guest file system (needs VMware Tools in the VM)	Metti in quiescenza il file system guest (richiede VMware Tools nella VM)
 Recovery code	Codice di ripristino
 Recovery codes	Codici di ripristino
@@ -285,6 +287,7 @@ Sign in	Accedi
 Sign out	Esci
 Sign-in failed.	Accesso non riuscito.
 Size	Dimensione
+Skipped: credentials rejected	Saltato: credenziali rifiutate
 Snapshot	Snapshot
 Source	Origine
 Source server	Server di origine
@@ -320,12 +323,14 @@ The certificate was installed.	Il certificato è stato installato.
 The connection is tested now. "Test connection" tests again; "Finish" saves the server.	La connessione viene provata ora. "Prova connessione" prova di nuovo; "Fine" salva il server.
 The connection test failed or has not finished. Save the server anyway?	La prova di connessione non è riuscita o non è terminata. Salvare comunque il server?
 The connection works.	La connessione funziona.
+The credentials of this server were not rejected.	Le credenziali di questo server non sono state rifiutate.
 The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	Il datastore "{0}" ha {1} liberi, il backup occupa fino a {2}. Ripristinare comunque?
 The figures are approximate (typical data). More CPU cores make compression faster.	Le cifre sono approssimative (dati tipici). Più core della CPU rendono la compressione più veloce.
 The file is larger than 1 MB.	Il file supera 1 MB.
 The list is cut: only the first entries are shown.	L'elenco è troncato: sono mostrate solo le prime voci.
 The longest wait cannot be shorter than the first one.	L'attesa massima non può essere inferiore alla prima.
 The name of the virtual machine must be at most 80 characters and cannot contain slashes or %.	Il nome della macchina virtuale deve avere al massimo 80 caratteri e non può contenere barre o %.
+The next run will contact the server again.	La prossima esecuzione contatterà di nuovo il server.
 The password is too simple.	La password è troppo semplice.
 The password must be at least 10 characters long.	La password deve contenere almeno 10 caratteri.
 The password must not contain the user name.	La password non deve contenere il nome utente.
@@ -366,6 +371,7 @@ Transfer: plain FTP (not encrypted - enable encryption of the backup!)	Trasferim
 Trigger	Trigger
 Trust X-Forwarded-For from a reverse proxy on this computer	Considera attendibile X-Forwarded-For da un reverse proxy su questo computer
 Trust this identity and test again	Considera attendibile questa identità e riprova
+Try again	Riprova
 Tue	Mar
 Two-factor	Due fattori
 Type	Tipo
@@ -463,6 +469,7 @@ verify	verifica
 viewer	osservatore
 {0} datastore(s), {1} folder(s), {2} resource pool(s) found.	{0} datastore, {1} cartella/e, {2} pool di risorse trovati.
 {0} free of {1}	{0} liberi su {1}
+{0} skipped: credentials rejected	{0} saltato/i: credenziali rifiutate
 {0} virtual machine(s)	{0} macchina/e virtuale/i
 {0} volume(s)	{0} volume/i
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: circa {1} MB/s per core della CPU; i backup sono circa il {2}% più grandi che al livello 5.

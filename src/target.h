@@ -12,7 +12,11 @@ struct Target {
     // server said "try later" (FTP 4xx), a data transfer broke off. Permanent errors (wrong password, no such folder, access
     // denied, disk full, a bad host key / certificate) leave it false. The engine retries and resumes only transient failures.
     bool transient;
-    Target() : transient(false) {}
+    // true when the last failure was a REFUSAL OF THE CREDENTIALS (wrong / expired / locked password, login not allowed): permanent, and trying again with the same
+    // record only counts against the account (a domain locks it after a few wrong attempts). Never set for a network error, a timeout, an unknown host key.
+    // Sticky: it stays set until the object is destroyed; auth_code / auth_err keep the code (Win32 / FTP reply / libssh2) and the text of that failure.
+    bool auth_failed; int auth_code; Str auth_err;
+    Target() : transient(false), auth_failed(false), auth_code(0) {}
     virtual ~Target() {}
     virtual const char* kind() const = 0;
     virtual bool connect() = 0;                                  // opens the connection, creates the folder; may be called again after a failure
@@ -28,6 +32,7 @@ struct Target {
     bool get_bytes(const Str& name, Bytes& out, size_t maxSize = (size_t)64 << 20);
 protected:
     bool fail(const Str& e, bool temp = false) { err = e; transient = temp; return false; }
+    bool failAuth(const Str& e, int code) { err = e; transient = false; auth_failed = true; auth_code = code; auth_err = e; return false; }
 };
 
 // Builds a target from its configuration:

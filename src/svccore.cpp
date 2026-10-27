@@ -120,6 +120,7 @@ public:
     RateLimiter limiter; mutable CRITICAL_SECTION cs;
     // timings for the speed shown in the window
     double sampleT = 0; i64 sampleRaw = 0, sampleArch = 0; double rate = 0;
+    Vec<Str> authDead;      // servers that refused the credentials during THIS job (a second element on the same server is not tried)
 
     void set(Str Job::*f, const Str& v) { EnterCriticalSection(&cs); this->*f = v; LeaveCriticalSection(&cs); }
     // Progress
@@ -288,6 +289,55 @@ static bool PathInside(const Str& child, const Str& parent)
     return !q.empty() && (c == q || c.starts_with((q + "\\").c_str()));
 }
 
+
+// ---- the lock-out guard ----------------------------------------------------------------------------------------
+// A domain account is locked after a few wrong passwords, and one call to a server with a wrong password costs TWO of them (Kerberos, then NTLM). So after
+// a server refused the credentials it is not contacted again by a scheduled run (or by another element of the same job) until its record changes
+// (the stored fingerprint no longer fits) or an administrator presses "Try again" (servers.unblock). An explicit action (a manual run, "Test connection")
+// makes one attempt and updates the mark: a new refusal sets it, a success removes it.
+static bool IsAuthTextOfSource(const Str& t, int& code)
+{
+    unsigned long c = SmbErrorCodeOf(t);
+    if (SmbIsAuthCode(c)) { code = (int)c; return true; }
+    if (t.find("the user name or password was refused by the server") >= 0) { code = 401; return true; }        // ESXi / vCenter login
+    return false;
+}
+
+Str ServiceCore::authSkipMessage(const Str& serverId, i64 when, const Str& text)
+{
+    Json s; Str name = serverId; if (m_cfg.server(serverId, false, s)) name = s.get("name").str();
+    return "The credentials of server \"" + name + "\" were rejected on " + FormatLocalMin(UnixToLocalMin(when)) + " (" + text + "); not tried again until the server record is changed or \"Try again\" is pressed.";
+}
+
+bool ServiceCore::authGate(Job* j, const Str& serverId, Str& message)
+{
+    if (serverId.empty() || serverId == kLocalServerId) return false;
+    for (const Str& d : j->authDead) if (d == serverId) {
+        Json b; if (m_cfg.authBlock(serverId, b)) message = authSkipMessage(serverId, (i64)b.get("time").integer(), b.get("text").str());
+        else message = authSkipMessage(serverId, now(), "refused earlier in this run");
+        return true;
+    }
+    if (j->trigger == "manual") return false;                  // an explicit action of the user: one attempt (the guard of the next elements is j->authDead)
+    Json b;
+    if (m_cfg.authBlock(serverId, b)) { message = authSkipMessage(serverId, (i64)b.get("time").integer(), b.get("text").str()); return true; }
+    return false;
+}
+
+void ServiceCore::authFailedNow(Job* j, const Str& serverId, const Str& fp, int code, const Str& text)
+{
+    if (serverId.empty() || serverId == kLocalServerId) return;
+    if (j) { bool have = false; for (const Str& d : j->authDead) if (d == serverId) have = true; if (!have) j->authDead.push_back(serverId); }
+    m_cfg.setAuthBlock(serverId, fp, code, text, now());
+    Json s; Str name = serverId; if (m_cfg.server(serverId, false, s)) name = s.get("name").str();
+    Log(L"the credentials of server \"%s\" were refused (code %d); it is not contacted again until its record is changed or \"Try again\" is pressed", Wide(name).c_str(), code);
+}
+
+void ServiceCore::authOk(const Str& serverId)
+{
+    if (serverId.empty() || serverId == kLocalServerId) return;
+    if (m_cfg.clearAuthBlock(serverId)) Log(L"the server works again: its credentials mark was removed");
+}
+
 void ServiceCore::backupElement(Job* j, const Json& el, const Str& taskName, Json& results, bool& stopTask)
 {
     (void)taskName;
@@ -300,6 +350,7 @@ void ServiceCore::backupElement(Job* j, const Json& el, const Str& taskName, Jso
     bool haveSrc = m_cfg.server(el.get("source").get("server").str(), true, sj);
     if (haveSrc && el.get("snapshot").is_object()) sj["snapshot"] = el.get("snapshot");      // quiesce / memory options of an ESXi source
     if (haveSrc && !el.get("source").get("datacenter").str().empty()) sj["datacenter"] = el.get("source").get("datacenter");   // vCenter: one datacenter (the Snapshot tab)
+    const Str srvId = el.get("source").get("server").str(), tgtId = el.get("target").get("server").str();
     for (size_t i = 0; i < vms.size(); ++i) {
         Str vm = vms.at(i).str();
         Json r = Json::object(); r["vm"] = vm; r["status"] = "Failed"; r["started"] = UnixNow();
@@ -309,9 +360,18 @@ void ServiceCore::backupElement(Job* j, const Json& el, const Str& taskName, Jso
             r["status"] = (j->pauseFlag || m_stop) && !j->abortFlag ? "Paused" : "Abort"; r["message"] = "not started"; results.push(r); continue;
         }
         if (!haveSrc) { r["message"] = "the source server no longer exists"; results.push(r); if (!el.get("on_error_next").boolean(true)) stopTask = true; continue; }
+        {   // credentials that were refused are not offered again (see the guard above); nothing is sent to the server
+            Str skip;
+            if (authGate(j, srvId, skip) || authGate(j, tgtId, skip)) {
+                r["message"] = skip; r["skipped"] = true; r["skip_reason"] = "credentials"; results.push(r);
+                if (!el.get("on_error_next").boolean(true)) stopTask = true;
+                continue;
+            }
+        }
+        const Str srvFp = m_cfg.credsFingerprint(srvId), tgtFp = m_cfg.credsFingerprint(tgtId);
         VmSource* src = MakeSource(sj, err);
         Target* tgt = nullptr; Str terr;
-        if (!src) { r["message"] = err; results.push(r); if (!el.get("on_error_next").boolean(true)) stopTask = true; continue; }
+        if (!src) { int ac = 0; if (IsAuthTextOfSource(err, ac)) authFailedNow(j, srvId, srvFp, ac, err); r["message"] = err; results.push(r); if (!el.get("on_error_next").boolean(true)) stopTask = true; continue; }
         if (!makeTarget(el.get("target").get("server").str(), el.get("target").get("directory").str(), vm, t0, tgt, terr)) { r["message"] = terr; delete src; results.push(r); if (!el.get("on_error_next").boolean(true)) stopTask = true; continue; }
         {   // a backup folder inside the folder of the VM: the next backup would contain the previous ones (growing every run)
             Json tj1; m_cfg.server(el.get("target").get("server").str(), false, tj1);
@@ -359,6 +419,12 @@ void ServiceCore::backupElement(Job* j, const Json& el, const Str& taskName, Jso
         for (size_t q = 0; q < m_claims.size(); ++q) if (m_claims[q] == claim) { m_claims.erase(q); break; }
         LeaveCriticalSection(&m_cs);
         r["duration"] = UnixNow() - t0;
+        if (ok) { authOk(tgtId); authOk(srvId); }
+        else {
+            int ac = 0;
+            if (tgt->auth_failed) authFailedNow(j, tgtId, tgtFp, tgt->auth_code, tgt->auth_err);
+            else if (berr != kAbortedMessage && IsAuthTextOfSource(berr, ac)) authFailedNow(j, srvId, srvFp, ac, berr);
+        }
         if (ok) {
             r["status"] = warn.empty() ? "Success" : "Warning"; r["archive"] = m.archive; r["size"] = m.size; r["raw"] = m.rawSize; r["volumes"] = (u64)m.segments.size();
             r["codec"] = m.codec; r["encrypted"] = m.encrypted; if (!warn.empty()) r["message"] = warn;
@@ -404,6 +470,7 @@ void ServiceCore::runJob(Job* j)
         Target* t = nullptr;
         Json srv; m_cfg.server(j->args.get("server").str(), true, srv);
         Json cfg = srv; Str dir = j->args.get("directory").str(); cfg["directory"] = dir; if (srv.get("type").str() == "local") cfg["path"] = dir;
+        Str opSrv = j->args.get("server").str(), opFp = m_cfg.credsFingerprint(opSrv);
         t = MakeTarget(cfg, err);
         if (!t) r["message"] = err;
         else {
@@ -434,6 +501,7 @@ void ServiceCore::runJob(Job* j)
                 if (isEsxi) { r["restored_vm"] = eres.vmName; r["vmx"] = eres.vmxPath; if (!eres.warning.empty()) { r["status"] = "Warning"; r["message"] = eres.warning; } }
             }
             else { bool paused = err == kAbortedMessage && (j->pauseFlag || m_stop) && !j->abortFlag; r["status"] = err == kAbortedMessage ? (paused ? "Paused" : "Abort") : "Failed"; r["message"] = err; }
+            if (t->auth_failed) authFailedNow(j, opSrv, opFp, t->auth_code, t->auth_err); else if (ok) authOk(opSrv);
             delete t;
         }
         results.push(r);
@@ -596,6 +664,8 @@ bool ServiceCore::listTarget(const Json& args, Json& result, Str& err)
     Vec<Str> dirs;
     Json srv;
     if (!m_cfg.server(serverId, true, srv)) { err = "server not found"; return false; }
+    { Json b; if (m_cfg.authBlock(serverId, b)) { err = authSkipMessage(serverId, (i64)b.get("time").integer(), b.get("text").str()); return false; } }     // the explorer does not knock on a door that refused the password
+    const Str listFp = m_cfg.credsFingerprint(serverId);
     if (!dir.empty()) dirs.push_back(dir);
     else {
         EnterCriticalSection(&m_cs);
@@ -619,7 +689,9 @@ bool ServiceCore::listTarget(const Json& args, Json& result, Str& err)
             for (const Manifest& m : ms) { Json o = m.toJson(); o.remove("segments"); o["volumes"] = (u64)m.segments.size(); o["server"] = serverId; o["directory"] = dirs[d]; found.push(o); }
             ListResumable(*t, nullptr, rs, le);
             for (const ResumeInfo& r : rs) { Json o = Json::object(); o["vm"] = r.vm; o["archive"] = r.archive; o["stamp"] = r.stamp; o["created"] = r.created; o["volumes_done"] = r.volumesDone; o["stored_bytes"] = r.storedBytes; o["raw_bytes"] = r.rawBytes; o["server"] = serverId; o["directory"] = dirs[d]; resumable.push(o); }
-        } else if (!dir.empty()) { err = le.empty() ? t->err : le; delete t; return false; }
+            if (!t->auth_failed) authOk(serverId);
+        } else if (t->auth_failed) { authFailedNow(nullptr, serverId, listFp, t->auth_code, t->auth_err); if (!dir.empty()) err = t->err; delete t; if (!dir.empty()) return false; break; }      // one refusal ends the whole listing: the other folders would count again
+        else if (!dir.empty()) { err = le.empty() ? t->err : le; delete t; return false; }
         delete t;
     }
     result = Json::object(); result["backups"] = found; result["resumable"] = resumable;
@@ -639,6 +711,10 @@ bool ServiceCore::handle(const Str& cmd, const Json& a, Json& r, Str& err)
     if (cmd == "settings.set") { if (!m_cfg.setSettings(a, err)) return false; r = m_cfg.settings(); return true; }
     if (cmd == "servers.list") { r = m_cfg.servers(); return true; }
     if (cmd == "servers.save") { Json s; if (!m_cfg.saveServer(a.get("server"), s, err)) return false; r = s; return true; }
+    if (cmd == "servers.unblock") {                          // "Try again": the next run may contact the server (admin only over the web)
+        Json sv; if (!m_cfg.server(a.get("id").str(), false, sv)) { err = "server not found"; return false; }
+        r["was_blocked"] = m_cfg.clearAuthBlock(a.get("id").str()); return true;
+    }
     if (cmd == "servers.delete") return m_cfg.deleteServer(a.get("id").str(), err);
     if (cmd == "servers.test" || cmd == "servers.vms") {
         Json s;
@@ -652,10 +728,13 @@ bool ServiceCore::handle(const Str& cmd, const Json& a, Json& r, Str& err)
         }
         Str type = s.get("type").str(); Str e2;
         if (type == "directory" || type == "esxi" || type == "vcenter") {
+            const Str tid = a.has("id") ? a.get("id").str() : Str();
+            const Str tfp = m_cfg.credsFingerprint(tid); int ac = 0;
             VmSource* src = MakeSource(s, e2);
-            if (!src) { err = e2; return false; }
+            if (!src) { if (IsAuthTextOfSource(e2, ac)) authFailedNow(nullptr, tid, tfp, ac, e2); err = e2; return false; }
             Vec<VmInfo> vms; bool ok = src->list(vms);
-            if (!ok) { err = src->err; delete src; return false; }
+            if (!ok) { if (IsAuthTextOfSource(src->err, ac)) authFailedNow(nullptr, tid, tfp, ac, src->err); err = src->err; delete src; return false; }
+            authOk(tid);
             Json arr = Json::array(); for (const VmInfo& v : vms) { Json o = Json::object(); o["name"] = v.name; o["state"] = v.state; o["size"] = v.size; if (!v.extra.empty()) o["extra"] = v.extra; arr.push(o); }
             r["vms"] = arr; r["message"] = Str::fmt("%d virtual machine(s) found", (int)vms.size());
             delete src; return true;
@@ -663,8 +742,11 @@ bool ServiceCore::handle(const Str& cmd, const Json& a, Json& r, Str& err)
         Json cfg = s; if (type == "local") { cfg["path"] = s.get("directory").str(); }
         Target* t = MakeTarget(cfg, e2);
         if (!t) { err = e2; return false; }
+        const Str testId = a.has("id") ? a.get("id").str() : Str();     // the wizard's unsaved record (maybe with other credentials than the stored one) never touches a mark
+        const Str testFp = m_cfg.credsFingerprint(testId);
         bool ok = t->connect(); Vec<Str> names; if (ok) ok = t->list(names);
-        if (!ok) { err = t->err; delete t; return false; }
+        if (!ok) { if (t->auth_failed) authFailedNow(nullptr, testId, testFp, t->auth_code, t->auth_err); err = t->err; delete t; return false; }
+        authOk(testId);
         r["message"] = "connected"; r["files"] = (u64)names.size();
         if (type == "smb") {                                                  // a network folder: prove that we can write and delete, and tell the free space
             static const char* kProbe = ".vm2b-test.tmp";

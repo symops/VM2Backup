@@ -129,7 +129,7 @@ Str B64NoPad(const u8* p, size_t n) { Str s = Base64Encode(p, n); while (s.ends_
 
 } // namespace
 
-SshSession::SshSession() : transient(false), hostKeyUntrusted(false), rekeys(0), m_i(new Impl()), m_state(St_Closed), m_abort(nullptr) { Ssh2Init(); }
+SshSession::SshSession() : transient(false), authRefused(false), authRc(0), hostKeyUntrusted(false), rekeys(0), m_i(new Impl()), m_state(St_Closed), m_abort(nullptr) { Ssh2Init(); }
 SshSession::~SshSession() { disconnect(); delete m_i; }
 void SshSession::set_abort_flag(volatile long* f) { m_abort = f; m_i->abortFlag = f; }
 
@@ -165,8 +165,8 @@ bool SshSession::fail_rc(int rc, const char* what)
     case LIBSSH2_ERROR_SOCKET_TIMEOUT: case LIBSSH2_ERROR_TIMEOUT: case LIBSSH2_ERROR_BANNER_RECV: case LIBSSH2_ERROR_BANNER_SEND:
         return fail(I.lastSockErr ? Str::fmt("connection lost (error %d)", I.lastSockErr) : Str("connection lost"), true);
     case LIBSSH2_ERROR_AUTHENTICATION_FAILED: case LIBSSH2_ERROR_PUBLICKEY_UNVERIFIED: case LIBSSH2_ERROR_KEYFILE_AUTH_FAILED:
-        return fail("authentication failed (wrong user name, password or key)", false);
-    case LIBSSH2_ERROR_PASSWORD_EXPIRED: return fail("authentication failed: the password has expired", false);
+        authRefused = true; authRc = rc; return fail("authentication failed (wrong user name, password or key)", false);
+    case LIBSSH2_ERROR_PASSWORD_EXPIRED: authRefused = true; authRc = rc; return fail("authentication failed: the password has expired", false);
     case LIBSSH2_ERROR_METHOD_NONE: case LIBSSH2_ERROR_KEX_FAILURE: case LIBSSH2_ERROR_KEY_EXCHANGE_FAILURE: case LIBSSH2_ERROR_ALGO_UNSUPPORTED:
     case LIBSSH2_ERROR_METHOD_NOT_SUPPORTED: case LIBSSH2_ERROR_HOSTKEY_INIT: case LIBSSH2_ERROR_HOSTKEY_SIGN:
         return fail(Str("key exchange failed (no common algorithm, or the server's key was refused)") + (detail.empty() ? Str() : ": " + detail), false);
@@ -274,7 +274,7 @@ bool SshSession::connect(const SshConfig& cfg)
 {
     
     disconnect();
-    err.clear(); transient = false; hostKeyUntrusted = false; fingerprint.clear(); serverVersion.clear(); kexName.clear(); cipherName.clear(); macName.clear(); hostKeyName.clear(); rekeys = 0;
+    err.clear(); transient = false; authRefused = false; authRc = 0; hostKeyUntrusted = false; fingerprint.clear(); serverVersion.clear(); kexName.clear(); cipherName.clear(); macName.clear(); hostKeyName.clear(); rekeys = 0;
     Impl& I = *m_i;
     I.cfg = cfg; I.abortFlag = m_abort; I.lastSockErr = 0;
     I.deadline = 0;

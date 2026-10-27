@@ -56,6 +56,9 @@ Str SmbErrorText(unsigned long code, const Str& host, const Str& share, bool& tr
 // The Win32 error number at the end of "...: Access is denied. (5)" (0 when there is none).
 unsigned long SmbErrorCodeOf(const Str& text);
 bool SmbIsTransientCode(unsigned long code);
+// The codes that mean "the credentials were refused" (wrong / locked / disabled / expired password, logon not allowed): 86, 1326, 1909, 1331, 1330, 1907, 1385, 1327, 1328.
+// 1219 (a conflict with another connection of this computer) and 5 (access denied for a valid account) are NOT among them.
+bool SmbIsAuthCode(unsigned long code);
 
 // Network drives of the logged-in user (GUI): letters ("Z:") and the UNC path each one points at.
 void SmbListNetworkDrives(Vec<Str>& letters, Vec<Str>& uncs);

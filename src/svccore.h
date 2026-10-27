@@ -73,6 +73,11 @@ private:
     void backupElement(Job* j, const Json& el, const Str& taskName, Json& results, bool& stopTask);
     bool listTarget(const Json& args, Json& result, Str& err);
     void remember(const Str& serverId, const Str& directory);
+    // the lock-out guard (see config.h): a server whose credentials were refused is not contacted again by anything that runs on its own
+    Str authSkipMessage(const Str& serverId, i64 when, const Str& text);
+    bool authGate(Job* j, const Str& serverId, Str& message);                              // true = do not touch the server (message set)
+    void authFailedNow(Job* j, const Str& serverId, const Str& fp, int code, const Str& text);
+    void authOk(const Str& serverId);
 
     Config m_cfg; ServiceOptions m_opt; IpcServer m_ipc; WebServer m_web; HANDLE m_sched; volatile LONG m_stop;
     mutable CRITICAL_SECTION m_cs; Vec<Job*> m_jobs; HANDLE m_slots; int m_slotCount;

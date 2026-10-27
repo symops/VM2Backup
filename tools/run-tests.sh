@@ -4,7 +4,7 @@
 #   tools/run-tests.sh [--seed N] [--skip a,b] [--only a,b] [--build]
 # (t_tar is an interop helper for Python, not a self-test; tar is covered by core tar_roundtrip)
 # Suites: native core service ftp ssh esxi web gui package package2     (core = the default groups of vm2bautotest.exe)
-# Environment: LOGDIR (default $TMPDIR/vm2b-tests-<time>), TMPDIR; the suites use ports 22000-24999 and the Xvfb display :96 (GUI_DISPLAY).
+# Environment: LOGDIR (default $TMPDIR/vm2b-tests-<time>), TMPDIR; the suites use ports 22000-24999 and the Xvfb display :95 (GUI_DISPLAY).
 cd "$(dirname "$0")/.."
 ROOT=$PWD
 SEED=; SKIP=,; ONLY=; BUILD=0
@@ -45,7 +45,7 @@ run ssh     env WINEPREFIX=$LOGDIR/prefix-ssh tools/run-ssh-tests.sh $SEED
 run esxi    env WINEPREFIX=$LOGDIR/prefix-esxi tools/run-esxi-tests.sh $SEED
 run web     env WINEPREFIX=$LOGDIR/prefix-web tools/run-web-tests.sh
 run gui     env WINEPREFIX_GUI=$LOGDIR/prefix-gui GUI_TEST_DIR=$LOGDIR/gui tools/run-gui-tests.sh $SEED
-run package env PKG_TEST_DIR=$LOGDIR/pkg DISPLAY=${GUI_DISPLAY:-:96} tools/test-package-wine.sh
-run package2 env PKG_TEST_DIR=$LOGDIR/pkg2 PKG_DISPLAY=${GUI_DISPLAY:-:96} WINEPREFIX_PKG2=$LOGDIR/prefix-pkg2 tools/test-package-extra.sh
+run package env PKG_TEST_DIR=$LOGDIR/pkg DISPLAY=${GUI_DISPLAY:-:95} tools/test-package-wine.sh
+run package2 env PKG_TEST_DIR=$LOGDIR/pkg2 PKG_DISPLAY=${GUI_DISPLAY:-:95} WINEPREFIX_PKG2=$LOGDIR/prefix-pkg2 tools/test-package-extra.sh
 echo; echo "logs: $LOGDIR"; printf '%s\n' "${RES[@]}"
 printf '%s\n' "${RES[@]}" | grep -q ' FAIL ' && exit 1; exit 0

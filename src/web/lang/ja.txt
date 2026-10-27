@@ -88,6 +88,7 @@ Create a self-signed certificate	自己署名証明書を作成
 Create new self-signed...	新しい自己署名を作成...
 Create schedule...	スケジュールを作成...
 Created	作成日時
+Credentials rejected since {0}: {1}	{0} から資格情報が拒否されています: {1}
 Current password	現在のパスワード
 Data folder	データフォルダー
 Datacenter	データセンター
@@ -233,6 +234,7 @@ Power on after restore	復元後に電源をオンにする
 Press Load to read the datacenters, datastores, folders and resource pools of the server.	「読み込み」を押すと、サーバーのデータセンター、データストア、フォルダー、リソースプールを読み取ります。
 Private key file	秘密キーファイル
 Private key text	秘密キーのテキスト
+Problem	問題
 Quiesce the guest file system (needs VMware Tools in the VM)	ゲストファイルシステムを静止する (VM に VMware Tools が必要)
 Recovery code	回復コード
 Recovery codes	回復コード
@@ -285,6 +287,7 @@ Sign in	サインイン
 Sign out	サインアウト
 Sign-in failed.	サインインに失敗しました。
 Size	サイズ
+Skipped: credentials rejected	スキップ: 資格情報が拒否されました
 Snapshot	スナップショット
 Source	ソース
 Source server	ソースサーバー
@@ -320,12 +323,14 @@ The certificate was installed.	証明書をインストールしました。
 The connection is tested now. "Test connection" tests again; "Finish" saves the server.	接続をテストしています。「接続テスト」で再テストし、「完了」でサーバーを保存します。
 The connection test failed or has not finished. Save the server anyway?	接続テストに失敗したか、完了していません。それでもサーバーを保存しますか?
 The connection works.	接続は正常です。
+The credentials of this server were not rejected.	このサーバーの資格情報は拒否されていません。
 The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	データストア "{0}" の空きは {1} で、バックアップは最大 {2} になります。それでも復元しますか?
 The figures are approximate (typical data). More CPU cores make compression faster.	数値は概算です (一般的なデータ)。CPU コアが多いほど圧縮は速くなります。
 The file is larger than 1 MB.	ファイルが 1 MB を超えています。
 The list is cut: only the first entries are shown.	一覧は省略されています。最初の項目のみ表示しています。
 The longest wait cannot be shorter than the first one.	最長の待機時間を最初の待機時間より短くすることはできません。
 The name of the virtual machine must be at most 80 characters and cannot contain slashes or %.	仮想マシン名は 80 文字以内で、スラッシュや % を含められません。
+The next run will contact the server again.	次回の実行で再びサーバーに接続します。
 The password is too simple.	パスワードが単純すぎます。
 The password must be at least 10 characters long.	パスワードは 10 文字以上にしてください。
 The password must not contain the user name.	パスワードにユーザー名を含めることはできません。
@@ -366,6 +371,7 @@ Transfer: plain FTP (not encrypted - enable encryption of the backup!)	転送: �
 Trigger	トリガー
 Trust X-Forwarded-For from a reverse proxy on this computer	このコンピューター上のリバースプロキシからの X-Forwarded-For を信頼する
 Trust this identity and test again	この ID を信頼して再テスト
+Try again	再試行
 Tue	火
 Two-factor	二要素認証
 Type	種類
@@ -463,6 +469,7 @@ verify	検証
 viewer	閲覧者
 {0} datastore(s), {1} folder(s), {2} resource pool(s) found.	データストア {0} 件、フォルダー {1} 件、リソースプール {2} 件が見つかりました。
 {0} free of {1}	{1} 中 {0} 空き
+{0} skipped: credentials rejected	{0} 件スキップ: 資格情報が拒否されました
 {0} virtual machine(s)	仮想マシン {0} 台
 {0} volume(s)	ボリューム {0} 個
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: CPU コアあたり約 {1} MB/s。バックアップはレベル 5 より約 {2}% 大きくなります。

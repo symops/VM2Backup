@@ -62,6 +62,7 @@ public:
     bool exec(const Str& command, Bytes& out, Bytes& errOut, int& status, size_t maxOut = (size_t)16 << 20);
     void set_abort_flag(volatile long* f);
     Str err; bool transient;
+    bool authRefused; int authRc;                // connect() failed because the server refused the credentials (wrong password / key, expired password): permanent, not a network error
     bool hostKeyUntrusted;                       // connect() failed because the host key is not known (fingerprint is in err and in fingerprint)
     Str fingerprint, serverVersion, kexName, cipherName, macName, hostKeyName;
     u64 rekeys;                                  // always 0 (kept for the tests)

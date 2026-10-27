@@ -88,6 +88,7 @@ Create a self-signed certificate	자체 서명 인증서 만들기
 Create new self-signed...	새 자체 서명 만들기...
 Create schedule...	일정 만들기...
 Created	생성됨
+Credentials rejected since {0}: {1}	{0}부터 자격 증명이 거부됨: {1}
 Current password	현재 암호
 Data folder	데이터 폴더
 Datacenter	데이터센터
@@ -233,6 +234,7 @@ Power on after restore	복원 후 전원 켜기
 Press Load to read the datacenters, datastores, folders and resource pools of the server.	불러오기를 눌러 서버의 데이터센터, 데이터스토어, 폴더 및 리소스 풀을 읽으십시오.
 Private key file	개인 키 파일
 Private key text	개인 키 텍스트
+Problem	문제
 Quiesce the guest file system (needs VMware Tools in the VM)	게스트 파일 시스템 정지(VM에 VMware Tools 필요)
 Recovery code	복구 코드
 Recovery codes	복구 코드
@@ -285,6 +287,7 @@ Sign in	로그인
 Sign out	로그아웃
 Sign-in failed.	로그인하지 못했습니다.
 Size	크기
+Skipped: credentials rejected	건너뜀: 자격 증명이 거부됨
 Snapshot	스냅숏
 Source	원본
 Source server	원본 서버
@@ -320,12 +323,14 @@ The certificate was installed.	인증서가 설치되었습니다.
 The connection is tested now. "Test connection" tests again; "Finish" saves the server.	지금 연결을 테스트합니다. "연결 테스트"는 다시 테스트하고, "마침"은 서버를 저장합니다.
 The connection test failed or has not finished. Save the server anyway?	연결 테스트에 실패했거나 아직 끝나지 않았습니다. 그래도 서버를 저장할까요?
 The connection works.	연결이 정상입니다.
+The credentials of this server were not rejected.	이 서버의 자격 증명은 거부되지 않았습니다.
 The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	데이터스토어 "{0}"의 여유 공간은 {1}이고 백업은 최대 {2}입니다. 그래도 복원할까요?
 The figures are approximate (typical data). More CPU cores make compression faster.	수치는 근사치입니다(일반적인 데이터). CPU 코어가 많을수록 압축이 빨라집니다.
 The file is larger than 1 MB.	파일이 1 MB보다 큽니다.
 The list is cut: only the first entries are shown.	목록이 잘렸습니다. 처음 항목만 표시됩니다.
 The longest wait cannot be shorter than the first one.	최장 대기 시간은 첫 대기 시간보다 짧을 수 없습니다.
 The name of the virtual machine must be at most 80 characters and cannot contain slashes or %.	가상 컴퓨터 이름은 80자 이하여야 하며 슬래시나 %를 포함할 수 없습니다.
+The next run will contact the server again.	다음 실행 시 서버에 다시 연결합니다.
 The password is too simple.	암호가 너무 단순합니다.
 The password must be at least 10 characters long.	암호는 10자 이상이어야 합니다.
 The password must not contain the user name.	암호에 사용자 이름을 포함할 수 없습니다.
@@ -366,6 +371,7 @@ Transfer: plain FTP (not encrypted - enable encryption of the backup!)	전송: �
 Trigger	트리거
 Trust X-Forwarded-For from a reverse proxy on this computer	이 컴퓨터의 리버스 프록시에서 오는 X-Forwarded-For 신뢰
 Trust this identity and test again	이 ID를 신뢰하고 다시 테스트
+Try again	다시 시도
 Tue	화
 Two-factor	2단계 인증
 Type	유형
@@ -463,6 +469,7 @@ verify	검증
 viewer	보기 전용
 {0} datastore(s), {1} folder(s), {2} resource pool(s) found.	데이터스토어 {0}개, 폴더 {1}개, 리소스 풀 {2}개를 찾았습니다.
 {0} free of {1}	{1} 중 {0} 사용 가능
+{0} skipped: credentials rejected	{0}개 건너뜀: 자격 증명이 거부됨
 {0} virtual machine(s)	가상 컴퓨터 {0}대
 {0} volume(s)	볼륨 {0}개
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: CPU 코어당 약 {1} MB/s, 백업이 수준 5보다 약 {2}% 큽니다.

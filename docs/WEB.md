@@ -194,6 +194,24 @@ A browser cannot list the network or the drive letters of a user; the service ca
 
 `tasks.copy {id|name, name?}` (admin) copies a task with new ids and the stored encryption passwords; `tasks.next {id}` or `{schedule}` (a schedule that is being edited) gives the next start; `backups.restore_esxi` / `esxi.restore_options` (admin) restore to ESXi / vCenter - see `docs/ESXI.md`.  The history page builds the HTML report of an entry in the browser (every value escaped) and saves it as a file.
 
+## Защита от блокировки учётной записи (`servers.unblock`, пометка на сервере)
+
+Причина: в домене один вызов `WNetAddConnection2W` с неверным паролем увеличивает `badPwdCount` пользователя на 2 (Kerberos, затем NTLM; измерено на настоящем контроллере домена), а планировщик
+перезапускает задачи. Поэтому сервер, который **отказал в учётных данных**, больше не опрашивается без явного действия пользователя.
+
+* Что считается отказом (постоянная ошибка, `Target::auth_failed`): SMB 86, 1326, 1909, 1331, 1330, 1907, 1385, 1327, 1328; FTP 530; SCP: ошибка аутентификации libssh2 (неверный пароль / ключ, истёкший пароль); ESXi / vCenter: `InvalidLogin`;
+  источник «папка с ВМ» на сетевой шаре: те же коды SMB. Сеть, таймаут, 1219 (конфликт соединений), 5 (нет прав у верной записи), неизвестный ключ хоста / сертификат отказом **не** считаются и ничего не блокируют.
+* Состояние хранится в `state.json` (раздел `_auth_blocks`: `{server_id: {code, text, time, creds_fp}}`), не в `config.json`; переживает перезапуск службы. `creds_fp` = SHA-256 (первые 16 байт) от типа, адреса, порта, пользователя,
+  пути, файла ключа и защищённых DPAPI значений секретов; пароль из него получить нельзя, в журнал он не попадает. Любое изменение этих полей (`servers.save`) делает отметку недействительной; переименование сервера - нет.
+* Запуск по расписанию (`trigger` `schedule`, в том числе после пропуска) и каждый следующий элемент той же задачи, дошедший до такого сервера, **не обращаются к серверу вообще**: результат `Failed` с `skipped: true`,
+  `skip_reason: "credentials"` и текстом «The credentials of server "X" were rejected on <время> (<текст с кодом>); not tried again until the server record is changed or "Try again" is pressed.».
+  Внутри одной задачи (в том числе ручной) тот же сервер после первого отказа второй раз не пробуется.
+* Явные действия делают ровно одну попытку: ручной запуск (`tasks.run`, `backup.run`), `backups.verify` / `backups.restore`, `servers.test` по `id` («Проверить соединение»). Новый отказ снова ставит отметку, успех снимает.
+  `servers.test` с неизвестной записью мастера (без `id`) отметок не трогает. `backups.list` (Проводник копий) с отметкой отвечает ошибкой тем же текстом, не обращаясь к серверу.
+* `servers.unblock {id}` (admin, CSRF как у остальных изменяющих команд) снимает отметку без изменения записи («Try again»); ответ `{was_blocked}`; неизвестный сервер - ошибка.
+* Видимость: `servers.list` отдаёт `auth_blocked: {code, text, time}` (без пароля); страница «Datacenter» показывает красную пометку «Credentials rejected since <время>: <текст>» и кнопку «Try again» (admin); в списке истории -
+  «N skipped: credentials rejected»; в деталях записи и в HTML-отчёте у пропущенного элемента - «Skipped: credentials rejected». Тексты вставляются как текст (экранирование), во всех 16 языковых файлах есть перевод.
+
 ## Languages
 
 The page offers 17 languages (login page and header).  `src/web/lang/<code>.txt` holds `English<TAB>translation` per line (`tools/webui_strings.py --update` syncs the keys with `src/web/app.js`, `--check` verifies placeholders `{0}`..., `--missing <code>` lists the untranslated ones); `tools/gen_webui.py` embeds one small script per language (`/lang/<code>.js`), loaded when the language is chosen.  The choice is remembered in the browser (`localStorage`); the first visit follows the browser language; an untranslated text is shown in English.

@@ -88,6 +88,7 @@ Create a self-signed certificate	创建自签名证书
 Create new self-signed...	新建自签名...
 Create schedule...	创建计划...
 Created	创建时间
+Credentials rejected since {0}: {1}	自 {0} 起凭据被拒绝：{1}
 Current password	当前密码
 Data folder	数据文件夹
 Datacenter	数据中心
@@ -233,6 +234,7 @@ Power on after restore	还原后开机
 Press Load to read the datacenters, datastores, folders and resource pools of the server.	点击"加载"以读取服务器的数据中心、数据存储、文件夹和资源池。
 Private key file	私钥文件
 Private key text	私钥文本
+Problem	问题
 Quiesce the guest file system (needs VMware Tools in the VM)	使客户机文件系统静默(虚拟机中需要 VMware Tools)
 Recovery code	恢复代码
 Recovery codes	恢复代码
@@ -285,6 +287,7 @@ Sign in	登录
 Sign out	退出登录
 Sign-in failed.	登录失败。
 Size	大小
+Skipped: credentials rejected	已跳过：凭据被拒绝
 Snapshot	快照
 Source	源
 Source server	源服务器
@@ -320,12 +323,14 @@ The certificate was installed.	证书已安装。
 The connection is tested now. "Test connection" tests again; "Finish" saves the server.	现在正在测试连接。"测试连接"会再次测试; "完成"将保存服务器。
 The connection test failed or has not finished. Save the server anyway?	连接测试失败或尚未完成。仍要保存服务器吗?
 The connection works.	连接正常。
+The credentials of this server were not rejected.	此服务器的凭据未被拒绝。
 The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	数据存储"{0}"有 {1} 可用空间,备份最多占用 {2}。仍要还原吗?
 The figures are approximate (typical data). More CPU cores make compression faster.	数字为近似值(典型数据)。更多 CPU 核心可使压缩更快。
 The file is larger than 1 MB.	文件大于 1 MB。
 The list is cut: only the first entries are shown.	列表已截断: 仅显示前几项。
 The longest wait cannot be shorter than the first one.	最长等待不能短于首次等待。
 The name of the virtual machine must be at most 80 characters and cannot contain slashes or %.	虚拟机名称最多 80 个字符,且不能包含斜杠或 %。
+The next run will contact the server again.	下次运行将再次连接该服务器。
 The password is too simple.	密码过于简单。
 The password must be at least 10 characters long.	密码长度至少为 10 个字符。
 The password must not contain the user name.	密码不得包含用户名。
@@ -366,6 +371,7 @@ Transfer: plain FTP (not encrypted - enable encryption of the backup!)	传输: �
 Trigger	触发器
 Trust X-Forwarded-For from a reverse proxy on this computer	信任此计算机上反向代理发来的 X-Forwarded-For
 Trust this identity and test again	信任此身份并重新测试
+Try again	重试
 Tue	周二
 Two-factor	双因素认证
 Type	类型
@@ -463,6 +469,7 @@ verify	验证
 viewer	查看者
 {0} datastore(s), {1} folder(s), {2} resource pool(s) found.	找到 {0} 个数据存储、{1} 个文件夹、{2} 个资源池。
 {0} free of {1}	{1} 中有 {0} 可用
+{0} skipped: credentials rejected	已跳过 {0} 项：凭据被拒绝
 {0} virtual machine(s)	{0} 台虚拟机
 {0} volume(s)	{0} 个卷
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: 每个 CPU 核心约 {1} MB/s; 备份比级别 5 约大 {2}%。

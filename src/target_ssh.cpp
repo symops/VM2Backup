@@ -44,7 +44,7 @@ public:
 protected:
     bool open_session() {
         m_sess.set_abort_flag(m_abort);
-        if (!m_sess.connect(m_cfg)) return fail(m_sess.err, m_sess.transient);
+        if (!m_sess.connect(m_cfg)) { if (m_sess.authRefused) return failAuth(m_sess.err, m_sess.authRc); return fail(m_sess.err, m_sess.transient); }
         return true;
     }
     bool session_ok() { return m_sess.connected(); }

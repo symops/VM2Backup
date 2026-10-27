@@ -16,6 +16,7 @@
 #include "smb.h"
 #include "netbrowse.h"
 #include "tests_svc.h"
+#include "schedule.h"
 #include <winsock2.h>
 #include <stdio.h>
 
@@ -231,6 +232,51 @@ VM2B_TEST("domainlock", domain_backup_with_wrong_password_does_not_hammer_the_se
     T_CHECK(!why.empty()); T_CHECK(!dc.leaks(why)); T_CHECK(why.lower().find("password") >= 0);
     T_CHECK(adds <= 3);
     T_CHECK(SmbOpenConnections() == 0);
+    return true;
+}
+
+VM2B_TEST("domainlock", domain_scheduled_task_with_wrong_password_is_tried_once)
+{
+    // Защита от блокировки (служба в этом же процессе, настоящий вход в домен): запись сервера с НЕВЕРНЫМ паролем lockuser (порог блокировки 5) + задача по расписанию
+    // с быстрыми тиками (поддельные часы).  После N запусков планировщика badPwdCount вырос только на то, что стоит ОДНО обращение (Kerberos + NTLM = 2),
+    // учётная запись не заблокирована; после смены пароля в записи сервера задача снова работает.
+    NEED_DOMAIN();
+    if (dc.lockUser.empty() || dc.lockPw.empty()) { c_.skip("no locked_user"); return true; }
+    const Str lockShort = dc.lockUser.substr(dc.lockUser.rfind('\\') + 1);
+    { Str e; Target* t = MakeTarget(SmbJson(dc.fqdn, dc.lockUser, dc.lockPw, ""), e); bool ok = t && t->connect(); if (!ok && t) c_.note("lockuser first logon: %s", t->err.c_str()); T_CHECK(ok); delete t; }   // сбрасывает badPwdCount
+    CountScope cs;
+    Svc s(c_, "domag", true); if (!s.up) return false; s.record = true;
+    Str vms = s.tmp.sub("vms"); WriteBytes(JoinPath(vms, "vm1\\disk.vmdk"), Random(c_, 80000)); Str src = s.addDirServer(vms);
+    Json sv = Json::object(); sv["type"] = "smb"; sv["name"] = "Domain share"; sv["path"] = dc.fqdn; sv["user"] = dc.lockUser; sv["password"] = dc.wrongPw;
+    Json sa = Json::object(); sa["server"] = sv; Str id = s.ok("servers.save", sa).get("id").str(); T_CHECK(!id.empty());
+    g_fakeNow = (i64)UnixNow() + 3600; i64 t0 = g_fakeNow;
+    Json sch = Json::object(); sch["enabled"] = true; sch["mode"] = "every"; Json ev = Json::object(); ev["value"] = 10; ev["unit"] = "minutes"; sch["every"] = ev;
+    sch["first_time"] = FormatLocalMin(UnixToLocalMin(t0)).replace_all(" ", "T");
+    Json el = Svc::Element(src, "vm1", "{VM}"); Json tg = Json::object(); tg["server"] = id; tg["directory"] = Unique(c_, "dlk") + "\\{VM}"; el["target"] = tg; el["verify"] = false;
+    Str task = s.saveTask("Domain wrong password", el, sch); T_CHECK(!task.empty());
+    int bad0 = BadPwd(dc, lockShort);          // до включения планировщика: первый запуск может случиться сразу
+    s.ok("scheduler.set", [] { Json a = Json::object(); a["enabled"] = true; return a; }()); Sleep(300);
+    const int N = 8;
+    for (int i = 0; i < N; ++i) { int h = s.historyCount(); g_fakeNow += 10 * 60; T_CHECK(s.waitHistory(h + 1, 30000)); }
+    int bad1 = BadPwd(dc, lockShort);
+    c_.note("%d scheduler runs with the wrong password: logon calls %d, badPwdCount of %s on the DC %d -> %d", N, cs.count(), lockShort.c_str(), bad0, bad1);
+    T_CHECK(cs.count() == 1);
+    if (bad0 >= 0 && bad1 >= 0) { T_CHECK(bad1 - bad0 >= 1 && bad1 - bad0 <= 2); T_CHECK(bad1 < 5); }   // одно обращение = Kerberos (+ NTLM) = +1..+2 (на lockuser измерено +1, на bkuser +2; раньше N запусков дали бы блокировку)
+    Json list = s.ok("servers.list", Json::object()); Json mark;
+    for (size_t i = 0; i < list.size(); ++i) if (list.at(i).get("id").str() == id) mark = list.at(i).get("auth_blocked");
+    T_CHECK(mark.is_object()); T_CHECK(mark.get("code").integer() == 1326);
+    Json hl = s.ok("history.list", [] { Json a = Json::object(); a["limit"] = 1; return a; }());
+    if (hl.size()) { Json ha = Json::object(); ha["id"] = hl.at(0).get("id").str(); Json rec = s.ok("history.get", ha); T_CHECK(rec.get("results").at(0).get("skipped").boolean()); c_.note("last run: %s", rec.get("results").at(0).get("message").str().c_str()); }
+    // учётная запись цела: верный пароль входит (и сбрасывает счётчик)
+    { Str e; Target* t = MakeTarget(SmbJson(dc.fqdn, dc.lockUser, dc.lockPw, ""), e); bool ok = t && t->connect(); if (!ok && t) c_.note("lockuser after the series: %s", t->err.c_str()); T_CHECK(ok); delete t; }
+    // новый пароль в записи сервера снимает блокировку: следующий запуск доходит до сервера и копирует
+    sv["id"] = id; sv["password"] = dc.lockPw; Json sb = Json::object(); sb["server"] = sv; s.ok("servers.save", sb);
+    int callsBefore = cs.count(); { int h = s.historyCount(); g_fakeNow += 10 * 60; T_CHECK(s.waitHistory(h + 1, 120000)); }
+    Json hl2 = s.ok("history.list", [] { Json a = Json::object(); a["limit"] = 1; return a; }());
+    c_.note("after the new password: logon calls +%d, last result %s", cs.count() - callsBefore, hl2.size() ? hl2.at(0).get("status").str().c_str() : "?");
+    T_CHECK(cs.count() > callsBefore); T_CHECK(hl2.size() && hl2.at(0).get("status").str() == "Success");
+    T_CHECK(!dc.leaks(s.transcript)); T_CHECK(s.transcript.find("auth_blocked") >= 0);
+    Json off = Json::object(); off["enabled"] = false; s.ok("scheduler.set", off);
     return true;
 }
 

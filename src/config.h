@@ -40,6 +40,15 @@ public:
     bool server(const Str& id, bool reveal, Json& out) const;
     bool saveServer(const Json& in, Json& saved, Str& err);
     bool deleteServer(const Str& id, Str& err);
+    // ---- the lock-out guard: servers whose credentials were refused ----
+    // A server that answered "wrong password / locked / disabled / expired" is marked in state.json (section "_auth_blocks": {server_id: {code,text,time,creds_fp}}, never in
+    // config.json: it is a state, not a setting, and it survives a restart of the service). The mark is valid only while creds_fp equals the fingerprint of the
+    // CURRENT record (a hash of type / address / port / user / path / key file and of the protected secrets): any edit of the login data removes it by itself.
+    // The fingerprint cannot be turned back into a password (it covers the DPAPI blob, which is salted). "local" has no credentials: never blocked.
+    Str credsFingerprint(const Str& serverId) const;         // "" = the server does not exist / has no credentials
+    bool authBlock(const Str& serverId, Json& out) const;    // {code,text,time}: a valid mark of this server
+    void setAuthBlock(const Str& serverId, const Str& fp, int code, const Str& text, i64 when);   // ignored when the record changed meanwhile (fp differs)
+    bool clearAuthBlock(const Str& serverId);                // true when there was a mark
 
     // ---- tasks ----
     Json tasks() const;                                    // public view
@@ -70,6 +79,10 @@ private:
     bool saveCfg(Str& err);
     bool saveHist();
     Json publicServer(const Json& s) const;
+    Str fingerprintOf(const Json& rawServer) const;
+    bool authBlockLocked(const Str& serverId, Json& out) const;
+    void persistState();
+    Json publicServerWithBlock(const Json& s) const;
     Json publicTask(const Json& t) const;
     void lock() const { EnterCriticalSection(&m_cs); }
     void unlock() const { LeaveCriticalSection(&m_cs); }

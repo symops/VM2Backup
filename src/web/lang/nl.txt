@@ -88,6 +88,7 @@ Create a self-signed certificate	Een zelfondertekend certificaat maken
 Create new self-signed...	Nieuw zelfondertekend certificaat maken...
 Create schedule...	Schema maken...
 Created	Gemaakt
+Credentials rejected since {0}: {1}	Aanmeldgegevens geweigerd sinds {0}: {1}
 Current password	Huidig wachtwoord
 Data folder	Gegevensmap
 Datacenter	Datacenter
@@ -233,6 +234,7 @@ Power on after restore	Inschakelen na herstel
 Press Load to read the datacenters, datastores, folders and resource pools of the server.	Klik op Laden om de datacenters, datastores, mappen en resourcepools van de server te lezen.
 Private key file	Bestand met persoonlijke sleutel
 Private key text	Tekst van persoonlijke sleutel
+Problem	Probleem
 Quiesce the guest file system (needs VMware Tools in the VM)	Het bestandssysteem van de gast quiescen (vereist VMware Tools in de VM)
 Recovery code	Herstelcode
 Recovery codes	Herstelcodes
@@ -285,6 +287,7 @@ Sign in	Aanmelden
 Sign out	Afmelden
 Sign-in failed.	Aanmelden mislukt.
 Size	Grootte
+Skipped: credentials rejected	Overgeslagen: aanmeldgegevens geweigerd
 Snapshot	Snapshot
 Source	Bron
 Source server	Bronserver
@@ -320,12 +323,14 @@ The certificate was installed.	Het certificaat is geïnstalleerd.
 The connection is tested now. "Test connection" tests again; "Finish" saves the server.	De verbinding wordt nu getest. "Verbinding testen" test opnieuw; "Voltooien" slaat de server op.
 The connection test failed or has not finished. Save the server anyway?	De verbindingstest is mislukt of nog niet voltooid. De server toch opslaan?
 The connection works.	De verbinding werkt.
+The credentials of this server were not rejected.	De aanmeldgegevens van deze server zijn niet geweigerd.
 The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	De datastore "{0}" heeft {1} vrij, de back-up bevat tot {2}. Toch herstellen?
 The figures are approximate (typical data). More CPU cores make compression faster.	De cijfers zijn bij benadering (typische gegevens). Meer CPU-kernen maken de compressie sneller.
 The file is larger than 1 MB.	Het bestand is groter dan 1 MB.
 The list is cut: only the first entries are shown.	De lijst is ingekort: alleen de eerste items worden getoond.
 The longest wait cannot be shorter than the first one.	De langste wachttijd mag niet korter zijn dan de eerste.
 The name of the virtual machine must be at most 80 characters and cannot contain slashes or %.	De naam van de virtuele machine mag maximaal 80 tekens bevatten en mag geen slashes of % bevatten.
+The next run will contact the server again.	De volgende uitvoering neemt weer contact op met de server.
 The password is too simple.	Het wachtwoord is te eenvoudig.
 The password must be at least 10 characters long.	Het wachtwoord moet minstens 10 tekens lang zijn.
 The password must not contain the user name.	Het wachtwoord mag de gebruikersnaam niet bevatten.
@@ -366,6 +371,7 @@ Transfer: plain FTP (not encrypted - enable encryption of the backup!)	Overdrach
 Trigger	Trigger
 Trust X-Forwarded-For from a reverse proxy on this computer	X-Forwarded-For vertrouwen van een reverse proxy op deze computer
 Trust this identity and test again	Deze identiteit vertrouwen en opnieuw testen
+Try again	Opnieuw proberen
 Tue	Di
 Two-factor	Tweestaps
 Type	Type
@@ -463,6 +469,7 @@ verify	verificatie
 viewer	kijker
 {0} datastore(s), {1} folder(s), {2} resource pool(s) found.	{0} datastore(s), {1} map(pen), {2} resourcepool(s) gevonden.
 {0} free of {1}	{0} vrij van {1}
+{0} skipped: credentials rejected	{0} overgeslagen: aanmeldgegevens geweigerd
 {0} virtual machine(s)	{0} virtuele machine(s)
 {0} volume(s)	{0} volume(s)
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: ongeveer {1} MB/s per CPU-kern; back-ups zijn ongeveer {2}% groter dan op niveau 5.

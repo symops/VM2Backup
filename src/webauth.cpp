@@ -59,7 +59,7 @@ void HmacSha1(const void* key, size_t klen, const void* data, size_t n, u8 out[2
 
 Str RandomHex(size_t bytes) { Bytes b; b.resize(bytes); RandomBytes(b.data(), bytes); return HexEncode(b.data(), bytes); }
 
-const char* const kAdminCmds[] = { "state", "scheduler.set", "settings.get", "settings.set", "servers.list", "servers.save", "servers.delete", "servers.test", "servers.vms",
+const char* const kAdminCmds[] = { "state", "scheduler.set", "settings.get", "settings.set", "servers.list", "servers.save", "servers.delete", "servers.unblock", "servers.test", "servers.vms",
     "tasks.list", "tasks.save", "tasks.copy", "tasks.delete", "tasks.run", "tasks.next", "backup.run", "jobs.list", "jobs.abort", "history.list", "history.get", "history.clear",
     "backups.list", "backups.verify", "backups.restore", "backups.restore_esxi", "esxi.restore_options", "net.drives", "net.browse", "fs.browse", "backups.delete", "resumable.discard",
     "web.status", "web.settings.get", "web.settings.set", "web.interfaces.list", "web.cert.generate", "web.cert.import", "web.users.list", "web.users.save", "web.users.delete",

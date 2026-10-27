@@ -124,7 +124,7 @@ def raw_exchange(payload, timeout=10, read_all=True):
 
 def status_of(raw): return int(raw[9:12]) if raw.startswith(b'HTTP/1.1 ') else 0
 
-ALL_CMDS = ['state', 'scheduler.set', 'settings.get', 'settings.set', 'servers.list', 'servers.save', 'servers.delete', 'servers.test', 'servers.vms', 'tasks.list', 'tasks.save', 'tasks.copy', 'tasks.delete',
+ALL_CMDS = ['state', 'scheduler.set', 'settings.get', 'settings.set', 'servers.list', 'servers.save', 'servers.delete', 'servers.unblock', 'servers.test', 'servers.vms', 'tasks.list', 'tasks.save', 'tasks.copy', 'tasks.delete',
             'tasks.run', 'tasks.next', 'backup.run', 'jobs.list', 'jobs.abort', 'history.list', 'history.get', 'history.clear', 'backups.list', 'backups.verify', 'backups.restore', 'backups.delete', 'resumable.discard']
 VIEWER = {'state', 'servers.list', 'tasks.list', 'tasks.next', 'jobs.list', 'history.list', 'history.get', 'backups.list'}
 OPERATOR = VIEWER | {'tasks.run', 'jobs.abort', 'backup.run', 'backups.verify'}
@@ -312,7 +312,7 @@ def t_roles_table():
     for n in ('adm', 'op', 'vw'):
         advance(200); c = Client(); st, j = c.login(n, PW[n]); check(st == 200, 'role client ' + n); clients[n] = c
     expect = {'adm': set(ALL_CMDS) | set(ESXI_CMDS) | set(WEB_SAFE), 'op': OPERATOR, 'vw': VIEWER}
-    benign = {'tasks.next': {'id': 'nothing'}, 'tasks.run': {'id': 'nothing'}, 'jobs.abort': {'id': 'nothing'}, 'history.get': {'id': 'nothing'}, 'servers.delete': {'id': 'nothing'},
+    benign = {'tasks.next': {'id': 'nothing'}, 'tasks.run': {'id': 'nothing'}, 'jobs.abort': {'id': 'nothing'}, 'history.get': {'id': 'nothing'}, 'servers.delete': {'id': 'nothing'}, 'servers.unblock': {'id': 'nothing'},
               'tasks.delete': {'id': 'nothing'}, 'tasks.copy': {'id': 'nothing'}, 'servers.test': {'id': 'nothing'}, 'servers.vms': {'id': 'nothing'}, 'backups.list': {'server': 'nothing'}, 'backup.run': {'element': {}},
               'backups.verify': {}, 'backups.restore': {}, 'backups.delete': {'server': 'nothing'}, 'resumable.discard': {'server': 'nothing'}, 'settings.set': {}, 'scheduler.set': {'enabled': False},
               'servers.save': {'server': {'type': 'scp', 'name': 'x'}}, 'tasks.save': {'task': {}}, 'history.clear': {}}

@@ -88,6 +88,7 @@ Create a self-signed certificate	Otomatik imzalı sertifika oluştur
 Create new self-signed...	Yeni otomatik imzalı oluştur...
 Create schedule...	Zamanlama oluştur...
 Created	Oluşturuldu
+Credentials rejected since {0}: {1}	Kimlik bilgileri {0} tarihinden beri reddedildi: {1}
 Current password	Geçerli parola
 Data folder	Veri klasörü
 Datacenter	Veri merkezi
@@ -233,6 +234,7 @@ Power on after restore	Geri yüklemeden sonra aç
 Press Load to read the datacenters, datastores, folders and resource pools of the server.	Sunucunun veri merkezlerini, veri depolarını, klasörlerini ve kaynak havuzlarını okumak için Yükle'ye basın.
 Private key file	Özel anahtar dosyası
 Private key text	Özel anahtar metni
+Problem	Sorun
 Quiesce the guest file system (needs VMware Tools in the VM)	Konuk dosya sistemini sessize al (VM'de VMware Tools gerekir)
 Recovery code	Kurtarma kodu
 Recovery codes	Kurtarma kodları
@@ -285,6 +287,7 @@ Sign in	Oturum aç
 Sign out	Oturumu kapat
 Sign-in failed.	Oturum açılamadı.
 Size	Boyut
+Skipped: credentials rejected	Atlandı: kimlik bilgileri reddedildi
 Snapshot	Anlık görüntü
 Source	Kaynak
 Source server	Kaynak sunucu
@@ -320,12 +323,14 @@ The certificate was installed.	Sertifika yüklendi.
 The connection is tested now. "Test connection" tests again; "Finish" saves the server.	Bağlantı şimdi sınanıyor. "Bağlantıyı sına" yeniden sınar; "Bitir" sunucuyu kaydeder.
 The connection test failed or has not finished. Save the server anyway?	Bağlantı sınaması başarısız oldu veya bitmedi. Sunucu yine de kaydedilsin mi?
 The connection works.	Bağlantı çalışıyor.
+The credentials of this server were not rejected.	Bu sunucunun kimlik bilgileri reddedilmedi.
 The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	"{0}" veri deposunda {1} boş alan var, yedek en çok {2} içeriyor. Yine de geri yüklensin mi?
 The figures are approximate (typical data). More CPU cores make compression faster.	Rakamlar yaklaşıktır (tipik veriler). Daha fazla CPU çekirdeği sıkıştırmayı hızlandırır.
 The file is larger than 1 MB.	Dosya 1 MB'tan büyük.
 The list is cut: only the first entries are shown.	Liste kesildi: yalnızca ilk girdiler gösteriliyor.
 The longest wait cannot be shorter than the first one.	En uzun bekleme ilkinden kısa olamaz.
 The name of the virtual machine must be at most 80 characters and cannot contain slashes or %.	Sanal makinenin adı en çok 80 karakter olabilir; eğik çizgi veya '%' karakteri içeremez.
+The next run will contact the server again.	Sonraki çalıştırma sunucuyla yeniden bağlantı kuracak.
 The password is too simple.	Parola çok basit.
 The password must be at least 10 characters long.	Parola en az 10 karakter uzunluğunda olmalıdır.
 The password must not contain the user name.	Parola kullanıcı adını içermemelidir.
@@ -366,6 +371,7 @@ Transfer: plain FTP (not encrypted - enable encryption of the backup!)	Aktarım:
 Trigger	Tetikleyici
 Trust X-Forwarded-For from a reverse proxy on this computer	Bu bilgisayardaki bir ters proxy'den gelen X-Forwarded-For değerine güven
 Trust this identity and test again	Bu kimliğe güven ve yeniden sına
+Try again	Yeniden dene
 Tue	Sal
 Two-factor	İki aşamalı
 Type	Tür
@@ -463,6 +469,7 @@ verify	doğrulama
 viewer	görüntüleyici
 {0} datastore(s), {1} folder(s), {2} resource pool(s) found.	{0} veri deposu, {1} klasör, {2} kaynak havuzu bulundu.
 {0} free of {1}	{1} içinde {0} boş
+{0} skipped: credentials rejected	{0} atlandı: kimlik bilgileri reddedildi
 {0} virtual machine(s)	{0} sanal makine
 {0} volume(s)	{0} birim
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: CPU çekirdeği başına yaklaşık {1} MB/s; yedekler 5. düzeye göre yaklaşık %{2} daha büyüktür.

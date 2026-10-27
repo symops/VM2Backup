@@ -88,6 +88,7 @@ Create a self-signed certificate	Стварэнне самападпісанаг
 Create new self-signed...	Стварыць новы самападпісаны...
 Create schedule...	Стварыць расклад...
 Created	Створана
+Credentials rejected since {0}: {1}	Уліковыя даныя адхілены з {0}: {1}
 Current password	Бягучы пароль
 Data folder	Папка даных
 Datacenter	Цэнтр апрацоўкі даных
@@ -233,6 +234,7 @@ Power on after restore	Уключыць пасля аднаўлення
 Press Load to read the datacenters, datastores, folders and resource pools of the server.	Націсніце «Загрузіць», каб прачытаць цэнтры апрацоўкі даных, сховішчы даных, папкі і пулы рэсурсаў сервера.
 Private key file	Файл закрытага ключа
 Private key text	Тэкст закрытага ключа
+Problem	Праблема
 Quiesce the guest file system (needs VMware Tools in the VM)	Замарозіць файлавую сістэму гасця (патрэбны VMware Tools у ВМ)
 Recovery code	Код аднаўлення
 Recovery codes	Коды аднаўлення
@@ -285,6 +287,7 @@ Sign in	Увайсці
 Sign out	Выйсці
 Sign-in failed.	Не ўдалося ўвайсці.
 Size	Памер
+Skipped: credentials rejected	Прапушчана: уліковыя даныя адхілены
 Snapshot	Здымак
 Source	Крыніца
 Source server	Сервер-крыніца
@@ -320,12 +323,14 @@ The certificate was installed.	Сертыфікат усталяваны.
 The connection is tested now. "Test connection" tests again; "Finish" saves the server.	Зараз правяраецца злучэнне. «Праверыць падключэнне» паўтарае праверку; «Гатова» захоўвае сервер.
 The connection test failed or has not finished. Save the server anyway?	Праверка злучэння не ўдалася або не скончылася. Усё роўна захаваць сервер?
 The connection works.	Злучэнне працуе.
+The credentials of this server were not rejected.	Уліковыя даныя гэтага сервера не адхілялі.
 The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	На сховішчы даных «{0}» вольна {1}, а копія займае да {2}. Усё роўна аднавіць?
 The figures are approximate (typical data). More CPU cores make compression faster.	Лічбы прыблізныя (тыповыя даныя). Чым больш ядраў працэсара, тым хутчэйшае сцісканне.
 The file is larger than 1 MB.	Файл большы за 1 МБ.
 The list is cut: only the first entries are shown.	Спіс абрэзаны: паказаны толькі першыя запісы.
 The longest wait cannot be shorter than the first one.	Самая доўгая паўза не можа быць карацейшай за першую.
 The name of the virtual machine must be at most 80 characters and cannot contain slashes or %.	Назва віртуальнай машыны павінна быць не даўжэйшай за 80 сімвалаў, без касых рысак і %.
+The next run will contact the server again.	Наступны запуск зноў звернецца да сервера.
 The password is too simple.	Пароль занадта просты.
 The password must be at least 10 characters long.	Пароль павінен быць не карацейшым за 10 сімвалаў.
 The password must not contain the user name.	Пароль не павінен змяшчаць імя карыстальніка.
@@ -366,6 +371,7 @@ Transfer: plain FTP (not encrypted - enable encryption of the backup!)	Пера�
 Trigger	Запуск
 Trust X-Forwarded-For from a reverse proxy on this computer	Давяраць X-Forwarded-For ад зваротнага проксі на гэтым камп'ютары
 Trust this identity and test again	Давяраць гэтай ідэнтычнасці і праверыць зноў
+Try again	Паўтарыць
 Tue	Аў
 Two-factor	Двухфактарная праверка
 Type	Тып
@@ -463,6 +469,7 @@ verify	праверка
 viewer	назіральнік
 {0} datastore(s), {1} folder(s), {2} resource pool(s) found.	Знойдзена: сховішчаў даных — {0}, папак — {1}, пулаў рэсурсаў — {2}.
 {0} free of {1}	вольна {0} з {1}
+{0} skipped: credentials rejected	Прапушчана: {0} (уліковыя даныя адхілены)
 {0} virtual machine(s)	Віртуальных машын: {0}
 {0} volume(s)	тамоў: {0}
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: каля {1} МБ/с на адно ядро; копіі прыкладна на {2}% большыя, чым на ўзроўні 5.

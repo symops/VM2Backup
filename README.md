@@ -26,6 +26,12 @@ for a possible restore in `/home/symo/Claude/.wip/gui-full-backup/` (sources, la
 * **Resume:** a backup, a verification and a restore continue after a lost connection (volume by volume) and after a restart of
   the service. Restore to ESXi uploads whole files (HTTP PUT cannot append): a lost connection re-sends the current file.
 * **Restore:** to a folder, or to an ESXi host / vCenter (files are uploaded and the VM is registered); both from the web site's Backup Explorer ("Restore to": Folder / ESXi host or vCenter, with the same choices as the old Windows dialog; admin role only, because the service writes as SYSTEM / connects with stored credentials).
+* **Lock-out protection:** a domain account is locked after a few wrong passwords, and one call to a server with a wrong password counts twice (Kerberos, then NTLM; measured on a real
+  domain controller). So when a server (SMB, FTP, SCP, ESXi / vCenter, a VM folder on a share) refuses the credentials (wrong / locked / disabled / expired password, logon not allowed;
+  never a network error or a timeout), the service remembers it in `state.json` and does **not contact that server again** from a scheduled run or from another element of the same task:
+  the element ends `Failed` with the mark "skipped" and the text "The credentials of server ... were rejected on ...; not tried again until the server record is changed or "Try again" is pressed".
+  Changing the login data of the record (user, password, address, port, key) lifts the block by itself; so does "Try again" on the Datacenter page (`servers.unblock`, admin) and a successful
+  connection. A manual run and "Test connection" make exactly one attempt and update the mark. Other servers are not affected. Details: `docs/WEB.md`.
 * **Scheduler:** every N minutes/hours/days, weekly, monthly, once; time windows with a speed limit per window; bandwidth limit.
 * **Web site (on by default, localhost only):** HTTPS, users with roles (admin / operator / viewer), TOTP 2FA, listening interfaces
   chosen by the administrator. A fresh installation has the user `admin` with the password `admin`; the site listens on localhost only

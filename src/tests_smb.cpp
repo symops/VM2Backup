@@ -7,6 +7,8 @@
 #include "config.h"
 #include "smb.h"
 #include "tests_svc.h"
+#include "schedule.h"
+#include <winsock2.h>
 
 namespace vm2b {
 namespace {
@@ -18,10 +20,11 @@ struct FakeNet {
     Vec<Cred> accepted;           // user + password pairs the "server" accepts
     bool anonymous;               // accepts a connection without credentials
     bool down;                    // every connection attempt fails: network unreachable
+    unsigned long force;          // not 0: the answer of every connection attempt (1909 locked, 1331 disabled ...)
     int adds, cancels;
     Vec<Str> conns;               // "server|user" of the open connections
     Vec<Str> log;
-    FakeNet() : anonymous(false), down(false), adds(0), cancels(0) {}
+    FakeNet() : anonymous(false), down(false), force(0), adds(0), cancels(0) {}
 };
 FakeNet g_f;
 
@@ -32,6 +35,7 @@ unsigned long FakeAdd(const wchar_t* remote, const wchar_t* user, const wchar_t*
     Str r = FromWide(remote).lower(), u = user ? FromWide(user) : Str(), p = pass ? FromWide(pass) : Str();
     ++g_f.adds; g_f.log.push_back("add " + r + " user=" + (user ? u : Str("<none>")));
     if (g_f.down) return 1231;
+    if (g_f.force) return g_f.force;
     if (ServerPart(r) != ServerPart(g_f.share)) return 53;
     if (r != g_f.share) return 67;
     Str srv = ServerPart(r);
@@ -549,6 +553,250 @@ VM2B_TEST("smb", service_save_test_and_backup)
     // a server in use cannot be deleted; deleting the task first lets it go
     Json del = Json::object(); del["id"] = id; T_CHECK(!s.call("servers.delete", del));
     return true;
+}
+
+// ---- the lock-out guard (a wrong password is not offered again and again) -----------------------------------------------
+namespace {
+
+Str SaveSmbServer(Svc& s, const char* name, const char* user, const char* pass)
+{
+    Json sv = Json::object(); sv["type"] = "smb"; sv["name"] = name; sv["path"] = "\\\\fileserver\\backup\\vm2b"; sv["user"] = user; sv["password"] = pass;
+    Json a = Json::object(); a["server"] = sv; return s.ok("servers.save", a).get("id").str();
+}
+Json SaveSmbWithId(Svc& s, const Str& id, const char* name, const char* user, const char* pass)
+{
+    Json sv = Json::object(); sv["id"] = id; sv["type"] = "smb"; sv["name"] = name; sv["path"] = "\\\\fileserver\\backup\\vm2b"; sv["user"] = user; sv["password"] = pass;
+    Json a = Json::object(); a["server"] = sv; return s.ok("servers.save", a);
+}
+Json ServerOf(Svc& s, const Str& id)
+{
+    Json l = s.ok("servers.list", Json::object()); for (size_t i = 0; i < l.size(); ++i) if (l.at(i).get("id").str() == id) return l.at(i);
+    return Json::object();
+}
+Json EveryTen(i64 t0)
+{
+    Json sch = Json::object(); sch["enabled"] = true; sch["mode"] = "every"; Json ev = Json::object(); ev["value"] = 10; ev["unit"] = "minutes"; sch["every"] = ev;
+    sch["first_time"] = FormatLocalMin(UnixToLocalMin(t0)).replace_all(" ", "T"); return sch;
+}
+Json ElementTo(const Str& src, const Str& tgtServer) { Json el = Svc::Element(src, "vm1", "{VM}"); Json tg = Json::object(); tg["server"] = tgtServer; tg["directory"] = "{VM}"; el["target"] = tg; el["verify"] = false; return el; }
+// one scheduler pass per fake 10 minutes; waits for the run of every pass to be in the history
+void Passes(Svc& s, int n)
+{
+    for (int i = 0; i < n; ++i) { int h = s.historyCount(); g_fakeNow += 10 * 60; s.waitHistory(h + 1, 20000); }
+}
+Json LastRecord(Svc& s)
+{
+    Json l = s.ok("history.list", [] { Json a = Json::object(); a["limit"] = 1; return a; }());
+    if (l.size() == 0) return Json::object();
+    Json a = Json::object(); a["id"] = l.at(0).get("id").str(); return s.ok("history.get", a);
+}
+Str ReadAll(const Str& path) { Bytes b; Str e; if (!ReadWholeFile(path.c_str(), b, e)) return Str(); return Str((const char*)b.data(), b.size()); }
+
+} // namespace
+
+VM2B_TEST("smb", auth_guard_scheduled_task_one_attempt)
+{
+    FakeScope fs(c_, "smbag");
+    Svc s(c_, "smbag2", true); if (!s.up) return false;
+    s.record = true;
+    Str vms = s.tmp.sub("vms"); WriteBytes(JoinPath(vms, "vm1\\disk.vmdk"), Random(c_, 60000)); Str src = s.addDirServer(vms);
+    const char* bad = "Wr0ng-Pw-Lockout-1"; const char* good = "S3cr3t-Pa55-\xc3\xbc";
+    Str id = SaveSmbServer(s, "Share", "backupuser", bad);
+    g_fakeNow = (i64)UnixNow() + 3600; i64 t0 = g_fakeNow;
+    Str task = s.saveTask("ToShare", ElementTo(src, id), EveryTen(t0)); T_CHECK(!task.empty());
+    s.ok("scheduler.set", [] { Json a = Json::object(); a["enabled"] = true; return a; }());
+    Sleep(200);
+    Passes(s, 6);
+    c_.note("6 scheduler passes with a wrong password: %d WNetAddConnection2W call(s)", g_f.adds);
+    T_CHECK(g_f.adds == 1);                                                                           // the first run asked once, the other five did not touch the server
+    Json rec = LastRecord(s); T_CHECK(rec.get("status").str() == "Failed");
+    T_CHECK(rec.get("results").size() == 1 && rec.get("results").at(0).get("skipped").boolean());
+    T_CHECK(rec.get("results").at(0).get("message").str().find("were rejected") >= 0); T_CHECK(rec.get("results").at(0).get("message").str().find("1326") >= 0);
+    T_CHECK(rec.get("results").at(0).get("message").str().find("Try again") >= 0);
+    Json sv = ServerOf(s, id); T_CHECK(sv.get("auth_blocked").is_object()); T_CHECK(sv.get("auth_blocked").get("code").integer() == 1326); T_CHECK(sv.get("auth_blocked").get("time").integer() > 0);
+    T_CHECK(sv.dump().find(bad) < 0);
+    // the first record of the series is a real attempt, not a skip
+    { Json hl = s.ok("history.list", [] { Json a = Json::object(); a["limit"] = 50; return a; }()); Json oldest = hl.at(hl.size() - 1); Json a = Json::object(); a["id"] = oldest.get("id").str(); Json r0 = s.ok("history.get", a);
+      T_CHECK(!r0.get("results").at(0).get("skipped").boolean()); T_CHECK(r0.get("results").at(0).get("message").str().find("(1326)") >= 0); }
+    // the mark is in state.json (not in config.json) and holds no password; the service restarts and still does not try
+    Str stJson = ReadAll(JoinPath(s.core.config().dataDir(), "state.json")), cfgJson = ReadAll(JoinPath(s.core.config().dataDir(), "config.json"));
+    T_CHECK(stJson.find("_auth_blocks") >= 0 && stJson.find("creds_fp") >= 0); T_CHECK(cfgJson.find("auth_blocked") < 0 && cfgJson.find("creds_fp") < 0);
+    T_CHECK(stJson.find(bad) < 0 && stJson.find("Wr0ng") < 0);
+    T_CHECK(s.restart()); s.ok("scheduler.set", [] { Json a = Json::object(); a["enabled"] = true; return a; }()); Sleep(200);
+    T_CHECK(ServerOf(s, id).get("auth_blocked").is_object());
+    Passes(s, 3); T_CHECK(g_f.adds == 1);
+    // an edit of the record that does not touch the login data (the name) keeps the block; a new password lifts it and the next run goes through
+    { Json r = ServerOf(s, id); r["password"] = kMask; r["name"] = "Share renamed"; Json a = Json::object(); a["server"] = r; s.ok("servers.save", a); }
+    T_CHECK(ServerOf(s, id).get("auth_blocked").is_object()); Passes(s, 1); T_CHECK(g_f.adds == 1);
+    SaveSmbWithId(s, id, "Share renamed", "backupuser", good);
+    T_CHECK(!ServerOf(s, id).get("auth_blocked").is_object());
+    Passes(s, 1); T_CHECK(g_f.adds >= 2); T_CHECK(LastRecord(s).get("status").str() == "Success");
+    int addsOk = g_f.adds;
+    // the password goes stale again: one more attempt, then silence; "Try again" gives exactly one more
+    SaveSmbWithId(s, id, "Share renamed", "backupuser", "Stale-pw-2");
+    Passes(s, 4); T_CHECK(g_f.adds == addsOk + 1); T_CHECK(ServerOf(s, id).get("auth_blocked").is_object());
+    { Json a = Json::object(); a["id"] = id; Json r = s.ok("servers.unblock", a); T_CHECK(r.get("was_blocked").boolean()); }
+    T_CHECK(!ServerOf(s, id).get("auth_blocked").is_object());
+    Passes(s, 4); T_CHECK(g_f.adds == addsOk + 2); T_CHECK(ServerOf(s, id).get("auth_blocked").is_object());
+    { Json a = Json::object(); a["id"] = "nope"; T_CHECK(!s.call("servers.unblock", a)); T_CHECK(s.lastErr.find("not found") >= 0); }
+    // a manual run is an explicit action: ONE attempt each time, and a new refusal sets the mark again
+    int before = g_f.adds;
+    { Json a = Json::object(); a["id"] = task; Json r = s.ok("tasks.run", a); Str st = s.waitJob(r.get("job").str()); T_CHECK(st == "Failed" || st == "Gone"); }
+    T_CHECK(g_f.adds == before + 1); T_CHECK(ServerOf(s, id).get("auth_blocked").is_object());
+    { Json a = Json::object(); a["id"] = task; Json r = s.ok("tasks.run", a); s.waitJob(r.get("job").str()); }
+    T_CHECK(g_f.adds == before + 2);
+    // "Test connection" is explicit too: one attempt; a success removes the mark
+    { Json a = Json::object(); a["id"] = id; T_CHECK(!s.call("servers.test", a)); T_CHECK(g_f.adds == before + 3); T_CHECK(ServerOf(s, id).get("auth_blocked").is_object()); }
+    SaveSmbWithId(s, id, "Share renamed", "backupuser", good);
+    { Json a = Json::object(); a["id"] = id; T_CHECK(s.call("servers.test", a)); T_CHECK(!ServerOf(s, id).get("auth_blocked").is_object()); }
+    // the backup explorer does not knock on a closed door either
+    SaveSmbWithId(s, id, "Share renamed", "backupuser", "Stale-pw-3");
+    { Json a = Json::object(); a["id"] = id; T_CHECK(!s.call("servers.test", a)); }
+    before = g_f.adds; { Json a = Json::object(); a["server"] = id; a["directory"] = "{VM}"; T_CHECK(!s.call("backups.list", a)); T_CHECK(s.lastErr.find("were rejected") >= 0); } T_CHECK(g_f.adds == before);
+    // nothing anywhere holds a password
+    T_CHECK(s.transcript.find(bad) < 0); T_CHECK(s.transcript.find("Stale-pw") < 0); T_CHECK(s.transcript.find("Wr0ng") < 0); T_CHECK(s.transcript.find("S3cr3t") < 0);
+    stJson = ReadAll(JoinPath(s.core.config().dataDir(), "state.json")); T_CHECK(stJson.find("Stale-pw") < 0 && stJson.find("S3cr3t") < 0);
+    Str hist = ReadAll(JoinPath(s.core.config().dataDir(), "history.json")); T_CHECK(hist.find("Stale-pw") < 0 && hist.find(bad) < 0 && hist.find("S3cr3t") < 0);
+    Str logs = ReadAll(JoinPath(s.core.config().dataDir(), "service.log")); T_CHECK(logs.find("Stale-pw") < 0 && logs.find(bad) < 0);
+    Json off = Json::object(); off["enabled"] = false; s.ok("scheduler.set", off);
+    return true;
+}
+
+VM2B_TEST("smb", auth_guard_codes_transient_and_independence)
+{
+    FakeScope fs(c_, "smbag3");
+    // which codes are a refusal of the credentials
+    { const unsigned long yes[] = { 86, 1326, 1909, 1331, 1330, 1907, 1385, 1327, 1328 }; for (unsigned long k : yes) T_CHECK(SmbIsAuthCode(k));
+      const unsigned long no[] = { 0, 5, 53, 67, 1219, 1231, 1225, 1311, 1460, 121, 1203, 1396, 2250, 64 }; for (unsigned long k : no) T_CHECK(!SmbIsAuthCode(k)); }
+    Svc s(c_, "smbag4", true); if (!s.up) return false;
+    Str vms = s.tmp.sub("vms"); WriteBytes(JoinPath(vms, "vm1\\disk.vmdk"), Random(c_, 40000)); Str src = s.addDirServer(vms);
+    g_fakeNow = (i64)UnixNow() + 3600; i64 t0 = g_fakeNow;
+    // a network error never blocks
+    Str net = SaveSmbServer(s, "Net", "backupuser", "S3cr3t-Pa55-\xc3\xbc");
+    Str tNet = s.saveTask("Net task", ElementTo(src, net), EveryTen(t0));
+    s.ok("scheduler.set", [] { Json a = Json::object(); a["enabled"] = true; return a; }()); Sleep(200);
+    g_f.down = true; Passes(s, 3); T_CHECK(g_f.adds >= 3); T_CHECK(!ServerOf(s, net).get("auth_blocked").is_object());
+    int a3 = g_f.adds; g_f.down = false; Passes(s, 1); T_CHECK(g_f.adds > a3); T_CHECK(LastRecord(s).get("status").str() == "Success");
+    // every refusal code sets the mark; "access denied" (5) and the connection conflict (1219) do not
+    const unsigned long codes[] = { 1909, 1331, 1330, 1907, 1385, 1326 };
+    for (unsigned long code : codes) {
+        g_f.force = code; Json a = Json::object(); a["id"] = net; T_CHECK(!s.call("servers.test", a));
+        Json b = ServerOf(s, net).get("auth_blocked"); T_CHECK(b.is_object() && (unsigned long)b.get("code").integer() == code);
+        if (code != 1326) { g_f.force = 0; Json u = Json::object(); u["id"] = net; s.ok("servers.unblock", u); }
+    }
+    g_f.force = 5; { Json u = Json::object(); u["id"] = net; s.ok("servers.unblock", u); Json a = Json::object(); a["id"] = net; T_CHECK(!s.call("servers.test", a)); T_CHECK(!ServerOf(s, net).get("auth_blocked").is_object()); }
+    g_f.force = 1219; { Json a = Json::object(); a["id"] = net; T_CHECK(!s.call("servers.test", a)); T_CHECK(!ServerOf(s, net).get("auth_blocked").is_object()); }
+    g_f.force = 0;
+    // two servers: the refused one does not stop the other, even inside one task; two elements on the refused server = one attempt
+    Str bad = SaveSmbServer(s, "Bad", "backupuser", "Nope-1");
+    Str ok2 = SaveSmbServer(s, "Good", "corp\\other", "Other-Pw-77");
+    s.ok("scheduler.set", [] { Json a = Json::object(); a["enabled"] = false; return a; }());
+    Json t = Json::object(); t["name"] = "Mixed"; t["enabled"] = true; Json els = Json::array();
+    Json e1 = ElementTo(src, bad), e2 = ElementTo(src, ok2), e3 = ElementTo(src, bad); els.push(e1); els.push(e2); els.push(e3); t["elements"] = els;
+    Json sa = Json::object(); sa["task"] = t; Str mixed = s.ok("tasks.save", sa).get("id").str();
+    int before = g_f.adds;
+    { Json a = Json::object(); a["id"] = mixed; Json r = s.ok("tasks.run", a); s.waitJob(r.get("job").str()); }
+    Json rec = LastRecord(s); T_CHECK(rec.get("results").size() == 3);
+    T_CHECK(rec.get("results").at(0).get("status").str() == "Failed" && !rec.get("results").at(0).get("skipped").boolean());
+    T_CHECK(rec.get("results").at(1).get("status").str() == "Success");
+    T_CHECK(rec.get("results").at(2).get("status").str() == "Failed" && rec.get("results").at(2).get("skipped").boolean());
+    c_.note("mixed task: %d connection attempt(s) (one refused + one good)", g_f.adds - before);
+    T_CHECK(g_f.adds - before == 2);
+    T_CHECK(ServerOf(s, bad).get("auth_blocked").is_object()); T_CHECK(!ServerOf(s, ok2).get("auth_blocked").is_object());
+    return true;
+}
+
+VM2B_TEST("smb", auth_guard_old_state_file_is_read)
+{
+    Tmp tmp(c_, "smbag5"); Str dir = tmp.sub("data");
+    { Svc* none = nullptr; (void)none; }
+    Str e; MakeDirs(dir, e);
+    Str old = "{\n  \"abc123\": { \"last_status\": \"Success\", \"last_end\": 1760000000 }\n}\n";
+    T_CHECK(WriteWholeFile(JoinPath(dir, "state.json").c_str(), old.data(), old.size(), e));
+    Config cfg; T_CHECK(cfg.open(dir, e));
+    T_CHECK(cfg.servers().size() == 1); T_CHECK(cfg.taskState("abc123").get("last_status").str() == "Success");
+    Json b; T_CHECK(!cfg.authBlock("x", b)); T_CHECK(!cfg.clearAuthBlock("x"));
+    Json sv = Json::object(); sv["type"] = "smb"; sv["name"] = "S"; sv["path"] = "\\\\h\\s"; sv["user"] = "u"; sv["password"] = "pw-aaa-111"; Json saved; T_CHECK(cfg.saveServer(sv, saved, e));
+    Str id = saved.get("id").str(); Str fp = cfg.credsFingerprint(id); T_CHECK(fp.size() == 32); T_CHECK(fp.find("pw-aaa") < 0);
+    cfg.setAuthBlock(id, fp, 1326, "wrong (1326)", 1760000001); T_CHECK(cfg.authBlock(id, b)); T_CHECK(b.get("code").integer() == 1326);
+    cfg.setAuthBlock(id, "deadbeef", 1909, "ignored: the record changed meanwhile", 5); T_CHECK(cfg.authBlock(id, b) && b.get("code").integer() == 1326);
+    Config again; T_CHECK(again.open(dir, e)); T_CHECK(again.authBlock(id, b)); T_CHECK(b.get("time").integer() == 1760000001);          // survives a restart
+    T_CHECK(again.taskState("abc123").get("last_status").str() == "Success");                                                          // the task states are untouched
+    sv["id"] = id; sv["password"] = "pw-bbb-222"; T_CHECK(again.saveServer(sv, saved, e)); T_CHECK(!again.authBlock(id, b)); T_CHECK(!saved.has("auth_blocked"));
+    T_CHECK(ReadAll(JoinPath(dir, "state.json")).find("creds_fp") < 0);
+    Str fp2 = again.credsFingerprint(id); T_CHECK(fp2 != fp);
+    sv["user"] = "u2"; sv["password"] = kMask; T_CHECK(again.saveServer(sv, saved, e)); T_CHECK(again.credsFingerprint(id) != fp2);
+    sv["user"] = "u2"; sv["name"] = "S renamed"; sv["password"] = kMask; Str fp3 = again.credsFingerprint(id); T_CHECK(again.saveServer(sv, saved, e)); T_CHECK(again.credsFingerprint(id) == fp3);   // a rename is not a credentials change
+    T_CHECK(again.credsFingerprint("local").empty());
+    return true;
+}
+
+// ---- a fake FTP server that refuses every password with 530 ------------------------------------------------------------
+namespace {
+struct FakeFtp { SOCKET ls; int port; volatile LONG logins, stop; HANDLE th; };
+DWORD WINAPI FakeFtpThread(LPVOID p)
+{
+    FakeFtp* f = (FakeFtp*)p;
+    while (!f->stop) {
+        fd_set rs; FD_ZERO(&rs); FD_SET(f->ls, &rs); timeval tv = { 0, 100000 };
+        if (select(0, &rs, nullptr, nullptr, &tv) <= 0) continue;
+        SOCKET c = accept(f->ls, nullptr, nullptr); if (c == INVALID_SOCKET) continue;
+        send(c, "220 fake\r\n", 10, 0);
+        Str buf; DWORD t0 = GetTickCount();
+        while (!f->stop && GetTickCount() - t0 < 5000) {
+            fd_set r2; FD_ZERO(&r2); FD_SET(c, &r2); timeval t2 = { 0, 100000 };
+            int sel = select(0, &r2, nullptr, nullptr, &t2); if (sel <= 0) continue;
+            char tmp[256]; int n = recv(c, tmp, sizeof(tmp), 0); if (n <= 0) break; buf.append(tmp, (size_t)n);
+            for (;;) {
+                int nl = buf.find('\n'); if (nl < 0) break; Str line = buf.substr(0, (size_t)nl); buf = buf.substr((size_t)nl + 1);
+                const char* r = "502 not implemented\r\n";
+                if (line.starts_with("USER")) r = "331 password required\r\n"; else if (line.starts_with("PASS")) { InterlockedIncrement(&f->logins); r = "530 Login incorrect.\r\n"; } else if (line.starts_with("QUIT")) r = "221 bye\r\n";
+                send(c, r, (int)strlen(r), 0);
+            }
+        }
+        closesocket(c);
+    }
+    return 0;
+}
+}
+
+VM2B_TEST("smb", auth_guard_ftp_530)
+{
+    WSADATA wd; WSAStartup(MAKEWORD(2, 2), &wd);
+    FakeFtp f; f.logins = 0; f.stop = 0; f.ls = socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in a; memset(&a, 0, sizeof(a)); a.sin_family = AF_INET; a.sin_addr.s_addr = htonl(INADDR_LOOPBACK); a.sin_port = 0;
+    T_CHECK(bind(f.ls, (sockaddr*)&a, sizeof(a)) == 0); T_CHECK(listen(f.ls, 4) == 0);
+    int al = sizeof(a); getsockname(f.ls, (sockaddr*)&a, &al); f.port = ntohs(a.sin_port);
+    f.th = CreateThread(nullptr, 0, FakeFtpThread, &f, 0, nullptr);
+    bool res = [&]() -> bool {
+        // the target itself: 530 is a refusal of the credentials, 4xx / a refused connection are not
+        { Json j = Json::object(); j["type"] = "ftp"; j["host"] = "127.0.0.1"; j["port"] = (i64)f.port; j["user"] = "u"; j["password"] = "Ftp-Wr0ng-Pw"; j["directory"] = "/x";
+          Str e; Target* t = MakeTarget(j, e); T_CHECK(t != nullptr); if (!t) return false; T_CHECK(!t->connect()); T_CHECK(t->auth_failed); T_CHECK(t->auth_code == 530); T_CHECK(!t->transient); T_CHECK(t->auth_err.find("Ftp-Wr0ng") < 0); delete t; }
+        { Json j = Json::object(); j["type"] = "ftp"; j["host"] = "127.0.0.1"; j["port"] = (i64)1; j["user"] = "u"; j["password"] = "x"; j["directory"] = "/x";
+          Str e; Target* t = MakeTarget(j, e); if (t) { T_CHECK(!t->connect()); T_CHECK(!t->auth_failed); delete t; } }
+        f.logins = 0;
+        Svc s(c_, "smbag6", true); if (!s.up) return false; s.record = true;
+        Str vms = s.tmp.sub("vms"); WriteBytes(JoinPath(vms, "vm1\\disk.vmdk"), Random(c_, 30000)); Str src = s.addDirServer(vms);
+        Json sv = Json::object(); sv["type"] = "ftp"; sv["name"] = "Fake FTP"; sv["host"] = "127.0.0.1"; sv["port"] = (i64)f.port; sv["user"] = "u"; sv["password"] = "Ftp-Wr0ng-Pw"; sv["directory"] = "/x";
+        Json sa = Json::object(); sa["server"] = sv; Str id = s.ok("servers.save", sa).get("id").str();
+        g_fakeNow = (i64)UnixNow() + 3600; i64 t0 = g_fakeNow;
+        s.saveTask("ToFtp", ElementTo(src, id), EveryTen(t0));
+        s.ok("scheduler.set", [] { Json x = Json::object(); x["enabled"] = true; return x; }()); Sleep(200);
+        Passes(s, 5);
+        c_.note("5 scheduler passes, FTP answers 530: %d PASS command(s)", (int)f.logins);
+        T_CHECK(f.logins == 1);
+        Json b = ServerOf(s, id).get("auth_blocked"); T_CHECK(b.is_object() && b.get("code").integer() == 530);
+        T_CHECK(LastRecord(s).get("results").at(0).get("skipped").boolean());
+        // a new password: tried once more (and refused once more)
+        sv["id"] = id; sv["password"] = "Ftp-Wr0ng-Pw-2"; Json sb = Json::object(); sb["server"] = sv; s.ok("servers.save", sb);
+        Passes(s, 3); T_CHECK(f.logins == 2);
+        T_CHECK(s.transcript.find("Ftp-Wr0ng") < 0);
+        Str stJson = ReadAll(JoinPath(s.core.config().dataDir(), "state.json")); T_CHECK(stJson.find("Ftp-Wr0ng") < 0);
+        s.ok("scheduler.set", [] { Json x = Json::object(); x["enabled"] = false; return x; }());
+        return true;
+    }();
+    InterlockedExchange(&f.stop, 1); WaitForSingleObject(f.th, 5000); CloseHandle(f.th); closesocket(f.ls);
+    return res;
 }
 
 } // namespace vm2b

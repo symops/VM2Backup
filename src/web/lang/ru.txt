@@ -88,6 +88,7 @@ Create a self-signed certificate	Создание самоподписанног
 Create new self-signed...	Создать новый самоподписанный...
 Create schedule...	Создать расписание...
 Created	Создана
+Credentials rejected since {0}: {1}	Учётные данные отклонены с {0}: {1}
 Current password	Текущий пароль
 Data folder	Папка данных
 Datacenter	Центр данных
@@ -233,6 +234,7 @@ Power on after restore	Включить после восстановления
 Press Load to read the datacenters, datastores, folders and resource pools of the server.	Нажмите «Загрузить», чтобы прочитать центры обработки данных, хранилища данных, папки и пулы ресурсов сервера.
 Private key file	Файл закрытого ключа
 Private key text	Текст закрытого ключа
+Problem	Проблема
 Quiesce the guest file system (needs VMware Tools in the VM)	Заморозить файловую систему гостя (нужны VMware Tools в ВМ)
 Recovery code	Код восстановления
 Recovery codes	Коды восстановления
@@ -285,6 +287,7 @@ Sign in	Войти
 Sign out	Выйти
 Sign-in failed.	Не удалось войти.
 Size	Размер
+Skipped: credentials rejected	Пропущено: учётные данные отклонены
 Snapshot	Снимок
 Source	Источник
 Source server	Сервер-источник
@@ -320,12 +323,14 @@ The certificate was installed.	Сертификат установлен.
 The connection is tested now. "Test connection" tests again; "Finish" saves the server.	Соединение проверяется сейчас. «Проверить подключение» повторяет проверку; «Готово» сохраняет сервер.
 The connection test failed or has not finished. Save the server anyway?	Проверка соединения не удалась или не закончилась. Всё равно сохранить сервер?
 The connection works.	Соединение работает.
+The credentials of this server were not rejected.	Учётные данные этого сервера не отклонялись.
 The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	На хранилище «{0}» свободно {1}, а копия занимает до {2}. Всё равно восстановить?
 The figures are approximate (typical data). More CPU cores make compression faster.	Цифры приблизительные (типичные данные). Чем больше ядер процессора, тем быстрее сжатие.
 The file is larger than 1 MB.	Файл больше 1 МБ.
 The list is cut: only the first entries are shown.	Список обрезан: показаны только первые записи.
 The longest wait cannot be shorter than the first one.	Самая длинная пауза не может быть короче первой.
 The name of the virtual machine must be at most 80 characters and cannot contain slashes or %.	Имя виртуальной машины — не более 80 символов, без косых черт и %.
+The next run will contact the server again.	Следующий запуск снова обратится к серверу.
 The password is too simple.	Пароль слишком простой.
 The password must be at least 10 characters long.	Пароль должен быть не короче 10 символов.
 The password must not contain the user name.	Пароль не должен содержать имя пользователя.
@@ -366,6 +371,7 @@ Transfer: plain FTP (not encrypted - enable encryption of the backup!)	Пере�
 Trigger	Запуск
 Trust X-Forwarded-For from a reverse proxy on this computer	Доверять X-Forwarded-For от обратного прокси на этом компьютере
 Trust this identity and test again	Доверять этой идентичности и проверить снова
+Try again	Повторить
 Tue	Вт
 Two-factor	Двухфакторная проверка
 Type	Тип
@@ -463,6 +469,7 @@ verify	проверка
 viewer	наблюдатель
 {0} datastore(s), {1} folder(s), {2} resource pool(s) found.	Найдено: хранилищ данных — {0}, папок — {1}, пулов ресурсов — {2}.
 {0} free of {1}	свободно {0} из {1}
+{0} skipped: credentials rejected	Пропущено: {0} (учётные данные отклонены)
 {0} virtual machine(s)	Виртуальных машин: {0}
 {0} volume(s)	томов: {0}
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: около {1} МБ/с на одно ядро; копии примерно на {2}% больше, чем на уровне 5.

@@ -203,9 +203,76 @@ Json Config::servers() const
     local["directory"] = m_cfg.get("settings").get("default_local_path"); local["builtin"] = true;
     out.push(local);
     const Json& a = m_cfg.get("servers");
-    for (size_t i = 0; i < a.size(); ++i) out.push(publicServer(a.at(i)));
+    for (size_t i = 0; i < a.size(); ++i) out.push(publicServerWithBlock(a.at(i)));
     unlock();
     return out;
+}
+
+// ---- the lock-out guard ----------------------------------------------------------------------------------------
+static const char kBlocksKey[] = "_auth_blocks";
+
+Str Config::fingerprintOf(const Json& r) const
+{
+    static const char* const f[] = { "type", "host", "port", "user", "path", "key_file", "password", "key_passphrase", "key_text", nullptr };
+    Str all = "vm2b-creds-fp-1";
+    for (const char* const* k = f; *k; ++k) { all += '\x1f'; all += *k; all += '='; Json v = r.get(*k); all += v.is_number() ? Str::fmt("%lld", (long long)v.integer()) : v.str(); }
+    u8 d[32]; Sha256(all.data(), all.size(), d);
+    return HexEncode(d, 16);
+}
+
+Str Config::credsFingerprint(const Str& id) const
+{
+    if (id == kLocalServerId) return Str();
+    lock(); Str fp; const Json& a = m_cfg.get("servers");
+    for (size_t i = 0; i < a.size(); ++i) if (a.at(i).get("id").str() == id) { fp = fingerprintOf(a.at(i)); break; }
+    unlock();
+    return fp;
+}
+
+bool Config::authBlockLocked(const Str& id, Json& out) const
+{
+    const Json& b = m_state.get(kBlocksKey).get(id.c_str());
+    if (!b.is_object()) return false;
+    const Json& a = m_cfg.get("servers");
+    for (size_t i = 0; i < a.size(); ++i) if (a.at(i).get("id").str() == id) {
+        if (b.get("creds_fp").str() != fingerprintOf(a.at(i))) return false;      // the record was edited since: the mark is void
+        out = Json::object(); out["code"] = b.get("code"); out["text"] = b.get("text"); out["time"] = b.get("time"); return true;
+    }
+    return false;
+}
+
+bool Config::authBlock(const Str& id, Json& out) const { lock(); bool r = authBlockLocked(id, out); unlock(); return r; }
+
+void Config::persistState() { Str js = m_state.dump(true), e; WriteWholeFile(JoinPath(m_dir, "state.json").c_str(), js.data(), js.size(), e); }
+
+void Config::setAuthBlock(const Str& id, const Str& fp, int code, const Str& text, i64 when)
+{
+    if (fp.empty()) return;
+    lock();
+    const Json& a = m_cfg.get("servers"); bool same = false;
+    for (size_t i = 0; i < a.size(); ++i) if (a.at(i).get("id").str() == id && fingerprintOf(a.at(i)) == fp) same = true;
+    if (same) {
+        Json b = Json::object(); b["code"] = (i64)code; b["text"] = text; b["time"] = when; b["creds_fp"] = fp;
+        if (!m_state.get(kBlocksKey).is_object()) m_state[kBlocksKey] = Json::object();
+        m_state[kBlocksKey][id.c_str()] = b;
+        persistState();
+    }
+    unlock();
+}
+
+bool Config::clearAuthBlock(const Str& id)
+{
+    lock(); bool had = m_state.get(kBlocksKey).has(id.c_str());
+    if (had) { m_state[kBlocksKey].remove(id.c_str()); persistState(); }
+    unlock();
+    return had;
+}
+
+Json Config::publicServerWithBlock(const Json& s) const
+{
+    Json o = publicServer(s); Json b;
+    if (authBlockLocked(s.get("id").str(), b)) o["auth_blocked"] = b;
+    return o;
 }
 
 bool Config::server(const Str& id, bool reveal, Json& out) const
@@ -256,7 +323,7 @@ bool Config::saveServer(const Json& in, Json& saved, Str& err)
     }
     for (size_t i = 0; i < in.size(); ++i) {
         const Str& k = in.key_at(i);
-        if (k.starts_with("has_") || k == "builtin") continue;
+        if (k.starts_with("has_") || k == "builtin" || k == "auth_blocked") continue;      // computed fields of the public view
         s[k.c_str()] = in.value_at(i);
     }
     s["name"] = name;
@@ -272,7 +339,10 @@ bool Config::saveServer(const Json& in, Json& saved, Str& err)
     if (idx >= 0) arr.item((size_t)idx) = s; else arr.push(s);
     m_cfg["servers"] = arr;
     bool ok = saveCfg(err);
-    if (ok) saved = publicServer(s);
+    if (ok) {
+        if (m_state.get(kBlocksKey).has(id.c_str()) && m_state.get(kBlocksKey).get(id.c_str()).get("creds_fp").str() != fingerprintOf(s)) { m_state[kBlocksKey].remove(id.c_str()); persistState(); }
+        saved = publicServerWithBlock(s);
+    }
     unlock();
     return ok;
 }
@@ -292,6 +362,7 @@ bool Config::deleteServer(const Str& id, Str& err)
     if (!users.empty()) { unlock(); err = "the server is used by the tasks: " + users; return false; }
     m_cfg["servers"] = out;
     bool ok = saveCfg(err);
+    if (ok && m_state.get(kBlocksKey).has(id.c_str())) { m_state[kBlocksKey].remove(id.c_str()); persistState(); }
     unlock();
     return ok;
 }
@@ -485,10 +556,10 @@ Json Config::history(int limit) const
     lock(); Json out = Json::array();
     for (size_t i = m_hist.size(); i-- > 0 && (limit <= 0 || (int)out.size() < limit);) {
         Json r = m_hist.at(i); r.remove("results");
-        Json sum = Json::object(); int ok = 0, bad = 0;
+        Json sum = Json::object(); int ok = 0, bad = 0, skipped = 0;
         const Json& rs = m_hist.at(i).get("results");
-        for (size_t k = 0; k < rs.size(); ++k) { Str st = rs.at(k).get("status").str(); if (st == "Success" || st == "Warning") ++ok; else if (st != "Disabled") ++bad; }
-        sum["ok"] = ok; sum["bad"] = bad; sum["count"] = rs.size(); r["summary"] = sum;
+        for (size_t k = 0; k < rs.size(); ++k) { Str st = rs.at(k).get("status").str(); if (rs.at(k).get("skipped").boolean()) ++skipped; if (st == "Success" || st == "Warning") ++ok; else if (st != "Disabled") ++bad; }
+        sum["ok"] = ok; sum["bad"] = bad; sum["count"] = rs.size(); if (skipped) sum["skipped"] = skipped; r["summary"] = sum;
         out.push(r);
     }
     unlock();

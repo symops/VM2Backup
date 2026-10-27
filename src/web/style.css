@@ -31,6 +31,7 @@ table.grid tr.row { cursor: pointer; }
 table.grid tr.row:hover { background: #f5f9fe; }
 table.grid tr.sel { background: var(--blue-light); }
 .empty { color: var(--muted); padding: 24px 8px; }
+.bad { color: var(--bad); font-weight: 600; }
 .st-Success { color: var(--ok); font-weight: 600; } .st-Warning { color: var(--warn); font-weight: 600; } .st-Failed, .st-Abort { color: var(--bad); font-weight: 600; }
 .st-Running { color: var(--blue-dark); font-weight: 600; } .st-Waiting, .st-Paused, .st-Disabled { color: var(--muted); }
 .jobs { flex: none; border-top: 2px solid var(--blue); background: #fafcff; max-height: 34%; overflow: auto; }

@@ -88,6 +88,7 @@ Create a self-signed certificate	Buat sertifikat yang ditandatangani sendiri
 Create new self-signed...	Buat baru yang ditandatangani sendiri...
 Create schedule...	Buat jadwal...
 Created	Dibuat
+Credentials rejected since {0}: {1}	Kredensial ditolak sejak {0}: {1}
 Current password	Kata sandi saat ini
 Data folder	Folder data
 Datacenter	Datacenter
@@ -233,6 +234,7 @@ Power on after restore	Nyalakan setelah pemulihan
 Press Load to read the datacenters, datastores, folders and resource pools of the server.	Tekan Muat untuk membaca datacenter, datastore, folder, dan resource pool dari server.
 Private key file	Berkas kunci privat
 Private key text	Teks kunci privat
+Problem	Masalah
 Quiesce the guest file system (needs VMware Tools in the VM)	Quiesce sistem berkas guest (memerlukan VMware Tools di VM)
 Recovery code	Kode pemulihan
 Recovery codes	Kode pemulihan
@@ -285,6 +287,7 @@ Sign in	Masuk
 Sign out	Keluar
 Sign-in failed.	Gagal masuk.
 Size	Ukuran
+Skipped: credentials rejected	Dilewati: kredensial ditolak
 Snapshot	Snapshot
 Source	Sumber
 Source server	Server sumber
@@ -320,12 +323,14 @@ The certificate was installed.	Sertifikat telah dipasang.
 The connection is tested now. "Test connection" tests again; "Finish" saves the server.	Koneksi sedang diuji. "Uji koneksi" menguji lagi; "Selesai" menyimpan server.
 The connection test failed or has not finished. Save the server anyway?	Uji koneksi gagal atau belum selesai. Tetap simpan server?
 The connection works.	Koneksi berfungsi.
+The credentials of this server were not rejected.	Kredensial server ini tidak ditolak.
 The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	Datastore "{0}" memiliki {1} ruang kosong, cadangan berisi hingga {2}. Tetap pulihkan?
 The figures are approximate (typical data). More CPU cores make compression faster.	Angka-angka ini perkiraan (data umum). Lebih banyak inti CPU membuat kompresi lebih cepat.
 The file is larger than 1 MB.	Berkas lebih besar dari 1 MB.
 The list is cut: only the first entries are shown.	Daftar dipotong: hanya entri pertama yang ditampilkan.
 The longest wait cannot be shorter than the first one.	Tunggu terlama tidak boleh lebih singkat dari yang pertama.
 The name of the virtual machine must be at most 80 characters and cannot contain slashes or %.	Nama mesin virtual maksimal 80 karakter dan tidak boleh memuat garis miring atau %.
+The next run will contact the server again.	Eksekusi berikutnya akan menghubungi server lagi.
 The password is too simple.	Kata sandi terlalu sederhana.
 The password must be at least 10 characters long.	Kata sandi harus terdiri dari minimal 10 karakter.
 The password must not contain the user name.	Kata sandi tidak boleh memuat nama pengguna.
@@ -366,6 +371,7 @@ Transfer: plain FTP (not encrypted - enable encryption of the backup!)	Transfer:
 Trigger	Pemicu
 Trust X-Forwarded-For from a reverse proxy on this computer	Percayai X-Forwarded-For dari reverse proxy di komputer ini
 Trust this identity and test again	Percayai identitas ini dan uji lagi
+Try again	Coba lagi
 Tue	Sel
 Two-factor	Dua faktor
 Type	Jenis
@@ -463,6 +469,7 @@ verify	verifikasi
 viewer	penampil
 {0} datastore(s), {1} folder(s), {2} resource pool(s) found.	Ditemukan {0} datastore, {1} folder, {2} resource pool.
 {0} free of {1}	{0} kosong dari {1}
+{0} skipped: credentials rejected	{0} dilewati: kredensial ditolak
 {0} virtual machine(s)	{0} mesin virtual
 {0} volume(s)	{0} volume
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: sekitar {1} MB/s per inti CPU; cadangan sekitar {2}% lebih besar daripada tingkat 5.

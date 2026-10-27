@@ -29,6 +29,12 @@ projects Click2Screen / Speak2Mic. Read `src/base.h`, `src/stream.h`, `src/targe
   TLS client (`tls.h`, FTPS / HTTPS / ESXi) and TLS server + certificates (`webtls.h`) are OpenSSL as well; the sockets stay ours (`select` loops with
   timeouts and an abort flag, OpenSSL only does the records). The format V2BENC3 is fixed by `tests_crypto.cpp` (vector from an independent implementation).
 
+## Отказ в учётных данных (`Target::auth_failed`)
+
+Цель, которой сервер отказал в ЛОГИНЕ (неверный / заблокированный / истёкший пароль, вход запрещён), вызывает `failAuth(текст, код)` вместо `fail(...)`: ошибка постоянная, `auth_failed` = true (до удаления объекта), `auth_code` и `auth_err` хранят код и текст.
+Сеть, таймаут, неизвестный ключ хоста и сертификат - только `fail(...)`. Служба (`svccore.cpp`, `authGate / authFailedNow / authOk`) по этому признаку ставит отметку в `state.json`; новая цель с логином обязана ставить признак, иначе
+защита от блокировки (docs/WEB.md) для неё не работает. Для источников ВМ признак определяется по тексту ошибки (`IsAuthTextOfSource`).
+
 ## Resumable backups (what the targets must support)
 
 A backup is written as a series of independent volume files (`<archive>.00001`, `.00002`, ...), each one an atomic `.part` -> rename

@@ -95,6 +95,20 @@ VM2B_TEST("ssh", matrix_algorithms)
     return true;
 }
 
+// Защита от блокировки учётной записи: отказ в учётных данных SCP помечает цель (auth_failed), всё временное и «неизвестный ключ хоста» - нет.
+VM2B_TEST("ssh", scp_auth_refusal_flag)
+{
+    if (!SshServers(c_)) return true;
+    int port = (int)c_.servers.get("scp").get("port").integer(); const Json& sv = c_.servers.get("ssh");
+    auto cfgOf = [&](const char* pw) { Json j = Json::object(); j["type"] = "scp"; j["host"] = sv.get("host").str("127.0.0.1"); j["port"] = (i64)port; j["user"] = sv.get("user").str(); j["password"] = pw; j["directory"] = "x"; j["insecure_accept_host_key"] = true; return j; };
+    { Str e; Json j = cfgOf("definitely-wrong-pw"); Target* t = MakeTarget(j, e); T_CHECK(t != nullptr); if (t) { T_CHECK(!t->connect()); T_CHECK(t->auth_failed); T_CHECK(!t->transient); T_CHECK(t->auth_err.find("definitely-wrong-pw") < 0); delete t; } }
+    { Str e; Json j = cfgOf("definitely-wrong-pw"); j["user"] = "nosuchuser"; Target* t = MakeTarget(j, e); if (t) { T_CHECK(!t->connect()); T_CHECK(t->auth_failed); delete t; } }
+    { Str e; Json j = cfgOf(sv.get("password").str().c_str()); j.remove("insecure_accept_host_key"); j["host_key"] = "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"; Target* t = MakeTarget(j, e); if (t) { T_CHECK(!t->connect()); T_CHECK(!t->auth_failed); delete t; } }   // an unknown host key is not a credentials refusal
+    { Str e; Json j = cfgOf("x"); j["port"] = (i64)1; Target* t = MakeTarget(j, e); if (t) { T_CHECK(!t->connect()); T_CHECK(!t->auth_failed); delete t; } }                   // nobody listens: network, not credentials
+    { Str e; Json j = cfgOf(sv.get("password").str().c_str()); Target* t = MakeTarget(j, e); if (t) { T_CHECK(t->connect()); T_CHECK(!t->auth_failed); delete t; } }
+    return true;
+}
+
 VM2B_TEST("ssh", hostkey_policy)
 {
     if (!SshServers(c_)) return true;

@@ -11,7 +11,7 @@ ROOT=$PWD; BIN=${GUI_BIN:-$ROOT/build/x64}
 W=${GUI_TEST_DIR:-${TMPDIR:-/tmp}/vm2b-guitest}
 mkdir -p "$W"
 export WINEPREFIX=${WINEPREFIX_GUI:-$W/prefix} WINEDEBUG=-all VM2B_GUI_TESTS=1
-DISP=${GUI_DISPLAY:-:96}
+DISP=${GUI_DISPLAY:-:95}
 XPID=
 if [ ! -S "/tmp/.X11-unix/X${DISP#:}" ]; then Xvfb $DISP -screen 0 1280x800x24 >/dev/null 2>&1 & XPID=$!; sleep 2; fi
 export DISPLAY=$DISP

@@ -149,6 +149,11 @@ bool SmbIsTransientCode(unsigned long c)
     return false;
 }
 
+bool SmbIsAuthCode(unsigned long c)
+{
+    return c == 86 || c == 1326 || c == 1909 || c == 1331 || c == 1330 || c == 1907 || c == 1385 || c == 1327 || c == 1328;
+}
+
 unsigned long SmbErrorCodeOf(const Str& t)
 {
     size_t n = t.size();
@@ -443,7 +448,11 @@ private:
         delete m_in; m_in = nullptr;
         Str e; bool tr = false;
         Str host, sub, root2; SmbSplitUnc(m_root, root2, sub, host);
-        if (!m_conn.open(m_root, m_user, m_pass, reset, e, tr)) return fail(e, tr);
+        if (!m_conn.open(m_root, m_user, m_pass, reset, e, tr)) {
+            unsigned long ec = SmbErrorCodeOf(e);
+            if (SmbIsAuthCode(ec)) return failAuth(e, (int)ec);
+            return fail(e, tr);
+        }
         // is the share there for this account? (a name that does not resolve is told here, with the Windows reason)
         Str mroot = Mapped(m_root);
         DWORD a = GetFileAttributesW(FilePath(mroot));

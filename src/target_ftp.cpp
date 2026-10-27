@@ -218,6 +218,7 @@ bool FtpTarget::connect()
     if (r.code / 100 != 2) {
         Reply rr = r; m_ctl.close();
         if (rr.code / 100 == 4) return failReply("login failed", rr);
+        if (rr.code == 530) return failAuth(scrub(Str::fmt("login failed: %d %s", rr.code, rr.first().c_str())), 530);
         return fail(scrub(Str::fmt("login failed: %d %s", rr.code, rr.first().c_str())), false);
     }
     if (cmd("FEAT", r) && r.code == 211) {

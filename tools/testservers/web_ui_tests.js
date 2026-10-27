@@ -654,6 +654,53 @@ function makeEnv(router, lang) {
         const r = app.reportHtml(rec); ok(!/<(img|script|iframe)/i.test(r.replace('<!doctype html><html><head><meta charset="utf-8">', '').replace(/<style>[\s\S]*?<\/style>/, '')), 'report: no active content in the generated page');
     }
 
+    // 18b. the lock-out guard: a red mark on a server whose credentials were rejected, "Try again" (admin only), skipped elements in the history and the report
+    {
+        const XSS = '<img src=x onerror=alert(3)>', ZIP = '"><script>alert(4)</script>';
+        const mark = { code: 1326, text: 'the user name or the password is wrong (1326) ' + XSS, time: 1700000000 };
+        const mk = (role, withMark) => {
+            const unblocked = [];
+            const b = backend(role, { 'servers.list': () => [{ id: 'local', name: 'Local Computer', type: 'local' }, { id: 's1', name: 'NAS', type: 'smb', path: '\\\\h\\s', user: 'u', has_password: true, auth_blocked: withMark && !unblocked.length ? mark : undefined }, { id: 's2', name: 'Fine', type: 'smb', path: '\\\\h\\t', user: 'u', has_password: true }],
+                'servers.unblock': (bd) => { unblocked.push(bd.id); return { was_blocked: true }; },
+                'history.list': [{ id: 'h1', name: 'Nightly', kind: 'task', status: 'Failed', started: 1700000000, ended: 1700000100, trigger: 'scheduled', summary: { count: 2, skipped: 2 } }],
+                'history.get': { id: 'h1', name: 'Nightly', kind: 'task', status: 'Failed', started: 1700000000, ended: 1700000100, version: '1', trigger: 'scheduled', results: [{ vm: 'vm1', status: 'Failed', skipped: true, message: 'The credentials of server "NAS" were rejected ' + ZIP }] } });
+            return { b, unblocked };
+        };
+        for (const role of ['admin', 'operator', 'viewer']) {
+            const { b, unblocked } = mk(role, true);
+            t = makeEnv(b.r); app = createApp(t.env); await app.start(t.root); app.setLang('en');
+            let inputs = find(t.root, x => x.tagName === 'input'); inputs[0].value = 'u'; inputs[1].value = 'good'; find(t.root, x => x.tagName === 'form')[0].submit(); await sleep(20);
+            if (role === 'admin') { inputs[2].value = '1'; find(t.root, x => x.tagName === 'form')[0].submit(); }
+            await sleep(60); app.go('datacenter'); await sleep(60);
+            const txt = t.root.textContent;
+            ok(txt.indexOf('Credentials rejected since') >= 0 && txt.indexOf('(1326)') >= 0, role + ': the red mark with the time and the text is shown');
+            ok(find(t.root, x => x.tagName === 'img').length === 0 && find(t.root, x => x.tagName === 'script').length === 0, role + ': the text of the mark is shown as text (no HTML)');
+            ok(find(t.root, x => x.className === 'bad').length === 1, role + ': only the rejected server is marked');
+            ok(buttons(t.root, 'Try again').length === (role === 'admin' ? 1 : 0), role + ': the Try again button exists for the administrator only');
+            if (role === 'admin') {
+                const rows = find(t.root, x => x.className === 'row');
+                rows[2].fire('click'); buttons(t.root, 'Try again')[0].click(); await sleep(30);
+                ok(unblocked.length === 0 && b.st.calls.every(c => c[0] !== '/api/servers.unblock'), 'admin: Try again on a server without a mark does nothing');
+                find(t.root, x => x.className === 'row')[1].fire('click'); buttons(t.root, 'Try again')[0].click(); await sleep(60);
+                ok(unblocked.length === 1 && unblocked[0] === 's1', 'admin: Try again sends servers.unblock for the selected server');
+                const call = b.st.calls.filter(c => c[0] === '/api/servers.unblock')[0]; ok(call && call[2] && JSON.stringify(call[2].headers || {}).indexOf('c'.repeat(64)) >= 0, 'admin: the request carries the CSRF token');
+                ok(find(t.root, x => x.className === 'bad').length === 0, 'admin: after Try again the mark is gone');
+            }
+            if (role !== 'viewer') {
+                app.go('history'); await sleep(60); ok(t.root.textContent.indexOf('2 skipped: credentials rejected') >= 0, role + ': the history list says how many elements were skipped');
+                find(t.root, x => x.tagName === 'tr' && x.className.indexOf('row') >= 0)[0].fire('click'); buttons(t.root, 'Details')[0].click(); await sleep(30);
+                const o = find(t.root, x => x.className === 'overlay').pop();
+                ok(o.textContent.indexOf('Skipped: credentials rejected') >= 0 && find(o, x => x.tagName === 'script').length === 0, role + ': the details mark the skipped element');
+                const files = []; t.env.saveFile = (n, m, c) => files.push({ n, m, c }); buttons(o, 'HTML report...')[0].click();
+                ok(files.length === 1 && files[0].c.indexOf('Skipped: credentials rejected') >= 0 && files[0].c.indexOf('<script') < 0 && files[0].c.indexOf('&quot;&gt;&lt;script&gt;alert(4)') >= 0, role + ': the report marks and escapes it');
+            }
+        }
+        // Russian
+        { const { b } = mk('admin', true); t = makeEnv(b.r, 'ru-RU'); app = createApp(t.env); await app.start(t.root); app.setLang('ru');
+          let inputs = find(t.root, x => x.tagName === 'input'); inputs[0].value = 'u'; inputs[1].value = 'good'; find(t.root, x => x.tagName === 'form')[0].submit(); await sleep(20); inputs[2].value = '1'; find(t.root, x => x.tagName === 'form')[0].submit(); await sleep(60);
+          app.go('datacenter'); await sleep(60); ok(t.root.textContent.indexOf('Учётные данные отклонены с') >= 0 && buttons(t.root, 'Повторить').length === 1, 'ru: the mark and the button are translated'); }
+    }
+
     // 18. the folder / file picker of the service computer (fs.browse)
     {
         const EV = ['<img src=x onerror=alert(1)>', '"><script>alert(2)</script>'];
