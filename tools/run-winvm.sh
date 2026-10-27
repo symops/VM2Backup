@@ -11,7 +11,9 @@
 #   web       TLS from the Windows clients, login, session, RPC, adapters, bind to the guest address (host curl through the port forward), DPAPI over restarts
 #   net       ftp tls http / ssh scp / esxi svcesxi groups against servers on THIS host (Docker bridge address)
 #   smb       the REAL SMB share (group smbreal), net use Y: + net.drives
-#   win11     Windows 11 specifics (wmic, Smart App Control, SMB client policy ...), informational
+#   win11     Windows 11 specifics (wmic, Smart App Control, SMB client policy, terminal, event source ...), informational
+#   defender  Microsoft Defender at the end of the run: real-time ON, no detections, no exclusions (nothing is ever disabled)
+#   sac       (w11, ALWAYS LAST: cannot be undone) Smart App Control: try to switch it to On, restart, record what happens to the unsigned Setup and the service
 #   smartscreen  the Setup with Mark of the Web started like a double click, screenshots of what the user sees
 #   big       the 3 'big' autotests (4 GiB; VM2B_BIG=1)
 #   winbig    6 GiB sparse vmdk through the whole pipeline (xz level 1), peak memory
@@ -34,7 +36,7 @@ fi
 R=$(cd "$VM2B_RUNWINVM_DIR/.." && pwd); W=$R/.winvm; RES=$W/shared/results
 OS=${1:-}; shift || true
 case "$OS" in x86|w10|w11) ;; *) sed -n 2,30p "$0"; exit 2;; esac
-KEEP=0; CREATE=1; BUILD=1; PHASES=sysinfo,autotest,winreal,install,installer,panel,web,net,smb,smbsign,svcacct,aclreal,speedlimit,restartjob,unicode,verify,big,winbig; [ "$OS" = w11 ] && PHASES=sysinfo,win11,autotest,install,installer,panel,web,net,smb,smartscreen; SEED=$(( (RANDOM << 15 | RANDOM) % 1000000000 ))
+KEEP=0; CREATE=1; BUILD=1; PHASES=sysinfo,autotest,winreal,install,installer,panel,web,net,smb,smbsign,svcacct,aclreal,speedlimit,restartjob,unicode,verify,big,winbig; [ "$OS" = w11 ] && PHASES=sysinfo,win11,autotest,winreal,install,installer,panel,web,net,smb,smbsign,svcacct,aclreal,speedlimit,restartjob,unicode,verify,big,winbig,defender,smartscreen,sac; SEED=$(( (RANDOM << 15 | RANDOM) % 1000000000 ))
 while [ $# -gt 0 ]; do case "$1" in
   --keep) KEEP=1; shift;; --no-create) CREATE=0; shift;; --no-build) BUILD=0; shift;; --phases) PHASES=$2; shift 2;; --seed) SEED=$2; shift 2;;
   *) echo "unknown argument $1"; exit 2;; esac; done
@@ -69,7 +71,7 @@ json_smb() { # json_smb <file> [drive]: servers.json for group smbreal as the gu
   local drive=${2:-}
   cat > "$1" <<EOF
 { "smb": { "unc": "\\\\\\\\$SMB1\\\\vm2b", "alt_unc": "\\\\\\\\$SMB2\\\\vm2b", "enc_unc": "\\\\\\\\$SMB1\\\\vm2benc", "unreachable_unc": "\\\\\\\\$SMBX\\\\vm2b",
-           "cyr_unc": "\\\\\\\\$SMB1\\\\резерв", "cyr_user": "юзер-смб", "cyr_password": "Пар0ль-Смб!42",
+           "cyr_unc": "\\\\\\\\$SMB1\\\\резерв", "cyr_user": "юзер-смб", "cyr_password": "Пар0ль-Смб!42", "ro_user": "vm2bro", "ro_password": "Ro-Only-Pw!42",
            "user": "vm2buser", "password": "Sm8 Real&Pw!42", "wrong_password": "Wr0ng-Pa55-not", "control": "$SMBCTL"${drive:+, \"drive\": \"$drive\"} } }
 EOF
 }
@@ -203,6 +205,8 @@ if want net; then
     gj 06-at-$set 7200 "set TAG=$set" "set ARGS=--seed $SEED $A --servers $GS\\srv\\$F\\servers.json" "set VM2B_WEB_DEFAULT=0" 'call C:\vm2b\guest\autotest.cmd' > /dev/null; RC=$?
     L=$RES/autotest-$set.txt
     [ -f "$L" ] && { tr -d '\r' < "$L" | grep -aE ' passed, ' | tail -1 | sed "s/^/  net $set: /" | tee -a "$SUM"; tr -d '\r' < "$L" | grep -aE '^FAIL' | sed 's/^/    /' | tee -a "$SUM"; } || say "  net $set: NO OUTPUT"
+    # журналы тестовых серверов (для разбора нестабильных тестов, например ftp_large_streamed / ftp_abort_and_idle_connection): уровень журнала FTP-сервера задаёт VM2B_FTP_LOGLEVEL
+    mkdir -p "$RES/srv-$set"; cp "$JS/$F"/*.log "$RES/srv-$set/" 2>/dev/null
     "$R/tools/winvm-servers.sh" stop-all > /dev/null
     RESULT[net-$set]="rc=$RC"
   done
@@ -215,8 +219,9 @@ if want smb; then
     gj 07-at-smb 3600 "set TAG=smbreal" "set ARGS=--seed $SEED --only smbreal --skip real_net_drives_lists_the_mapped_drive --servers $GS\\pkg\\servers-smb.json" "set VM2B_WEB_DEFAULT=0" 'call C:\vm2b\guest\autotest.cmd' > /dev/null; RC=$?
     gj 07-at-drive 600 "net use Y: \\\\$SMB1\\vm2b \"Sm8 Real&Pw!42\" /user:vm2buser /persistent:yes" 'net use' "set TAG=smbdrive" "set ARGS=--seed $SEED --only real_net_drives_lists_the_mapped_drive --servers $GS\\pkg\\servers-smb-drive.json" 'call C:\vm2b\guest\autotest.cmd' 'set RC=%ERRORLEVEL%' 'net use Y: /delete /y' 'exit /b %RC%' > /dev/null; RC2=$?
     for t in smbreal smbdrive; do L=$RES/autotest-$t.txt; [ -f "$L" ] && { tr -d '\r' < "$L" | grep -aE ' passed, ' | tail -1 | sed "s/^/  $t: /" | tee -a "$SUM"; tr -d '\r' < "$L" | grep -aE '^FAIL|^SKIP' | sed 's/^/    /' | tee -a "$SUM"; }; done
-    gj 07-smbinfo 300 "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\vm2b\\guest\\smbinfo.ps1 \\\\$SMB1\\vm2b \\\\$SMB1\\vm2benc vm2buser \"Sm8 Real&Pw!42\"" > /dev/null; RC3=$?
+    gj 07-smbinfo 300 "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\vm2b\\guest\\smbinfo.ps1 \\\\$SMB1\\vm2b \\\\$SMB1\\vm2benc vm2buser \"Sm8 Real&Pw!42\" \\\\$SMB2\\vm2b vm2bro \"Ro-Only-Pw!42\"" > /dev/null; RC3=$?
     tr -d '\r' < "$RES/07-smbinfo.out" | grep -aE '^(PASS|FAIL|INFO)|Dialect|SMB' | tee -a "$SUM"
+    tally smbinfo $RC3 07-smbinfo
     RESULT[smb]="smbreal rc=$RC, drives rc=$RC2, smbinfo rc=$RC3"
   fi
 fi
@@ -256,13 +261,6 @@ if want restartjob; then
   tally restartjob $(( RC + RC2 )) 15-rj-start 15-rj-check
 fi
 
-if want smartscreen; then
-  gj 11-smartscreen 300 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\smartscreen.ps1' > /dev/null; RC=$?
-  mkdir -p "$RES/shots"; "$W/shot.sh" "$RES/shots/smartscreen-host.png" >/dev/null 2>&1
-  gj 11-smartscreen-kill 60 'taskkill /f /im VM2Backup-Setup.exe' 'taskkill /f /im smartscreen.exe' 'exit /b 0' > /dev/null
-  RESULT[smartscreen]="rc=$RC (screenshots in shots/: what the user sees)"
-fi
-
 if want big; then
   gj 12-at-big 10800 "set TAG=big" "set VM2B_BIG=1" "set ARGS=--seed $SEED --only big" "set VM2B_WEB_DEFAULT=0" 'call C:\vm2b\guest\autotest.cmd' > /dev/null; RC=$?
   L=$RES/autotest-big.txt; [ -f "$L" ] && { tr -d '\r' < "$L" | grep -aE ' passed, ' | tail -1 | sed "s/^/  big: /" | tee -a "$SUM"; tr -d '\r' < "$L" | grep -aE '^FAIL|^SKIP|level|backup:|peak' | sed 's/^/    /' | tee -a "$SUM"; }
@@ -281,6 +279,35 @@ if want verify; then
   L=$RES/autotest-verify.txt
   [ -f "$L" ] && { tr -d '\r' < "$L" | grep -aE ' passed, ' | tail -1 | sed "s/^/  verify: /" | tee -a "$SUM"; tr -d '\r' < "$L" | grep -aE '^FAIL|^SKIP' | sed 's/^/    /' | tee -a "$SUM"; }
   RESULT[verify]="rc=$RC"
+fi
+
+if want defender; then
+  gj 16-defender 600 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\defender.ps1' > /dev/null; RC=$?
+  tr -d '\r' < "$RES/16-defender.out" | grep -aE '^INFO' | head -10 | tee -a "$SUM"
+  tally defender $RC 16-defender
+fi
+
+if want smartscreen; then
+  gj 11-smartscreen 300 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\smartscreen.ps1' > /dev/null; RC=$?
+  mkdir -p "$RES/shots"; "$W/shot.sh" "$RES/shots/smartscreen-host.png" >/dev/null 2>&1
+  gj 11-smartscreen-kill 60 'taskkill /f /im VM2Backup-Setup.exe' 'taskkill /f /im smartscreen.exe' 'exit /b 0' > /dev/null
+  RESULT[smartscreen]="rc=$RC (screenshots in shots/: what the user sees)"
+fi
+
+if want sac; then
+  # Smart App Control: the LAST phase (once On it cannot be switched off without resetting Windows; the VM is deleted right after)
+  mkdir -p "$RES/shots"
+  gj 99-sac-enable 600 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\sac.ps1 enable' > /dev/null
+  tr -d '\r' < "$RES/99-sac-enable.out" | grep -aE '^INFO' | tee -a "$SUM"
+  if tr -d '\r' < "$RES/99-sac-enable.out" | grep -aq 'the value is 1'; then
+    reboot_guest 99-sac-reboot || "$W/shot.sh" "$RES/shots/sac-no-return.png" >/dev/null 2>&1
+    gj 99-sac-check 900 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\sac.ps1 check' > /dev/null; RC=$?
+  else
+    gj 99-sac-check 900 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\sac.ps1 check' > /dev/null; RC=$?
+  fi
+  "$W/shot.sh" "$RES/shots/sac-host.png" >/dev/null 2>&1
+  tr -d '\r' < "$RES/99-sac-check.out" | grep -aE '^(INFO|PASS|FAIL)' | tee -a "$SUM"
+  RESULT[sac]="rc=$RC (informational: 99-sac-*.out, shots/sac-*.png)"
 fi
 
 # ---------------------------------------------------------------- summary

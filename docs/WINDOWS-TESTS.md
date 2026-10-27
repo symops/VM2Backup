@@ -7,7 +7,7 @@ the web site with Windows' own TLS clients, DPAPI, the native autotests, the net
 
     tools/run-winvm.sh x86            # Windows 10 x86 (WIN10X86.iso), plain qemu inside the dockurr/windows image
     tools/run-winvm.sh w10            # Windows 10 x64 ru business 22H2 (dockur)      [одна команда с нуля проверена 27.10.2026: раздел «Раунд 3»]
-    tools/run-winvm.sh w11            # Windows 11 5in1 25H2 (dockur)                 [run 2026-10-26: see "Windows 11"]
+    tools/run-winvm.sh w11            # Windows 11 5in1 25H2 (dockur)                 [одна команда с нуля, 21 фаза: раздел «Раунд 4: Windows 11», 27.10.2026]
     tools/run-winvm.sh x86            # ОДНА команда с нуля: создание -> ожидание установки -> все фазы -> удаление (раунд 2, проверено 26.10.2026)
     tools/run-winvm.sh x86 --phases sysinfo,web --keep      # only some phases; --keep leaves the VM
     tools/run-winvm.sh x86 --no-create --phases smb --keep  # the VM is already up (after --keep)
@@ -60,6 +60,8 @@ The launchers (`tools/testservers/launch.py`, `esxi_launch.py`, `pm_server.py`, 
 | `net` | `ftp,tls,http`, `ssh,scp`, `esxi,svcesxi` on the guest against the host's servers | |
 | `smb` | group `smbreal` (`src/tests_smb_real.cpp`) against the real Samba share + `net use Z:` and `net.drives` | |
 | `installer` | update in place over the running service, `/remove /silent` (data kept), reinstall | |
+| `defender` | (w11) Defender в конце прогона: защита в реальном времени включена, нет исключений и обнаружений | `16-defender.out` |
+| `sac` | (w11, ВСЕГДА ПОСЛЕДНЯЯ: необратима) попытка включить Smart App Control, перезапуск, запуск Setup и состояние службы | `99-sac-*.out`, `shots/sac-*.png` |
 
 ### Group `smbreal` (servers json key `smb`; skipped without it, e.g. under Wine)
 
@@ -353,6 +355,69 @@ FTP выполнены на той же ВМ (`--no-create --keep`, файл `ho
 * gMSA и доменные учётные записи (нужен контроллер домена); проверены локальные записи, кириллическое имя, `NetworkService`.
 * Windows 11 в этом раунде, Smart App Control / SmartScreen.
 * Точные числа скорости записи при лимите (см. выше), повтор после исправления скрипта не делался (потребовал бы новой ВМ).
+
+## Раунд 4: Windows 11 25H2 Enterprise ru (сборка 26200.9445, x64), второй раунд, 27.10.2026
+
+Одна команда `tools/run-winvm.sh w11` с нуля: создание, ожидание установки (**2956 с = 49 мин**), 21 фаза
+(`sysinfo, win11, autotest, winreal, install, installer, panel, web, net, smb, smbsign, svcacct, aclreal, speedlimit, restartjob, unicode, verify, big, winbig, defender, smartscreen`
+плюс последняя фаза `sac`). Основной прогон до `smartscreen` занял **около 11 400 с (3 ч 10 мин)** вместе с установкой. Файл `.winvm/hold` не давал `destroy.sh` удалить ВМ: фаза `sac`
+необратима (после включения Smart App Control его нельзя выключить без сброса Windows), поэтому основной запуск остановили перед ней (по PID), перепроверили на той же ВМ `smbinfo`, три раза
+подряд набор FTP (с журналом сервера уровня DEBUG) и только потом вручную выполнили `--no-create --keep --phases sac`. Затем `hold` убран, ВМ и диск удалены `destroy.sh`.
+Результаты: `.winvm-results/w11-20261027-064957/` (`results/summary-main.txt` и `results/run-winvm-w11.log` = вывод основной команды; `results/*.out`, `results/autotest-*.txt`,
+`results/shots/` со снимками экрана, `results/ftp-debug-logs-reruns.tar.xz` = журналы FTP-серверов трёх повторов).
+
+| Область | Результат |
+|---|---|
+| Чистый гость: `core` / `service` / `gui` / `winreal` | 97 / 28 / 4 / 9 прошли, 0 упали (3 пропуска: нужен servers.json); `gui` на 100 / 125 / 150 % по 4 из 4; панель `/selftest` на трёх масштабах |
+| Установка, SCM, служба, ACL канала | 32 из 32 (в том числе новые проверки источника событий, см. ниже) |
+| Установщик: обновление с 1.0.298, удаление, повторная установка; права по SDDL | 10 из 10 |
+| Web | 41 из 41. **TLS 1.3 только**: `curl.exe --tlsv1.3 --tls-max 1.3` даёт HTTP 200, `SslStream` с `SslProtocols.Tls13` согласует `Tls13` (AES-256, SHA384), PowerShell `Invoke-WebRequest` при `SecurityProtocol = Tls13` даёт 200; клиент, ограниченный TLS 1.2, по-прежнему получает 200; TLS 1.0 / 1.1 отказ; привязка к 172.30.0.2, DPAPI после перезапуска службы и Windows |
+| ftp / tls / http | основной прогон: 31 прошёл, 2 упали: `ftp_passive_active_and_listing_variants` (известный предел: активный режим за NAT) и **`ftp_large_streamed`** (одноразовая нестабильность, см. ниже); три повтора с журналом DEBUG: 33 из 34, падает только активный режим |
+| ssh / scp | 59 из 59 (1 пропуск) |
+| esxi + svcesxi (эмулятор внутри гостя) | 65 прошли, 0 упали, 2 пропуска (имена с `:` на NTFS) |
+| Настоящая SMB | `smbreal` **11 из 11** (в том числе новый `real_readonly_user_reads_and_write_is_refused`), `smbdrive` 1 из 1; **обязательная подпись SMB с обеих сторон** (`smbsign`): `smbreal` 10 из 10, 6 проверок включения / выключения; шифрованная шара `vm2benc` (SMB 3.1.1, `Encrypted=True` по `Get-SmbConnection`) |
+| Два пользователя на одной шаре (новое) | `vm2buser` пишет, `vm2bro` (Samba `read list`) только читает: чтение и список работают, запись даёт отказ `Отказано в доступе (5)`, постоянный (не повторяется), без пароля в тексте; создание новой папки: `cannot create folder ...: ... (5)`; `servers.test`: «the connection works, but a file cannot be created in the folder: cannot create ...\\.vm2b-test.tmp.part: ... (5)»; `net use R:` из PowerShell: запись и `New-Item` отказаны |
+| `svcacct` | 46 из 46 (локальная учётная запись, неизвестная Samba, обычный пользователь, кириллическое имя службы, `NetworkService`); для обычного пользователя причина отказа запуска видна в журнале событий «Приложение» читаемым текстом |
+| `aclreal` / `speedlimit` / `restartjob` | 16 из 16 / 10 из 10 (без лимита 3,5 с, с лимитом 8 Мбит/с около 15,4 с, 0,78 МиБ/с) / 12 из 12 (Windows перезапущена посреди копии, 20 мин) |
+| `unicode` (администратор `Юзер-Тест`) | 12 из 12 тестов `core` |
+| `verify` / `big` / `winbig` | 83 из 83 / 3 из 3 (самый долгий 439 с) / 6 ГиБ разреженный vmdk: копия 80 с, 25 томов, 4,3 МБ, пик рабочего набора 53 МиБ |
+| `defender` (новая фаза) | 5 из 5: защита в реальном времени включена весь прогон и в конце (`RealTime=True`, `TamperProtected=True`), без исключений, `DisableRealtimeMonitoring=False`, `Get-MpThreatDetection` пуст, событий 1116 / 1117 нет; ничего не отключалось |
+| `win11` (справочно) | `wmic.exe` отсутствует; новый Терминал Windows (`wt.exe`, appx 1.18) есть, терминал по умолчанию не задан; TPM и SecureBoot нет (dockur обходит проверки); клиент SMB: подпись не требуется, `EnableInsecureGuestLogons=True` (задан обвязкой) |
+| SmartScreen | как в раунде 1: установщик с меткой Mark of the Web блокируется окном «Система Windows защитила ваш компьютер» с единственной кнопкой «Не выполнять» до нажатия «Подробнее» (`results/shots/smartscreen-1.png`) |
+| Smart App Control | в начале состояние **2 = оценка** (Evaluation; в разделе раунда 1 оно названо «off», это неточно). Администратор смог записать `VerifiedAndReputablePolicyState = 1` напрямую в реестр без переустановки и сброса; после перезапуска значение осталось 1, журнал CodeIntegrity показал активацию политики `VerifiedAndReputableDesktop` (событие 3099, статус 0). **Блокировки не было**: неподписанный Setup (с меткой Mark of the Web и без) запустился и показал своё окно (`shots/sac-*.png`), служба продукта работает, `vm2bautotest.exe` запускается. Вывод: запись значения реестром не включает реальное принудительное применение (решение принимает облачная репутация, а у ВМ нет интернета); поведение установщика при настоящем режиме On **не проверено**. Для таких пользователей по-прежнему нужен подписанный установщик |
+
+### Найдено и исправлено
+
+**В продукте ошибок этой системой не найдено.** Доработка продукта (небольшая, по просьбе): **источник событий `VM2BackupService` получил файл сообщений**. Раньше Просмотр событий писал «Не найдено описание для события с кодом 1»
+(текст причины был только в строках вставки). `service.cpp`: при `/install` и при неудачном старте службы пишется `HKLM\SYSTEM\CurrentControlSet\Services\EventLog\Application\VM2BackupService`
+(`EventMessageFile = %SystemRoot%\System32\EventCreate.exe`, `TypesSupported = 7`; сообщения 1..1000 у `EventCreate.exe` имеют вид «%1», поэтому показывается переданный текст), при `/uninstall` ключ снимается.
+Проверка на госте (`guest/service.ps1`): событие с кодом 1 из источника `VM2BackupService` читается с текстом, а не «описание не найдено»; (`guest/svcacct.ps1`) отказ запуска службы под обычным пользователем
+виден в журнале «Приложение» как «VM2Backup service cannot start: cannot write C:\ProgramData\VM2Backup\config.json.tmp: error 5». Обе проверки прошли.
+
+**Тестовый сервер FTP (`tools/testservers/ftp_server.py`), нестабильный `ftp_abort_and_idle_connection`: ошибка была в НАШЕМ обработчике.** Функция `cut_everything` (обрыв по `SITE FAULT`) закрывала управляющий канал
+(`ch.close()`) прямо внутри обработчика канала данных, который вызван из кода pyftpdlib (`push_dtp_data`, `handle_read`). `FTPHandler.close()` удаляет атрибут `data_channel`, а код pyftpdlib после нашего исключения
+продолжал читать его, отсюда в журнале сервера `AttributeError: 'H' object has no attribute 'data_channel'`; оборванное соединение оставалось в неопределённом состоянии, и тесты на том же сервере (порядок задаёт сид)
+иногда получали ложные «550 ... is not retrievable» (ответ `SIZE`) или таймаут управляющего соединения. Исправление: теперь на сокеты только вешается RST при закрытии (`SO_LINGER 0`), а каналы закрываются
+на следующем обороте цикла (`ioloop.call_later(0, ...)`); у класса обработчика добавлен `data_channel = None` по умолчанию. В журналах сервера `AttributeError` больше нет (до правки он был в каждом прогоне фаз `fault_injection`).
+Проверка: на хосте 10 полных наборов `--only ftp` и 10 одиночных `ftp_abort_and_idle_connection` подряд (случайные сиды) 20 из 20; на госте три полных набора подряд с журналом DEBUG: `ftp_abort_and_idle_connection` и
+`ftp_large_streamed` прошли все три раза. **Не объяснено:** в основном прогоне один раз упал `ftp_large_streamed` (FTPS, 134 МБ: данные ушли за ~11 с, ответ 226 не пришёл за 60 с, журнал сервера на уровне WARNING пуст),
+на хосте и в трёх повторах на госте не воспроизвёлся. Для разбора при следующем появлении `run-winvm.sh` теперь копирует журналы серверов в `results/srv-<набор>/`, а уровень журнала FTP-сервера задаётся
+переменной `VM2B_FTP_LOGLEVEL` (например `VM2B_FTP_LOGLEVEL=DEBUG NETSETS=ftp tools/run-winvm.sh w11 ...`).
+
+### Изменения обвязки и тестов
+
+* `run-winvm.sh w11`: набор фаз по умолчанию теперь полный (как у x86 / w10) плюс `win11`, `defender`, `smartscreen`, `sac`; `json_smb` передаёт `ro_user` / `ro_password`; `tally` для `smbinfo`; журналы тестовых серверов в результаты.
+* Новый тест `smbreal/real_readonly_user_reads_and_write_is_refused` (`src/tests_smb_real.cpp`), поля `ro_user` / `ro_password` в `servers.json`; в `smb-real.py` пользователь `vm2bro` (`read list` шары `[vm2b]`).
+* `guest/smbinfo.ps1`: подключён `lib.ps1` (до этого `Check` не был определён, проверки не считались); сведения о сессиях SMB собираются ПОКА идёт запись (Windows 11 закрывает бездействующую сессию сразу, `Get-SmbConnection` после ввода-вывода
+  её уже не показывает): `vm2benc` 3.1.1, `Encrypted=True`; проверки второго пользователя с доступом только на чтение.
+* `guest/web.ps1`: блок «TLS 1.3 only» (на сборках 22000 и выше обязателен, на старых справочно). `guest/win11.ps1`: Терминал Windows, источник событий. `guest/defender.ps1` (новая), `guest/sac.ps1` (новая: `info | enable | check`).
+* `guest/service.ps1`, `guest/svcacct.ps1`: проверки источника событий.
+
+### Не проверено
+
+* Настоящее принудительное применение Smart App Control (запись в реестр его не включила, нужен путь через интерфейс «Безопасность Windows» и ВМ с интернетом).
+* Поведение подписанных установщиков (подписи нет).
+* Причина единичного `ftp_large_streamed` (см. выше); домен и gMSA; настоящие ESXi / vCenter.
 
 ## Results
 

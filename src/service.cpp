@@ -62,6 +62,20 @@ static DWORD WINAPI KeepStopPending(LPVOID)
     return 0;
 }
 
+// Источник событий "VM2BackupService" в журнале Приложение: без файла сообщений Просмотр событий пишет «Не найдено описание для события с кодом 1».
+// Сообщения с кодами 1..1000 из стандартного EventCreate.exe имеют вид "%1": так текст, переданный в ReportEvent, показывается как есть.
+// Пишется при /install (и при запуске службы, если ключа нет); снимается при /uninstall.
+static const wchar_t kEventSourceKey[] = L"SYSTEM\\CurrentControlSet\\Services\\EventLog\\Application\\VM2BackupService";
+static void RegisterEventSourceFile()
+{
+    HKEY k;
+    if (RegCreateKeyExW(HKEY_LOCAL_MACHINE, kEventSourceKey, 0, nullptr, 0, KEY_WRITE, nullptr, &k, nullptr) != ERROR_SUCCESS) return;
+    const wchar_t* f = L"%SystemRoot%\\System32\\EventCreate.exe"; DWORD types = 7;                      // ошибка | предупреждение | сведения
+    RegSetValueExW(k, L"EventMessageFile", 0, REG_EXPAND_SZ, (const BYTE*)f, (DWORD)((wcslen(f) + 1) * sizeof(wchar_t)));
+    RegSetValueExW(k, L"TypesSupported", 0, REG_DWORD, (const BYTE*)&types, sizeof(types));
+    RegCloseKey(k);
+}
+
 static void WINAPI ServiceMain(DWORD, LPWSTR*)
 {
     g_statusHandle = RegisterServiceCtrlHandlerExW(kServiceName, Control, nullptr);
@@ -72,6 +86,7 @@ static void WINAPI ServiceMain(DWORD, LPWSTR*)
     if (!core.start(g_opt, err)) {
         Log(L"the service cannot start: %s", Wide(err).c_str());
         // SCM показывает только "Incorrect function" (код 1): причину кладём ещё и в журнал событий Windows (Приложение), чтобы администратор её увидел
+        RegisterEventSourceFile();
         { HANDLE es = RegisterEventSourceW(nullptr, L"VM2BackupService"); if (es) { Wide m(Str("VM2Backup service cannot start: ") + err); const wchar_t* strs[1] = { m.c_str() }; ReportEventW(es, EVENTLOG_ERROR_TYPE, 0, 1, nullptr, 1, 0, strs, nullptr); DeregisterEventSource(es); } }
         g_status.dwWin32ExitCode = ERROR_SERVICE_SPECIFIC_ERROR; g_status.dwServiceSpecificExitCode = 1;
         SetState(SERVICE_STOPPED);
@@ -124,6 +139,7 @@ static int Install(bool manual)
     }
     if (!svc) { fprintf(stderr, "cannot create the service (%lu)\n", (unsigned long)GetLastError()); rc = 1; }
     else {
+        RegisterEventSourceFile();
         SERVICE_DESCRIPTIONW d = { (LPWSTR)L"Runs the scheduled virtual machine backups of VM2Backup (also when no one is logged on)." };
         ChangeServiceConfig2W(svc, SERVICE_CONFIG_DESCRIPTION, &d);
         SC_ACTION acts[3] = { { SC_ACTION_RESTART, 60000 }, { SC_ACTION_RESTART, 60000 }, { SC_ACTION_RESTART, 300000 } };
@@ -172,6 +188,7 @@ static int Uninstall()
     SC_HANDLE svc = OpenServiceW(scm, kServiceName, DELETE);
     int rc = 0;
     if (svc) { if (!DeleteService(svc) && GetLastError() != ERROR_SERVICE_MARKED_FOR_DELETE) rc = 1; CloseServiceHandle(svc); }
+    RegDeleteKeyW(HKEY_LOCAL_MACHINE, kEventSourceKey);
     // the service disappears when the last handle to it is closed: wait until it really is gone (a caller may install it again at once)
     for (int i = 0; i < 100; ++i) {
         SC_HANDLE probe = OpenServiceW(scm, kServiceName, SERVICE_QUERY_STATUS);

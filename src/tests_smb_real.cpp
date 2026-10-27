@@ -7,6 +7,7 @@
 //            "control": "10.0.2.2:4456",               (one-line commands: stop | start | restart | status | wipe | ls  -> "ok ...")
 //            "enc_unc": "\\\\10.0.2.50\\vm2benc", (optional: a share the server marks "smb encrypt = required": SMB3 encryption)
 //            "cyr_unc": "\\\\10.0.2.50\\резерв", "cyr_user": "юзер-смб", "cyr_password": "..."   (optional: a share and an account with CYRILLIC names, group smbreal real_cyrillic_share_and_account_names)
+//            "ro_user": "vm2bro", "ro_password": "..."   (optional: a second account of the same share that may only READ: group smbreal real_readonly_user_reads_and_write_is_refused)
 //            "drive": "Z:" }                          (a drive the job mapped with `net use Z: <unc>` in the interactive session; optional)
 // Under Wine there is no SMB client: the tests are skipped there (servers.json has no "smb").
 #include "autotest.h"
@@ -21,14 +22,14 @@ namespace vm2b {
 namespace {
 
 struct RealCfg {
-    Str unc, user, pw, wrongPw, altUnc, badUnc, control, drive, encUnc, cyrUnc, cyrUser, cyrPw;
+    Str unc, user, pw, wrongPw, altUnc, badUnc, control, drive, encUnc, cyrUnc, cyrUser, cyrPw, roUser, roPw;
     bool ok;
     explicit RealCfg(Ctx& c) : ok(false) {
         const Json& s = c.servers.get("smb");
         if (!s.is_object()) return;
         unc = s.get("unc").str(); user = s.get("user").str(); pw = s.get("password").str(); wrongPw = s.get("wrong_password").str("not-the-password-1");
         altUnc = s.get("alt_unc").str(); badUnc = s.get("unreachable_unc").str(); control = s.get("control").str(); drive = s.get("drive").str(); encUnc = s.get("enc_unc").str();
-        cyrUnc = s.get("cyr_unc").str(); cyrUser = s.get("cyr_user").str(); cyrPw = s.get("cyr_password").str();
+        cyrUnc = s.get("cyr_unc").str(); cyrUser = s.get("cyr_user").str(); cyrPw = s.get("cyr_password").str(); roUser = s.get("ro_user").str(); roPw = s.get("ro_password").str();
         ok = !unc.empty() && !user.empty();
     }
 };
@@ -79,7 +80,7 @@ struct VmData {
     }
 };
 
-bool HasPassword(const Str& text, const RealCfg& rc) { return (rc.pw.size() >= 4 && text.find(rc.pw.c_str()) >= 0) || (rc.wrongPw.size() >= 4 && text.find(rc.wrongPw.c_str()) >= 0); }
+bool HasPassword(const Str& text, const RealCfg& rc) { return (rc.pw.size() >= 4 && text.find(rc.pw.c_str()) >= 0) || (rc.wrongPw.size() >= 4 && text.find(rc.wrongPw.c_str()) >= 0) || (rc.roPw.size() >= 4 && text.find(rc.roPw.c_str()) >= 0); }
 
 struct RtResult { bool ok; Str err; };
 
@@ -293,6 +294,46 @@ VM2B_TEST("smbreal", real_cyrillic_share_and_account_names)
     T_CHECK(bo);
     bool sh = false; for (size_t i = 0; i < r.get("entries").size(); ++i) if (r.get("entries").at(i).get("name").str() == shareName) sh = true;
     c_.note("the share list contains \"%s\": %d", shareName.c_str(), sh ? 1 : 0); T_CHECK(sh);
+    T_CHECK(SmbOpenConnections() == 0);
+    return true;
+}
+
+VM2B_TEST("smbreal", real_readonly_user_reads_and_write_is_refused)
+{
+    // Two accounts on one share: the first (user) may write, the second (ro_user) only read. Reading and listing work for both; a write by the second must
+    // end in a clear, PERMANENT refusal (access denied, code 5), never in a retry loop or a silent success, and leave nothing behind.
+    NEED_REAL_SMB();
+    if (rc.roUser.empty()) { c_.skip("no ro_user / ro_password in the \"smb\" servers (a read-only account)"); return true; }
+    Str dir = Unique(c_, "ro"); Bytes data = Random(c_, (size_t)c_.range(2000, 90000));
+    { Str e; Target* w = MakeTarget(SmbJson(rc.unc, rc.user, rc.pw, dir), e); T_CHECK(w != nullptr); if (!w) return false; T_CHECK(w->connect()); T_CHECK(w->put_bytes("seed.bin", data.data(), data.size())); delete w; }
+    T_CHECK(SmbOpenConnections() == 0);
+    // the read-only account: connects to the existing folder, lists, reads the same bytes
+    Str e; Target* t = MakeTarget(SmbJson(rc.unc, rc.roUser, rc.roPw, dir), e); T_CHECK(t != nullptr); if (!t) return false;
+    bool con = t->connect(); if (!con) c_.note("connect as the read-only account: %s", t->err.c_str()); T_CHECK(con);
+    Vec<Str> names; T_CHECK(t->list(names)); bool seen = false; for (const Str& n : names) if (n == "seed.bin") seen = true; T_CHECK(seen);
+    Bytes got; T_CHECK(t->get_bytes("seed.bin", got)); T_CHECK(got.size() == data.size() && !memcmp(got.data(), data.data(), got.size()));
+    // a write: refused, permanent, with the access-denied code and no secret in the text
+    Sink* w = t->open_write("forbidden.bin"); Str why = t->err; bool refused = (w == nullptr);
+    if (w) { Bytes b = Random(c_, 5000); bool ok = w->write(b.data(), b.size()) && w->finish(); refused = !ok; why = w->err; if (!ok) w->abort(); T_CHECK(!w->transient); delete w; }
+    c_.note("write as the read-only account: refused=%d code=%lu text=[%s]", refused ? 1 : 0, SmbErrorCodeOf(why), why.c_str());
+    T_CHECK(refused); T_CHECK(!t->transient); T_CHECK(why.size() > 0); T_CHECK(!HasPassword(why, rc));
+    T_CHECK(SmbErrorCodeOf(why) == 5);
+    bool yes = true; T_CHECK(t->exists("forbidden.bin", yes)); T_CHECK(!yes);
+    T_CHECK(!t->put_bytes("forbidden2.bin", "x", 1)); T_CHECK(!t->transient);
+    // removing a file is refused too (the data stays)
+    T_CHECK(!t->remove("seed.bin")); Bytes again; T_CHECK(t->get_bytes("seed.bin", again)); T_CHECK(again.size() == data.size() && !memcmp(again.data(), data.data(), again.size()));
+    delete t;
+    // a NEW folder cannot be created by this account: connect() says so at once
+    { Str e2; Target* n = MakeTarget(SmbJson(rc.unc, rc.roUser, rc.roPw, Unique(c_, "rono")), e2); T_CHECK(n != nullptr); if (!n) return false;
+      bool ok = n->connect(); c_.note("new folder as the read-only account: ok=%d transient=%d code=%lu text=[%s]", ok ? 1 : 0, n->transient ? 1 : 0, SmbErrorCodeOf(n->err), n->err.c_str());
+      T_CHECK(!ok); T_CHECK(!n->transient); T_CHECK(!HasPassword(n->err, rc)); delete n; }
+    // through the service: the test of the server names the problem; the backup of a VM into it fails without a retry storm
+    Svc s(c_, "smbrealro"); if (!s.up) return false; s.record = true;
+    Json sv = Json::object(); sv["type"] = "smb"; sv["name"] = "Read only"; sv["path"] = rc.unc + "\\" + dir; sv["user"] = rc.roUser; sv["password"] = rc.roPw;
+    Json a = Json::object(); a["server"] = sv; T_CHECK(!s.call("servers.test", a));
+    c_.note("servers.test as the read-only account: %s", s.lastErr.c_str());
+    T_CHECK(s.lastErr.find("cannot be created") >= 0); T_CHECK(!HasPassword(s.lastErr, rc)); T_CHECK(!HasPassword(s.transcript, rc));
+    { Str e3; Target* c2 = MakeTarget(SmbJson(rc.unc, rc.user, rc.pw, dir), e3); if (c2 && c2->connect()) { c2->remove("seed.bin"); } delete c2; }
     T_CHECK(SmbOpenConnections() == 0);
     return true;
 }

@@ -1,4 +1,4 @@
-# The web site on the real Windows stack: TLS from Windows' own clients, login, session, RPC, adapters.
+﻿# The web site on the real Windows stack: TLS from Windows' own clients, login, session, RPC, adapters.
 . C:\vm2b\guest\lib.ps1
 $base = 'https://127.0.0.1:8443'
 Write-Output "==== SslStream (.NET / Schannel) per protocol"
@@ -20,6 +20,27 @@ foreach ($v in @('', '--tlsv1.2 --tls-max 1.2', '--tlsv1.3', '--tlsv1.0 --tls-ma
 }
 $o = & cmd.exe /c "curl.exe -k -s -S -o NUL -w %{http_code} https://127.0.0.1:8443/ 2>&1"
 Check 'curl.exe -k GET / returns 200' ($o -eq '200') $o
+Write-Output "==== TLS 1.3 only (Windows 11 / Server 2022 and newer: Schannel speaks TLS 1.3; older builds: informational)"
+$build = [int](Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').CurrentBuildNumber; $need13 = $build -ge 22000
+function Check13($name, $ok, $detail) { if ($need13) { Check $name $ok $detail } else { Write-Output ("INFO  (build $build, TLS 1.3 not required) " + $name + ": " + $(if ($ok) { 'works' } else { 'does not work: ' + $detail })) } }
+$o = & cmd.exe /c "curl.exe -k -s -S -v --tlsv1.3 --tls-max 1.3 -o NUL -w ""HTTP %{http_code}"" https://127.0.0.1:8443/api/me 2>&1"
+Write-Output ("curl --tlsv1.3 --tls-max 1.3: " + (($o | Select-String 'HTTP \d+|SEC_E_|TLS|curl: \(' | Select-Object -First 4) -join ' | '))
+Check13 'curl.exe --tlsv1.3 --tls-max 1.3 reaches the site (HTTP 200)' (($o -join ' ') -match 'HTTP 200') ($o -join ' ')
+try {
+    $c = New-Object Net.Sockets.TcpClient('127.0.0.1', 8443); $ssl = New-Object Net.Security.SslStream($c.GetStream(), $false, ([Net.Security.RemoteCertificateValidationCallback]{ $true }))
+    $ssl.AuthenticateAsClient('localhost', $null, [Security.Authentication.SslProtocols]12288, $false)
+    Check13 'SslStream restricted to TLS 1.3 negotiates Tls13' ($ssl.SslProtocol.ToString() -match 'Tls13') $ssl.SslProtocol
+    $ssl.Close(); $c.Close()
+} catch { Check13 'SslStream restricted to TLS 1.3 negotiates Tls13' $false ($_.Exception.Message + ' ' + $_.Exception.InnerException.Message) }
+# PowerShell: Invoke-WebRequest with the protocol set to TLS 1.3 only (the process-wide setting of ServicePointManager)
+$save = [Net.ServicePointManager]::SecurityProtocol
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]12288; $r = Invoke-WebRequest -UseBasicParsing -Uri "$base/api/me" -TimeoutSec 20; Check13 'PowerShell Invoke-WebRequest with SecurityProtocol = Tls13 only -> 200' ($r.StatusCode -eq 200) $r.StatusCode }
+catch { Check13 'PowerShell Invoke-WebRequest with SecurityProtocol = Tls13 only -> 200' $false ($_.Exception.Message) }
+finally { [Net.ServicePointManager]::SecurityProtocol = $save }
+# HttpClient (.NET Framework 4.x): the same, and a client that offers only TLS 1.2 still works (both versions are served at once)
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]3072; $r = Invoke-WebRequest -UseBasicParsing -Uri "$base/api/me" -TimeoutSec 20; Check 'client limited to TLS 1.2 still gets 200 next to TLS 1.3' ($r.StatusCode -eq 200) $r.StatusCode }
+catch { Check 'client limited to TLS 1.2 still gets 200 next to TLS 1.3' $false $_.Exception.Message }
+finally { [Net.ServicePointManager]::SecurityProtocol = $save }
 Write-Output "==== Invoke-WebRequest"
 try { $r = Invoke-WebRequest -UseBasicParsing -Uri "$base/" -TimeoutSec 20; Check 'Invoke-WebRequest / -> 200 + CSP header' ($r.StatusCode -eq 200 -and $r.Headers['Content-Security-Policy']) ($r.StatusCode); Write-Output ($r.Headers.GetEnumerator() | ForEach-Object { "$($_.Key): $($_.Value)" }) } catch { Check 'Invoke-WebRequest /' $false $_.Exception.Message }
 Write-Output "==== HttpClient"

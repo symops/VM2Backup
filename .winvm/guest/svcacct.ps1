@@ -1,4 +1,4 @@
-# svcacct.ps1 <unc> <smbuser> <smbpw> : служба под учётными записями, отличными от LocalSystem (round 2, настоящая Windows).
+﻿# svcacct.ps1 <unc> <smbuser> <smbpw> : служба под учётными записями, отличными от LocalSystem (round 2, настоящая Windows).
 #  1. права на папку данных: обычный пользователь не должен ни читать config.json, ни снимать защиту DPAPI с его секретов, ни писать в него;
 #  2. служба под локальным администратором vm2svc: серверы с паролями на месте и работают (DPAPI машинной области), копия в папку, где права только у vm2svc,
 #     копия на SMB-шару с явной учётной записью и с ПУСТЫМ пользователем (права самой службы: Samba знает vm2svc с тем же паролем);
@@ -145,6 +145,9 @@ Switch-Account 'vm2plain' 'Pla-Pass-123!x'
 Start-Sleep -Seconds 12
 $state = St; Write-Output "INFO service state under a standard account: $state"
 Check 'a standard account without rights to the data folder: the service does NOT run half-working (it is STOPPED)' ($state -match 'STOPPED') $state
+$evs = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'VM2BackupService' } -MaxEvents 5 -ErrorAction SilentlyContinue | Where-Object { $_.Message -match 'cannot start' })
+Write-Output ("INFO  Application log, VM2BackupService: " + $(if ($evs.Count) { ($evs[0].Message -split "`r?`n")[0] } else { '(no start-failure event)' }))
+Check 'the start failure is in the Application log with its reason (readable text, source VM2BackupService)' ($evs.Count -ge 1) 'no event with "cannot start"'
 $log = Get-Content "$data\logs\service.log" -Tail 12 -ErrorAction SilentlyContinue
 Write-Output ("INFO last lines of service.log:`n" + ($log -join "`n"))
 Check 'the log says WHY the service did not start (config.json, the data folder)' (($log -join ' ') -match 'cannot start.*config\.json|cannot start.*data folder|cannot read config') ($log -join ' ')

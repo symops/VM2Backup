@@ -7,13 +7,14 @@
 import os, signal, socket, subprocess, sys, shutil, threading
 USER, PW = "vm2buser", "Sm8 Real&Pw!42"
 CYR_USER, CYR_PW = "юзер-смб", "Пар0ль-Смб!42"             # кириллическая учётная запись SMB (smbreal/real_cyrillic_share_and_account_names; unix-пользователь создаётся с --badname)
-EXTRA = {"vm2svc": "Svc-Pass-123!x", CYR_USER: CYR_PW}                     # учётная запись службы из svcacct.ps1: пустой пользователь в записи сервера = права самой службы
+RO_USER, RO_PW = "vm2bro", "Ro-Only-Pw!42"                     # второй пользователь шары [vm2b]: только чтение (read list), smbreal/real_readonly_user_reads_and_write_is_refused
+EXTRA = {"vm2svc": "Svc-Pass-123!x", CYR_USER: CYR_PW, RO_USER: RO_PW}                     # учётная запись службы из svcacct.ps1: пустой пользователь в записи сервера = права самой службы
 SIGNING = "auto"                                           # команда control "signing on|off" -> mandatory | auto (подпись SMB обязательна на стороне сервера)
 SHARE = "/srv/vm2b"; CONF = "/tmp/smbreal/smb.conf"; DIR = "/tmp/smbreal"
 proc = None; lock = threading.Lock()
 
 def write_conf():
-    open(CONF, "w", encoding="utf-8").write(CONF_TEXT.format(DIR=DIR, SHARE=SHARE, USER=USER, SIGN=SIGNING, ALL=USER + " " + " ".join(EXTRA)))
+    open(CONF, "w", encoding="utf-8").write(CONF_TEXT.format(DIR=DIR, SHARE=SHARE, USER=USER, SIGN=SIGNING, ALL=USER + " " + " ".join(EXTRA), RO=RO_USER))
 
 def setup():
     os.makedirs(DIR, exist_ok=True); os.makedirs(SHARE, exist_ok=True); os.chmod(SHARE, 0o777)
@@ -48,6 +49,7 @@ usershare max shares = 0
 [vm2b]
 path = {SHARE}
 read only = no
+read list = {RO}
 valid users = {ALL}
 force user = root
 browseable = yes

@@ -1,4 +1,4 @@
-# Windows 11 specifics, recorded (no pass/fail except where noted): protections, wmic, SMB client policy, TLS, terminal.
+﻿# Windows 11 specifics, recorded (no pass/fail except where noted): protections, wmic, SMB client policy, TLS, terminal.
 $ErrorActionPreference = 'Continue'
 "==== OS"; (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' | Select-Object ProductName, DisplayVersion, CurrentBuild, UBR, EditionID | Format-List | Out-String)
 "==== wmic present?"; if (Get-Command wmic.exe -ErrorAction SilentlyContinue) { 'wmic.exe: present' } else { 'wmic.exe: ABSENT (24H2+ behaviour)' }
@@ -19,3 +19,9 @@ Get-ItemProperty 'HKCU:\Console\%%Startup' -ErrorAction SilentlyContinue | Forma
 whoami; (Get-LocalUser | Select-Object Name, Enabled, PrincipalSource | Format-Table | Out-String)
 "==== BitLocker / Device encryption (informational)"
 try { Get-BitLockerVolume | Select-Object MountPoint, ProtectionStatus | Format-Table | Out-String } catch { 'n/a' }
+"==== Windows Terminal / console"
+try { $wt = Get-Command wt.exe -ErrorAction Stop; "wt.exe: present ($($wt.Source))" } catch { 'wt.exe: absent' }
+try { $a = Get-AppxPackage -AllUsers -Name 'Microsoft.WindowsTerminal*' -ErrorAction Stop; if ($a) { 'WindowsTerminal appx: ' + ($a | ForEach-Object { $_.Version }) -join ',' } else { 'WindowsTerminal appx: not installed' } } catch { "WindowsTerminal appx: $($_.Exception.Message)" }
+try { 'default terminal (DelegationTerminal) = ' + (Get-ItemProperty 'HKCU:\Console\%%Startup' -ErrorAction Stop).DelegationTerminal } catch { 'default terminal: not set (the console host decides)' }
+"==== Event source of the service"
+try { $k = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\EventLog\Application\VM2BackupService' -ErrorAction Stop; 'EventMessageFile = ' + $k.EventMessageFile + '; TypesSupported = ' + $k.TypesSupported } catch { 'event source VM2BackupService: not registered yet (the product is not installed at this point)' }

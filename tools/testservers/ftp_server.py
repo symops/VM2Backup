@@ -35,7 +35,20 @@ def rst(sock):
         pass
 
 
+def _safe(fn):
+    try:
+        fn()
+    except Exception:
+        pass
+
+
 def cut_everything(dtp):
+    """Обрыв по команде SITE FAULT: оба соединения (управляющее и данных) получают RST.
+    Закрывать каналы ПРЯМО ЗДЕСЬ нельзя: мы внутри обработчика данных, который вызван из кода pyftpdlib (push_dtp_data / handle_read), а FTPHandler.close()
+    удаляет атрибут data_channel; код pyftpdlib, продолжающий работу после нашего исключения, обращается к нему и падает с
+    AttributeError: 'H' object has no attribute 'data_channel' (в журнале сервера; оборванная передача оставляла канал в неопределённом состоянии,
+    и следующий тест на том же сервере иногда зависал: ftp_abort_and_idle_connection на Windows 10 / 11). Поэтому здесь только включается RST при закрытии
+    (SO_LINGER 0), а сами каналы закрываются на следующем обороте цикла ввода-вывода, когда pyftpdlib уже вернулся из своих вызовов."""
     ch = dtp.cmd_channel
     for ob in (dtp, ch):
         try:
@@ -44,14 +57,9 @@ def cut_everything(dtp):
             rst(raw)
         except Exception:
             pass
-    try:
-        ch.close()
-    except Exception:
-        pass
-    try:
-        dtp.close()
-    except Exception:
-        pass
+    loop = ch.ioloop
+    loop.call_later(0, _safe, ch.close)
+    loop.call_later(0, _safe, dtp.close)
     raise ConnectionResetError('fault injected')
 
 
@@ -102,6 +110,7 @@ class TlsDTP(FaultMixin, TLS_DTPHandler):
 
 
 def faults(cls):
+    cls.data_channel = None            # FTPHandler.close() удаляет атрибут экземпляра: пусть после закрытия чтение даёт None, а не AttributeError
     cls.use_sendfile = False
     cls.auth_failed_timeout = 0
     cls.timeout = OPTS.get('idle', 300)
@@ -228,7 +237,7 @@ def main():
         H.tls_control_required = False
     H.banner = 'VM2B test FTP ready.'
     import logging
-    logging.basicConfig(level=logging.WARNING)
+    logging.basicConfig(level=getattr(logging, os.environ.get('VM2B_FTP_LOGLEVEL', 'WARNING').upper(), logging.WARNING))
     srv = FTPServer((common.BIND, a.port), H)
     srv.max_cons = 0; srv.max_cons_per_ip = 0
     print('ready', flush=True)

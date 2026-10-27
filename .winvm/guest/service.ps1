@@ -1,4 +1,4 @@
-# The Windows service under the real Service Control Manager.
+﻿# The Windows service under the real Service Control Manager.
 . C:\vm2b\guest\lib.ps1
 function St { $s = (& sc.exe query VM2BackupService | Select-String '\b(STOPPED|START_PENDING|STOP_PENDING|RUNNING|CONTINUE_PENDING|PAUSE_PENDING|PAUSED)\b' | Select-Object -First 1); if ($s) { ($s.ToString() -replace '\s+', ' ').Trim() } else { 'none' } }      # sc.exe output is localized (no 'STATE' on a Russian Windows): match the state names, which stay English
 function Wait-State($want, $ms) { $t0 = Get-Date; while (((Get-Date) - $t0).TotalMilliseconds -lt $ms) { if ((St) -match $want) { return $true }; Start-Sleep -Milliseconds 100 }; return $false }
@@ -59,6 +59,16 @@ Web-Up | Out-Null; $w = New-Web 'https://127.0.0.1:8443'; Web-Login $w | Out-Nul
 $done = $false; for ($i = 0; $i -lt 120; $i++) { $h = Api $w 'history.list' @{ limit = 5 }; if ($h.Result -and @($h.Result).Count -ge 1 -and ($h.Text -match 'Success')) { $done = $true; break }; Start-Sleep -Seconds 2 }
 Write-Output ("history: " + $h.Text)
 Check 'the interrupted backup continues after the restart and ends Success' $done $h.Text
+
+# the event source of the service has a message file: Event Viewer shows the text itself, not "the description for Event ID 1 cannot be found"
+$tok = 'vm2b-event-' + [guid]::NewGuid().ToString('N').Substring(0, 12)
+try { Write-EventLog -LogName Application -Source VM2BackupService -EventId 1 -EntryType Error -Message "VM2Backup test event $tok" -ErrorAction Stop } catch { Write-Output ("INFO  Write-EventLog: " + $_.Exception.Message) }
+Start-Sleep -Seconds 2
+$ev = Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'VM2BackupService' } -MaxEvents 10 -ErrorAction SilentlyContinue | Where-Object { $_.Properties.Count -gt 0 -and ($_.Properties[0].Value -match $tok) } | Select-Object -First 1
+$mf = try { (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\EventLog\Application\VM2BackupService' -ErrorAction Stop).EventMessageFile } catch { '' }
+Write-Output ("INFO  EventMessageFile = $mf; the rendered text: " + $(if ($ev) { ($ev.Message -split "`r?`n")[0] } else { '(event not found)' }))
+Check 'event source VM2BackupService is registered with a message file' ([bool]$mf) 'no EventMessageFile'
+Check 'Event Viewer shows the text of a VM2BackupService event (message file works)' ($ev -and $ev.Message -match [regex]::Escape($tok)) $(if ($ev) { $ev.Message } else { 'event not found' })
 
 # crash recovery: kill the process, the SCM restarts it after 60 s (first recovery action)
 $procId = Svc-Pid; Write-Output "service pid $procId"
