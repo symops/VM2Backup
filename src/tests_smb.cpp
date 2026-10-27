@@ -178,7 +178,7 @@ VM2B_TEST("smb", error_texts_and_classes)
     static const Row rows[] = {
         { 53, "not found", true }, { 67, "share", false }, { 86, "password", false }, { 1326, "password", false }, { 1219, "other credentials", false },
         { 5, "access denied", false }, { 1203, "not valid", false }, { 1231, "not reachable", true }, { 1222, "not reachable", true }, { 1460, "timed out", true },
-        { 64, "lost", true }, { 1331, "disabled", false }, { 1909, "locked", false }, { 1311, "domain controller", true }, { 1225, "refused", true },
+        { 64, "lost", true }, { 1331, "disabled", false }, { 1909, "locked", false }, { 1907, "must be changed", false }, { 1330, "expired", false }, { 1311, "domain controller", true }, { 1225, "refused", true },
     };
     for (const Row& r : rows) {
         bool tr = !r.transient; Str t = SmbErrorText(r.code, "srv1", "data", tr);

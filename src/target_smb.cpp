@@ -170,6 +170,8 @@ Str SmbErrorText(unsigned long code, const Str& host, const Str& share, bool& tr
     case 5: return Str::fmt("access denied: the user has no right to %s on %s, or no user name was given (%lu)", s.c_str(), h.c_str(), code);
     case 1203: return Str::fmt("the network path is not valid, no network provider accepted it (%lu)", code);
     case 1331: return Str::fmt("the account is disabled (%lu)", code);
+    case 1907: return Str::fmt("the password of this account must be changed before it can log on: change it (for example at a Windows logon), then enter the new one here (%lu)", code);
+    case 1330: return Str::fmt("the password of this account has expired: change it, then enter the new one here (%lu)", code);
     case 1909: return Str::fmt("the account is locked out (%lu)", code);
     case 1327: case 1328: case 1385: return Str::fmt("the account is not allowed to log on to %s (%lu)", h.c_str(), code);
     case 1396: return Str::fmt("the account name does not fit %s (wrong domain, or a trust problem) (%lu)", h.c_str(), code);

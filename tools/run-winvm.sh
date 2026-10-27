@@ -1,5 +1,6 @@
 #!/bin/bash
 # The whole VM2Backup test plan on a REAL Windows test VM (docs/WINDOWS-TESTS.md).
+#   tools/run-winvm.sh domain [...]   - НАСТОЯЩИЙ домен AD: две ВМ Server 2022 (vm2b-dc + vm2b-member), см. tools/run-domain.sh
 #   tools/run-winvm.sh <x86|w10|w11> [--keep] [--no-create] [--phases a,b,c] [--seed N] [--no-build]
 # Creates the VM (container vm2b-win, .winvm/run-os.sh), waits for the install, runs the phases, prints a summary, copies the results to
 # .winvm-results/<os>-<time>/ and DELETES the VM, its storage and the custom ISOs (.winvm/destroy.sh), whatever the result (--keep: leave it).
@@ -35,6 +36,7 @@ if [ -z "${VM2B_RUNWINVM_COPY:-}" ]; then
 fi
 R=$(cd "$VM2B_RUNWINVM_DIR/.." && pwd); W=$R/.winvm; RES=$W/shared/results
 OS=${1:-}; shift || true
+[ "$OS" = domain ] && exec bash "$R/tools/run-domain.sh" "$@"      # настоящий домен AD: две ВМ Server 2022 (tools/run-domain.sh)
 case "$OS" in x86|w10|w11) ;; *) sed -n 2,30p "$0"; exit 2;; esac
 KEEP=0; CREATE=1; BUILD=1; PHASES=sysinfo,autotest,winreal,install,installer,panel,web,net,smb,smbsign,svcacct,aclreal,speedlimit,restartjob,unicode,verify,big,winbig; [ "$OS" = w11 ] && PHASES=sysinfo,win11,autotest,winreal,install,installer,panel,web,net,smb,smbsign,svcacct,aclreal,speedlimit,restartjob,unicode,verify,big,winbig,defender,smartscreen,sac; SEED=$(( (RANDOM << 15 | RANDOM) % 1000000000 ))
 while [ $# -gt 0 ]; do case "$1" in

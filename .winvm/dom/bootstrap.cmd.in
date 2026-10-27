@@ -1,0 +1,34 @@
+@echo off
+rem Один раз при первом входе (через vm2bboot.cmd на втором CD): машина становится исполнителем тестов VM2Backup и получает внутреннюю сеть домена.
+rem Подстановки: @IP@ (10.77.0.1 DC / 10.77.0.2 member), @MAC@ (MAC внутренней карты), @NAME@.
+set SRC=\\10.0.2.4\qemu
+mkdir C:\vm2b 2>nul
+copy /y "%SRC%\poller.bat" C:\vm2b\poller.bat >nul
+ver > "%SRC%\results\windows-version.txt"
+systeminfo >> "%SRC%\results\windows-version.txt" 2>&1
+rem Исполнитель: ключ Run (запуск в интерактивном сеансе при входе ЛЮБОГО пользователя, в т.ч. доменного Administrator на DC после повышения;
+rem задача планировщика привязана к локальной учётной записи, которой после повышения до DC уже нет). Встроенный Administrator (RID 500) - без фильтрации UAC.
+reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v VM2BPoller /t REG_SZ /d "C:\vm2b\poller.bat %SRC%" /f > "%SRC%\results\task-create.txt" 2>&1
+netsh advfirewall set allprofiles state off > "%SRC%\results\firewall.txt" 2>&1
+powercfg /change monitor-timeout-ac 0
+powercfg /change standby-timeout-ac 0
+powercfg /hibernate off
+reg add "HKLM\SOFTWARE\Microsoft\ServerManager" /v DoNotOpenServerManagerAtLogon /t REG_DWORD /d 1 /f >nul
+reg add "HKLM\SOFTWARE\Microsoft\ServerManager" /v DoNotPopWACConsoleAtSMLaunch /t REG_DWORD /d 1 /f >nul
+reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\System" /v EnableSmartScreen /t REG_DWORD /d 0 /f >nul
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" /v FileInfoCacheLifetime /t REG_DWORD /d 0 /f >nul
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" /v DirectoryCacheLifetime /t REG_DWORD /d 0 /f >nul
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" /v FileNotFoundCacheLifetime /t REG_DWORD /d 0 /f >nul
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" /v AllowInsecureGuestAuth /t REG_DWORD /d 1 /f >nul
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff" /f >nul
+sc config wuauserv start= disabled >nul
+sc stop wuauserv >nul 2>&1
+reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" /v NoAutoUpdate /t REG_DWORD /d 1 /f >nul
+rem Внутренняя сеть: адрес по MAC. Карта хоста (user-режим) не регистрируется в DNS (иначе у обеих ВМ в домене оказался бы адрес 10.0.2.15) и без DNS-серверов хоста.
+powershell -NoProfile -Command "$ErrorActionPreference='Continue'; $a=Get-NetAdapter | ?{$_.MacAddress -eq '@MAC@'}; $h=Get-NetAdapter | ?{$_.MacAddress -ne '@MAC@' -and $_.Virtual -eq $false}; New-NetIPAddress -InterfaceIndex $a.ifIndex -IPAddress @IP@ -PrefixLength 24; Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses 10.77.0.1; Rename-NetAdapter -Name $a.Name -NewName Internal; foreach($x in $h){ Set-DnsClient -InterfaceIndex $x.ifIndex -RegisterThisConnectionsAddress $false; Set-DnsClientServerAddress -InterfaceIndex $x.ifIndex -ServerAddresses 10.77.0.1; Rename-NetAdapter -Name $x.Name -NewName Host }; Set-NetIPInterface -InterfaceAlias Internal -InterfaceMetric 5; Set-DnsClient -InterfaceAlias Internal -RegisterThisConnectionsAddress $true" > "%SRC%\results\net-setup.txt" 2>&1
+ipconfig /all >> "%SRC%\results\net-setup.txt"
+rem Имя компьютера в домене: DC / MEMBER (тесты и задание пользователя используют \\dc и member$); автовход - по локальной учётной записи ".".
+powershell -NoProfile -Command "Rename-Computer -NewName @SHORT@ -Force" >> "%SRC%\results\net-setup.txt" 2>&1
+reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v DefaultDomainName /t REG_SZ /d . /f >nul
+echo executor installed %DATE% %TIME% > "%SRC%\results\executor-ready.txt"
+shutdown /r /t 10

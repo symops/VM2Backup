@@ -1,0 +1,46 @@
+[32s] executors initialised
+INFO icacls data folder:
+INFO [LocalSystem] by IP address (no SPN -> NTLM, a machine account cannot): status 200
+INFO [LocalSystem] backup to Restricted: {"id":"6b61cb9f848c","kind":"task","name":"dom-sys-restr-114223","task_id":"5bcf6eb85594","trigger":"manual","started":1793090543.9788921,"ended":1793090544.1974995,"version":"1.0.300.573","status":"Failed","raw_bytes":0,"archive_bytes":0,"summary":{"ok":0,"bad":1,"count":1}}
+INFO secedit (SeServiceLogonRight VM2B\svcbackup = S-1-5-21-2596210169-3719527221-797397273-1118): Выполнено 6 проц. (0/15) 	Обработка области Privilege Rights  Выполнено 13 проц. (1/15) 	Обработка области Privilege Rig
+INFO sc config obj=VM2B\svcbackup: [SC] ChangeServiceConfig: успех
+INFO sc start:  Имя_службы: VM2BackupService Тип : 10 WIN32_OWN_PROCESS Состояние : 2 START_PENDING (NOT_STOPPABLE, NOT_PAUSABLE, IGNORES_SHUTDOWN) Код_выхода_Win32 : 0 (0x0) Код_выхода_службы : 0 (0x0) Контрольная_точка : 0x0 Ожидание : 0x7d0 ID_процесса : 3272 Флаги : 
+INFO svcbackup :  Name Value ---- ----- StartName VM2B\svcbackup Owner VM2B\svcbackup 
+INFO [svcbackup] share on MEMBER itself (loopback): OK
+INFO secedit (SeServiceLogonRight VM2B\nouser = S-1-5-21-2596210169-3719527221-797397273-1120): Выполнено 6 проц. (0/15) 	Обработка области Privilege Rights  Выполнено 13 проц. (1/15) 	Обработка области Privilege Rig
+INFO a standard DOMAIN user vs the data folder: READ_DENIED config.json | READ_DENIED web.json | READ_DENIED state.json | READ_DENIED history.json | WRITE_DENIED config.json | LOGS_LIST_OK
+INFO secedit (SeServiceLogonRight VM2B\vm2bgmsa$ = S-1-5-21-2596210169-3719527221-797397273-1126): Выполнено 6 проц. (0/15) 	Обработка области Privilege Rights  Выполнено 13 проц. (1/15) 	Обработка области Privilege Rig
+INFO sc config obj=VM2B\vm2bgmsa$: [SC] ChangeServiceConfig: успех
+INFO sc start:  Имя_службы: VM2BackupService Тип : 10 WIN32_OWN_PROCESS Состояние : 2 START_PENDING (NOT_STOPPABLE, NOT_PAUSABLE, IGNORES_SHUTDOWN) Код_выхода_Win32 : 0 (0x0) Код_выхода_службы : 0 (0x0) Контрольная_точка : 0x1 Ожидание : 0x3a98 ID_процесса : 2768 Флаги : 
+INFO gMSA :  Name Value ---- ----- StartName VM2B\vm2bgmsa$ Owner VM2B\vm2bgmsa$ 
+INFO gMSA password id before: 01-00-00-00-4B-44-53-4B-02-00-00-00-6C-01-00-00-10-00-00-00-; pwdLastSet 134375609521222708
+INFO Reset-ADServiceAccountPassword (gMSA): ok
+INFO gMSA password id changed after Reset-ADServiceAccountPassword: False
+INFO the password did not rotate with the cmdlet: moving the clocks of DC and MEMBER forward by 2 days (the interval of the gMSA is 1 day), then back
+INFO gMSA password id changed after the time shift: False
+INFO service state with the old process after the shift: Состояние : 4 RUNNING
+INFO [gMSA] backup in the running service after the rotation, WITHOUT a restart: backup: 
+INFO net start after the rotation: Служба "VM2Backup Service" запускается. Служба "VM2Backup Service" успешно запущена. 
+INFO sc config obj=VM2B\nouser: [SC] ChangeServiceConfig: успех
+INFO sc start:  Имя_службы: VM2BackupService Тип : 10 WIN32_OWN_PROCESS Состояние : 2 START_PENDING (NOT_STOPPABLE, NOT_PAUSABLE, IGNORES_SHUTDOWN) Код_выхода_Win32 : 0 (0x0) Код_выхода_службы : 0 (0x0) Контрольная_точка : 0x1 Ожидание : 0x3a98 ID_процесса : 3748 Флаги : 
+INFO service state under VM2B\nouser (no rights to the data folder): STATE : 1 STOPPED
+INFO Application log: VM2Backup service cannot start: cannot write C:\ProgramData\VM2Backup\config.json.tmp: error 5
+INFO sc config obj=LocalSystem: [SC] ChangeServiceConfig: успех
+INFO sc start:  Имя_службы: VM2BackupService Тип : 10 WIN32_OWN_PROCESS Состояние : 2 START_PENDING (NOT_STOPPABLE, NOT_PAUSABLE, IGNORES_SHUTDOWN) Код_выхода_Win32 : 0 (0x0) Код_выхода_службы : 0 (0x0) Контрольная_точка : 0x0 Ожидание : 0x7d0 ID_процесса : 4684 Флаги : 
+[2455s] returning the clocks of both VMs by 2 days
+Синхронизация не выполнена, так как запрошенное изменение времени слишком велико.
+27.10.2026 12:16:30,32
+[2477s] PHASE svc: 45 pass, 8 fail (rc=0)
+    [10-svc] FAIL  six servers saved  :: 
+    [10-svc] FAIL  [LocalSystem] backup + verify + restore on \\dc.vm2b.test\Backups with the empty user (MEMBER$)  :: backup: 
+    [10-svc] FAIL  [svcbackup] all servers are still there  :: {"ok":true,"result":[{"id":"local","name":"Local Computer","type":"local","directory":"C:\\ProgramData\\VM2Backup\\Backups","builtin":true},{"path":"C:\\vm2b\\jobdata","name":"kept server","type":"directory","id":"9055de62d088"},{"path":"\\\\dc.vm2b.test\\Backups","name":"dom own fqdn","type":"smb","user":"","id":"1c8af35360b0"},{"path":"C:\\vm2b\\domdata","name":"src dom-gmsa-shift-norestart-111613","type":"directory","id":"c7408c14aaad"},{"path":"\\\\dc.vm2b.test\\Backups","name":"dom explicit bkuser","has_password":true,"type":"smb","user":"bkuser@vm2b.test","id":"b7fe0dd8f9df"},{"path":"\\\\dc\\Backups","name":"dom own short","type":"smb","user":"","id":"49213aead1e3"},{"path":"\\\\10.77.0.1\\Backups","name":"dom own ip","type":"smb","user":"","id":"05b8e3e8c5b2"},{"path":"\\\\dc.vm2b.test\\Restricted","name":"dom own restricted","type":"smb","user":"","id":"696d5de132ff"},{"path":"\\\\member.vm2b.test\\memberlocal","name":"dom own member local","type":"smb","user":"","id":"4eaed81a7f2f"},{"path":"C:\\vm2b\\domdata","name":"src dom-sys-fqdn-113600","type":"directory","id":"682f1e6ca01c"},{"path":"C:\\vm2b\\domdata","name":"src dom-sys-short-114208","type":"directory","id":"57c6c1373d22"},{"path":"C:\\vm2b\\domdata","name":"src dom-sys-restr-114223","type":"directory","id":"be8817bf087e"},{"path":"C:\\vm2b\\domdata","name":"src dom-sys-explicit-114226","type":"directory","id":"7fcf0059f3d8"}]}
+    [10-svc] FAIL  [svcbackup] backup + verify + restore on \\dc.vm2b.test\Backups, empty user  :: backup: 
+    [10-svc] FAIL  [gMSA] all servers are still there  :: {"ok":true,"result":[{"id":"local","name":"Local Computer","type":"local","directory":"C:\\ProgramData\\VM2Backup\\Backups","builtin":true},{"path":"C:\\vm2b\\jobdata","name":"kept server","type":"directory","id":"9055de62d088"},{"path":"\\\\dc.vm2b.test\\Backups","name":"dom own fqdn","type":"smb","user":"","id":"1c8af35360b0"},{"path":"C:\\vm2b\\domdata","name":"src dom-gmsa-shift-norestart-111613","type":"directory","id":"c7408c14aaad"},{"path":"\\\\dc.vm2b.test\\Backups","name":"dom explicit bkuser","has_password":true,"type":"smb","user":"bkuser@vm2b.test","id":"b7fe0dd8f9df"},{"path":"\\\\dc\\Backups","name":"dom own short","type":"smb","user":"","id":"49213aead1e3"},{"path":"\\\\10.77.0.1\\Backups","name":"dom own ip","type":"smb","user":"","id":"05b8e3e8c5b2"},{"path":"\\\\dc.vm2b.test\\Restricted","name":"dom own restricted","type":"smb","user":"","id":"696d5de132ff"},{"path":"\\\\member.vm2b.test\\memberlocal","name":"dom own member local","type":"smb","user":"","id":"4eaed81a7f2f"},{"path":"C:\\vm2b\\domdata","name":"src dom-sys-fqdn-113600","type":"directory","id":"682f1e6ca01c"},{"path":"C:\\vm2b\\domdata","name":"src dom-sys-short-114208","type":"directory","id":"57c6c1373d22"},{"path":"C:\\vm2b\\domdata","name":"src dom-sys-restr-114223","type":"directory","id":"be8817bf087e"},{"path":"C:\\vm2b\\domdata","name":"src dom-sys-explicit-114226","type":"directory","id":"7fcf0059f3d8"},{"path":"C:\\vm2b\\domdata","name":"src dom-svc-fqdn-114251","type":"directory","id":"67df48f30b09"},{"path":"C:\\vm2b\\domdata","name":"src dom-svc-short-114856","type":"directory","id":"66c0ec6d7f9b"},{"path":"C:\\vm2b\\domdata","name":"src dom-svc-local-114913","type":"directory","id":"4591acb7923b"},{"path":"C:\\vm2b\\domdata","name":"src dom-svc-explicit-114926","type":"directory","id":"f1008784be8e"},{"path":"\\\\dc.vm2b.test\\Backups","name":"dom saved by svcbackup","has_password":true,"type":"smb","user":"VM2B\\bkuser","id":"b90d2a8d5a91"}]}
+    [10-svc] FAIL  [gMSA] backup + verify + restore on \\dc.vm2b.test\Backups, empty user  :: backup: 
+    [10-svc] FAIL  [gMSA] backup works after the restart  :: backup: 
+    [10-svc] FAIL  [gMSA] backup + verify + restore works after the rotation and the restart  :: backup: 
+[2477s] ================ SUMMARY (domain, seed 17483, 2477s) ================
+  svc: 45 pass, 8 fail (rc=0)
+  log domainlock: 3 passed, 0 failed, 0 skipped (1 round, seed 3940)
+  log domainreal: 6 passed, 0 failed, 0 skipped (1 round, seed 3940)
+  log gui: 4 passed, 0 failed, 0 skipped (1 round, seed 4148)
