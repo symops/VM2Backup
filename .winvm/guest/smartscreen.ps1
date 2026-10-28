@@ -8,3 +8,8 @@ Start-Process explorer.exe -ArgumentList "`"$d\VM2Backup-Setup.exe`""
 Start-Sleep -Seconds 20
 & powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\shot.ps1 smartscreen-1
 'processes: ' + ((Get-Process | Where-Object { $_.ProcessName -match 'Setup|smartscreen|VM2' } | Select-Object -ExpandProperty ProcessName) -join ',')
+# расширенная часть: «Подробнее» -> видна кнопка «Выполнить в любом случае»; снимок и перечень элементов окна
+& powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\signing.ps1 click more 8
+Start-Sleep -Seconds 3
+& powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\shot.ps1 smartscreen-2-more-info
+& powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\signing.ps1 dump

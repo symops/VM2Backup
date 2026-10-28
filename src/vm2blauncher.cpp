@@ -55,6 +55,32 @@ static bool ExtractPayload(wchar_t* root, bool* failed)
     if (f == INVALID_HANDLE_VALUE) return false;
     LARGE_INTEGER size = {}, pos = {};
     GetFileSizeEx(f, &size);
+    // A signed file (Authenticode) carries its signature AFTER the payload and the trailer: the certificate table is the last thing in the file.
+    // The payload ends where the table starts (tools/sign.sh signs the finished single file; the signature covers the whole payload).
+    {
+        IMAGE_DOS_HEADER dos = {};
+        DWORD rd = 0;
+        LARGE_INTEGER z = {};
+        if (SetFilePointerEx(f, z, nullptr, FILE_BEGIN) && ReadFile(f, &dos, sizeof(dos), &rd, nullptr) && rd == sizeof(dos) && dos.e_magic == IMAGE_DOS_SIGNATURE) {
+            IMAGE_NT_HEADERS32 nt = {};
+            z.QuadPart = dos.e_lfanew;
+            if (SetFilePointerEx(f, z, nullptr, FILE_BEGIN) && ReadFile(f, &nt, sizeof(nt), &rd, nullptr) && rd == sizeof(nt) &&
+                nt.Signature == IMAGE_NT_SIGNATURE && nt.OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC) {
+                const IMAGE_DATA_DIRECTORY& sec = nt.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_SECURITY];   // VirtualAddress = a FILE offset here
+                if (sec.VirtualAddress > 0 && sec.Size > 0 && (LONGLONG)sec.VirtualAddress + sec.Size <= size.QuadPart) {
+                    size.QuadPart = sec.VirtualAddress;
+                    // the signing tool pads the file to a multiple of 8 before the table: skip up to 7 zero bytes behind the trailer
+                    for (int pad = 0; pad < 8 && size.QuadPart > 16; pad++) {
+                        char t[16] = {};
+                        LARGE_INTEGER at;
+                        at.QuadPart = size.QuadPart - 16;
+                        if (SetFilePointerEx(f, at, nullptr, FILE_BEGIN) && ReadFile(f, t, 16, &rd, nullptr) && rd == 16 && memcmp(t, kMagic, 8) == 0) break;
+                        size.QuadPart--;
+                    }
+                }
+            }
+        }
+    }
     char trailer[16] = {};
     DWORD got = 0;
     pos.QuadPart = size.QuadPart - 16;

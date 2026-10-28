@@ -14,6 +14,7 @@
 #   smb       the REAL SMB share (group smbreal), net use Y: + net.drives
 #   win11     Windows 11 specifics (wmic, Smart App Control, SMB client policy, terminal, event source ...), informational
 #   defender  Microsoft Defender at the end of the run: real-time ON, no detections, no exclusions (nothing is ever disabled)
+#   signing   (w11) the SIGNED Setup with Mark of the Web, four cases (unsigned / signed untrusted / signed trusted / tampered): SmartScreen, UAC, screenshots (docs/SIGNING.md)
 #   sac       (w11, ALWAYS LAST: cannot be undone) Smart App Control: try to switch it to On, restart, record what happens to the unsigned Setup and the service
 #   smartscreen  the Setup with Mark of the Web started like a double click, screenshots of what the user sees
 #   big       the 3 'big' autotests (4 GiB; VM2B_BIG=1)
@@ -296,19 +297,64 @@ if want smartscreen; then
   RESULT[smartscreen]="rc=$RC (screenshots in shots/: what the user sees)"
 fi
 
+if want signing; then
+  # ПОДПИСАННЫЙ установщик (docs/SIGNING.md, .winvm/guest/signing.ps1): четыре сочетания, что видит пользователь. Файл всегда с Mark of the Web (ZoneId=3).
+  #   c) без подписи            a) подписан, корень НЕ доверен       b) подписан, корень в Root + издатель в TrustedPublisher      d) подписан + доверен, файл ИЗМЕНЁН после подписи
+  # Снимки делает ХОСТ (qemu screendump): так виден и запрос UAC на безопасном рабочем столе. Тестовый сертификат: tools/make-test-cert.sh (.winvm/shared/pki).
+  [ -f "$W/shared/pki/test-sign.cer" ] || bash "$R/tools/make-test-cert.sh" >/dev/null
+  mkdir -p "$RES/shots/signing" "$W/shared/pki/variants"
+  SG='powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\signing.ps1'
+  sg() { local n=$1; shift; gj "20-sign-$n" 300 "$SG $*"; }
+  sgshot() { "$W/shot.sh" "$RES/shots/signing/$1.png" >/dev/null 2>&1; }
+  sg prep prep > /dev/null
+  sg info-before info > /dev/null
+  sg untrust untrust > /dev/null
+  sg uac-on uac on > /dev/null; reboot_guest 20-sign-reboot-uac-on || say "the guest did not return after the restart (UAC on)"
+  signing_case() { # signing_case <метка> <вариант>: файл с Mark of the Web, двойной щелчок; окно SmartScreen -> «Подробнее» -> «Выполнить в любом случае» -> окно «Открыть файл» -> «Запустить» -> UAC; состояние, события, уборка
+    local tag=$1 var=$2
+    sg "$tag-launch" launch $var > /dev/null
+    sleep 20; sgshot "$tag-1-smartscreen"
+    sg "$tag-more" click more 8 > /dev/null; sleep 2; sgshot "$tag-2-more-info"
+    sg "$tag-run" click run 6 > /dev/null; sleep 5; sgshot "$tag-3-after-run-anyway"
+    sg "$tag-runfile" click runfile 12 > /dev/null; sleep 12; sgshot "$tag-4-uac-or-setup"
+    sg "$tag-state" state > /dev/null
+    sg "$tag-events" events 8 > /dev/null
+    sg "$tag-kill" kill > /dev/null; sleep 4; sgshot "$tag-5-cleaned"
+    for k in more run runfile; do echo "  $tag $k: $(tr -d '\r' < "$RES/20-sign-$tag-$k.out" | grep -aE '^INFO' | head -1)" >> "$RES/signing-observed.txt"; done
+  }
+  signing_case c-unsigned unsigned
+  signing_case a-signed-untrusted signed
+  sg trust trust > /dev/null; sg info-after-trust info > /dev/null
+  signing_case b-signed-trusted signed
+  signing_case d-tampered-trusted tampered
+  sg uac-reset uac reset > /dev/null; reboot_guest 20-sign-reboot-uac-off || true
+  for f in 20-sign-info-before 20-sign-info-after-trust 20-sign-trust; do tr -d '\r' < "$RES/$f.out" | grep -aE '^INFO' | tee -a "$SUM"; done
+  for t in c-unsigned a-signed-untrusted b-signed-trusted d-tampered-trusted; do echo "--- $t" | tee -a "$SUM"; tr -d '\r' < "$RES/20-sign-$t-launch.out" | grep -aE '^INFO' | tee -a "$SUM"; for k in state events; do tr -d '\r' < "$RES/20-sign-$t-$k.out" 2>/dev/null | grep -aE '^INFO' | head -12 | tee -a "$SUM"; done; done
+  RESULT[signing]="informational (20-sign-*.out, shots/signing/*.png)"
+fi
+
 if want sac; then
-  # Smart App Control: the LAST phase (once On it cannot be switched off without resetting Windows; the VM is deleted right after)
+  # Smart App Control: ПОСЛЕДНЯЯ фаза (включённый SAC нельзя выключить без сброса Windows; ВМ удаляется сразу после). Включение - через настоящий интерфейс
+  # «Безопасность Windows» (переключатель On, UI Automation), потом проверка вариантов установщика и продукта (guest/sac.ps1), без доверия к тестовому корню и с ним.
   mkdir -p "$RES/shots"
+  gj 99-sac-info 600 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\sac.ps1 info' > /dev/null
   gj 99-sac-enable 600 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\sac.ps1 enable' > /dev/null
   tr -d '\r' < "$RES/99-sac-enable.out" | grep -aE '^INFO' | tee -a "$SUM"
-  if tr -d '\r' < "$RES/99-sac-enable.out" | grep -aq 'the value is 1'; then
-    reboot_guest 99-sac-reboot || "$W/shot.sh" "$RES/shots/sac-no-return.png" >/dev/null 2>&1
-    gj 99-sac-check 900 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\sac.ps1 check' > /dev/null; RC=$?
-  else
-    gj 99-sac-check 900 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\sac.ps1 check' > /dev/null; RC=$?
-  fi
+  "$W/shot.sh" "$RES/shots/sac-host-after-enable.png" >/dev/null 2>&1
+  reboot_guest 99-sac-reboot || "$W/shot.sh" "$RES/shots/sac-no-return.png" >/dev/null 2>&1
+  gj 99-sac-check 1800 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\sac.ps1 check' > /dev/null; RC=$?
   "$W/shot.sh" "$RES/shots/sac-host.png" >/dev/null 2>&1
   tr -d '\r' < "$RES/99-sac-check.out" | grep -aE '^(INFO|PASS|FAIL)' | tee -a "$SUM"
+  gj 99-sac-trust 600 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\sac.ps1 trust' > /dev/null
+  reboot_guest 99-sac-reboot2 || true
+  gj 99-sac-check-trusted 1800 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\sac.ps1 check-trusted' > /dev/null
+  "$W/shot.sh" "$RES/shots/sac-host-trusted.png" >/dev/null 2>&1
+  tr -d '\r' < "$RES/99-sac-check-trusted.out" | grep -aE '^(INFO|PASS|FAIL)' | tee -a "$SUM"
+  # пробы: сеть у гостя, служба после перезагрузок, свежесобранные неподписанные exe (облачное решение SAC не всегда одинаково), неподписанные exe сборки, события блокировки
+  gj 99-sac-probe 900 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\sac.ps1 probe' > /dev/null
+  gj 99-sac-probe2 900 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\sac.ps1 probe2' > /dev/null
+  gj 99-sac-service 300 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\sacscm.ps1' > /dev/null
+  for f in 99-sac-probe 99-sac-probe2 99-sac-service; do tr -d '\r' < "$RES/$f.out" | grep -aE '^INFO' | grep -v 'no events' | cut -c1-300 | tee -a "$SUM"; done
   RESULT[sac]="rc=$RC (informational: 99-sac-*.out, shots/sac-*.png)"
 fi
 

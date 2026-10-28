@@ -35,6 +35,14 @@ for A in x64 x86; do
     cp scripts/uninstall.cmd $D/$A/
 done
 cp docs/INSTALL.txt docs/INSTALL.en.txt THIRD-PARTY-NOTICES.md $D/ 2>/dev/null || true
+# Необязательная подпись Authenticode (docs/SIGNING.md): включается переменной VM2B_SIGN_PFX (+ VM2B_SIGN_PASSWORD_FILE или VM2B_SIGN_PASSWORD,
+# VM2B_SIGN_TIMESTAMP, VM2B_SIGN_URL). Сначала подписываются все exe полезной нагрузки (они попадут в cab уже подписанными), потом - целиком
+# итоговый одиночный файл. Без переменных пакет собирается без подписи, как раньше. Пароль в журнал и в командную строку не попадает.
+SIGN=0
+if [ -n "${VM2B_SIGN_PFX:-}" ]; then
+    SIGN=1
+    tools/sign.sh --verify $D/VM2Backup-Setup.exe $D/x64/*.exe $D/x86/*.exe
+fi
 # Windows cmd.exe reads .cmd files in the OEM code page; convert the Russian text to CP866.
 for f in $D/uninstall.cmd $D/x64/uninstall.cmd $D/x86/uninstall.cmd; do
     iconv -f UTF-8 -t CP866 "$f" | sed 's/$/\r/' > "$f.tmp" && mv "$f.tmp" "$f"
@@ -47,9 +55,12 @@ python3 - <<'PY'
 import struct
 launcher = open('build/x86/vm2blauncher.exe', 'rb').read()
 cab = open('dist/payload.cab', 'rb').read()
-open('dist/VM2Backup-Setup.exe', 'wb').write(launcher + cab + b'VM2BPKG1' + struct.pack('<Q', len(cab)))
+# the whole file is a multiple of 8 bytes (zeros between the launcher and the cabinet): the signing tool then adds no padding behind the trailer
+pad = b'\0' * (-(len(launcher) + len(cab) + 16) % 8)
+open('dist/VM2Backup-Setup.exe', 'wb').write(launcher + pad + cab + b'VM2BPKG1' + struct.pack('<Q', len(cab)))
 PY
 rm -f dist/payload.cab
+[ "$SIGN" = 1 ] && tools/sign.sh --verify dist/VM2Backup-Setup.exe
 ls -la dist/VM2Backup-Setup.exe
 
 # Link maps of this build (a crash line in panel.log names module + offset; the map names the function), kept per version.
