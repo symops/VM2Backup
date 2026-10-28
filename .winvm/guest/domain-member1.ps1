@@ -7,6 +7,5 @@ Check 'the DC answers on the internal network (ping 10.77.0.1)' (Test-Connection
 Check 'DNS resolves dc.vm2b.test to 10.77.0.1' ((Wait-Dns 'dc.vm2b.test' 300) -and ((Resolve-DnsName dc.vm2b.test -Type A).IPAddress -contains $d.DcIp)) ((Resolve-DnsName dc.vm2b.test -ErrorAction SilentlyContinue | Out-String))
 Add-Computer -DomainName $d.Name -Credential (Dom-AdminCred) -Force -ErrorAction Stop -WarningAction SilentlyContinue
 Check 'Add-Computer' $? ''
-$wl = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
-Set-ItemProperty $wl AutoAdminLogon '1'; Set-ItemProperty $wl DefaultUserName 'Administrator'; Set-ItemProperty $wl DefaultDomainName '.'; Set-ItemProperty $wl DefaultPassword $d.AdminPw
+Set-AutoLogon $d.Netbios (Get-BuiltinAdminName) $d.AdminPw      # после ввода в домен: VM2B\<имя из SID -500>
 Write-Output ("FAILED=" + $global:Failed); exit $global:Failed

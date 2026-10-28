@@ -59,8 +59,7 @@ Details for developers: `docs/DEV.md`; tests on real Windows: `docs/WINDOWS-TEST
   the web site with Windows' own TLS clients (TLS 1.2 everywhere, TLS 1.3 negotiated on Windows 11), DPAPI over a service and a Windows restart, the native autotests, FTP / SCP
   against servers on the Linux host, and **real SMB** (`WNetAddConnection2W` against a Samba share with a user and a password, also an SMB 3 encrypted share on Windows 11:
   backup / verify / restore, wrong password, unreachable server, a server that stops and returns in the middle of a backup, network browse, `net use` drives).
-  The Windows 11 SmartScreen blocks the unsigned Setup.exe when it carries the Mark of the Web (the installer is not code-signed). Not covered: domain accounts and the service account
-  against shares, real ESXi / vCenter (the ESXi group ran on the x86 VM only, 5 tests limited by the Windows SMB client cache).
+  The Windows 11 SmartScreen blocks the unsigned Setup.exe when it carries the Mark of the Web (the installer is not code-signed). A **real Active Directory domain** (two Windows Server 2022 VMs, `tools/run-winvm.sh domain`) covered: Kerberos / NTLM accounts, the service as LocalSystem / a domain user / a gMSA (real password rotation after a synchronized clock shift, no restart needed), expired / locked / disabled / must-change passwords with the lock-out guard, the network root listing the domain's servers (DsGetDcName + LDAP), unattended logon after every restart. Not covered: real ESXi / vCenter (the ESXi group ran on the x86 VM only, 5 tests limited by the Windows SMB client cache).
 * **ESXi / vCenter** (backup and restore) was tested only against the mock servers in `tools/testservers/esxi_mock.py`
   (profiles 6.0 ... 9.0, host and vCenter). The API shapes follow the vSphere reference; behaviour of real hosts is assumed.
   ESXi 9.0 details are assumed.

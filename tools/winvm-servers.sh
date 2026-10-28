@@ -3,11 +3,11 @@
 #   Servers listen on the Docker bridge address (VM2B_BIND_ADDR, default 172.17.0.1) and the files they serve live in .winvm/shared/srv/<name>/, which the guest
 #   reaches as a UNC path (VM2B_GUEST_MAP); servers.json is written there with the addresses and paths AS THE GUEST SEES THEM.  PIDs: .winvm/shared/srv/pids-<name> (killed by PID only).
 #   Environment: VM2B_GUEST_SHARE (default \\10.0.2.4\qemu), VM2B_SEED.
-R=$(cd "$(dirname "$0")/.." && pwd); W=$R/.winvm; S=$W/shared/srv
+R=$(cd "$(dirname "$0")/.." && pwd); W=$R/.winvm; S=${VM2B_SRV_DIR:-$W/shared/srv}     # VM2B_SRV_DIR / VM2B_SHARED_ROOT: the domain stand (.winvm/dom/shared-member/srv)
 export VM2B_BIND_ADDR=${VM2B_BIND_ADDR:-172.17.0.1}; export VM2B_SERVER_HOST=${VM2B_SERVER_HOST:-$VM2B_BIND_ADDR}
 export VM2B_SERVER_NAME=${VM2B_SERVER_NAME:-vm2b-host.test}      # certificates are made for this name; the guest's hosts file maps it to the bridge address (run-winvm.sh does that)
 GS=${VM2B_GUEST_SHARE:-'\\10.0.2.4\qemu'}
-export VM2B_GUEST_MAP="$W/shared=$GS"
+export VM2B_GUEST_MAP="${VM2B_SHARED_ROOT:-$W/shared}=$GS"
 PY=$R/.venv/bin/python; [ -x "$PY" ] || PY=python3
 mkdir -p "$S"
 case "$1" in

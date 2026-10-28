@@ -27,7 +27,16 @@ function Cycle($w, [string]$tag, [string]$srv) {       # копия + прове
     return ''
 }
 function Own-Info($w, [string]$id, [string]$what) { $t = Api $w 'servers.test' @{ id = $id }; Write-Output ("INFO servers.test $what : status=" + $t.Status + " " + $t.Text.Substring(0, [Math]::Min(260, $t.Text.Length))); return $t }
-function Save-Smb($w, [string]$name, [string]$unc, [string]$user, [string]$pw) { $s = Api $w 'servers.save' @{ server = @{ type = 'smb'; name = $name; path = $unc; user = $user; password = $pw } }; return $s.Result.id }
+function Save-Smb($w, [string]$name, [string]$unc, [string]$user, [string]$pw) {
+    $t0 = Get-Date; $s = Api $w 'servers.save' @{ server = @{ type = 'smb'; name = $name; path = $unc; user = $user; password = $pw } }; $ms = [int]((Get-Date) - $t0).TotalMilliseconds
+    if ($s.Result -and $s.Result.id) { if ($ms -gt 3000) { Write-Output "INFO servers.save '$name' was slow: $ms ms" }; return $s.Result.id }
+    # разбор F: ответ без идентификатора. Сохраняем текст ответа и состояние на диске/в памяти, потом берём идентификатор записи, если она всё же есть (устойчивость скрипта)
+    Write-Output ("INFO SAVE-NO-ID '$name': status " + $s.Status + " after $ms ms; body: " + $s.Text)
+    $l = Api $w 'servers.list' @{}; $f = @($l.Result) | Where-Object { $_.name -eq $name } | Select-Object -First 1
+    Write-Output ("INFO SAVE-NO-ID '$name': record in servers.list: " + $(if ($f) { $f.id } else { 'no' }))
+    try { $cj = Get-Content "$env:ProgramData\VM2Backup\config.json" -Raw -ErrorAction Stop; Write-Output ("INFO SAVE-NO-ID '$name': on disk: " + $(if ($cj -match [regex]::Escape($name)) { 'yes' } else { 'NO (memory only)' })) } catch { Write-Output ("INFO config.json not readable: " + $_.Exception.Message) }
+    if ($f) { return $f.id }; return $null
+}
 function Common-Checks($w, [string]$who, [string]$label) {
     $i = Svc-Info; Write-Output ("INFO $label : " + (($i | Out-String) -replace '\s+', ' ')); Check "[$label] the process owner is $who" ($i.Owner -match [regex]::Escape($who.Split('\')[-1].TrimEnd('$'))) ($i | Out-String)
     $l = Api $w 'servers.list' @{}; $now = @($l.Result | ForEach-Object { $_.id }); $miss = @($script:ids.Values | Where-Object { $now -notcontains $_ })
@@ -125,39 +134,7 @@ if ($w) {
 Check '[gMSA] RUNNING after a service restart' (Wait-State 'RUNNING' 90000) (St)
 $w = Web-Ready
 if ($w) { $e = Cycle $w 'gmsa-restart' $script:ids['own-fqdn']; Check '[gMSA] backup works after the restart' ($e -eq '') $e }
-# ротация пароля: сначала штатно (Reset-ADServiceAccountPassword), потом сдвиг времени на +2 суток (интервал пароля gMSA = 1 сутки)
-$pid0 = (Get-WmiObject Win32_Service -Filter "Name='$svc'").ProcessId
-$mp0 = try { (Get-ADServiceAccount $d.Gmsa -Properties 'msDS-ManagedPasswordId' -Server dc.vm2b.test -Credential (Dom-AdminCred) -ErrorAction Stop).'msDS-ManagedPasswordId' } catch { $null }
-$pl0 = try { (Get-ADServiceAccount $d.Gmsa -Properties pwdLastSet -Server dc.vm2b.test -Credential (Dom-AdminCred)).pwdLastSet } catch { 0 }
-Write-Output ("INFO gMSA password id before: " + $(if ($mp0) { [BitConverter]::ToString([byte[]]$mp0).Substring(0, 60) } else { '(not readable)' }) + "; pwdLastSet $pl0")
-$rs = try { Reset-ADServiceAccountPassword $d.Gmsa -ErrorAction Stop; 'ok' } catch { 'error: ' + $_.Exception.Message }
-Write-Output ("INFO Reset-ADServiceAccountPassword (gMSA): $rs")
-Check '[gMSA] Test-ADServiceAccount after Reset-ADServiceAccountPassword' (Test-ADServiceAccount $d.Gmsa) ''
-$mp1 = try { (Get-ADServiceAccount $d.Gmsa -Properties 'msDS-ManagedPasswordId' -Server dc.vm2b.test -Credential (Dom-AdminCred) -ErrorAction Stop).'msDS-ManagedPasswordId' } catch { $null }
-$changed = $mp0 -and $mp1 -and ([BitConverter]::ToString([byte[]]$mp0) -ne [BitConverter]::ToString([byte[]]$mp1))
-Write-Output ("INFO gMSA password id changed after Reset-ADServiceAccountPassword: $changed")
-$shifted = $false
-if (-not $changed) {
-    $shifted = $true
-    Write-Output 'INFO the password did not rotate with the cmdlet: moving the clocks of DC and MEMBER forward by 2 days (the interval of the gMSA is 1 day), then back'
-    Stop-Service w32time -ErrorAction SilentlyContinue
-    Invoke-Command -ComputerName dc.vm2b.test -Credential (Dom-AdminCred) -ScriptBlock { Stop-Service w32time -ErrorAction SilentlyContinue; Set-Date ((Get-Date).AddDays(2)) | Out-Null }
-    Set-Date ((Get-Date).AddDays(2)) | Out-Null
-    $mp2 = try { (Get-ADServiceAccount $d.Gmsa -Properties 'msDS-ManagedPasswordId' -Server dc.vm2b.test -Credential (Dom-AdminCred) -ErrorAction Stop).'msDS-ManagedPasswordId' } catch { $null }
-    $changed = $mp0 -and $mp2 -and ([BitConverter]::ToString([byte[]]$mp0) -ne [BitConverter]::ToString([byte[]]$mp2))
-    Write-Output ("INFO gMSA password id changed after the time shift: $changed")
-    Write-Output ("INFO service state with the old process after the shift: " + (St))
-    $w = Web-Ready
-    if ($w) { $e = Cycle $w 'gmsa-shift-norestart' $script:ids['own-fqdn']; Write-Output ("INFO [gMSA] backup in the running service after the rotation, WITHOUT a restart: " + $(if ($e) { $e } else { 'OK' })) }
-    klist.exe -li 0x3e7 purge 2>&1 | Out-Null
-    Check '[gMSA] Test-ADServiceAccount after the rotation' (Test-ADServiceAccount $d.Gmsa) ''
-}
-& net.exe stop $svc 2>&1 | Out-Null; Wait-State 'STOPPED' 60000 | Out-Null; $so = & net.exe start $svc 2>&1; Write-Output ("INFO net start after the rotation: " + ($so -join ' ' -replace '\s+', ' '))
-Check '[gMSA] service RUNNING after the rotation + restart (no reboot needed)' (Wait-State 'RUNNING' 90000) (St)
-$w = Web-Ready
-if ($w) { $e = Cycle $w 'gmsa-rotated' $script:ids['own-fqdn']; Check '[gMSA] backup + verify + restore works after the rotation and the restart' ($e -eq '') $e
-          $t = Api $w 'servers.test' @{ id = $script:ids['explicit'] }; Check '[gMSA] DPAPI still fine after the rotation' ($t.Status -eq 200) $t.Text }
-if ($shifted) { Write-Output 'CLOCKSHIFTED=1' }      # часы обеих ВМ возвращает хост (run-domain.sh): через WinRM после сдвига Kerberos не работает
+# (ротация пароля gMSA: фаза rotate, domain-rot1.ps1 / domain-rot2.ps1)
 
 # ---- 10. доменная запись без права на папку данных
 Switch-Account 'VM2B\nouser' $d.NoPw

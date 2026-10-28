@@ -17,7 +17,8 @@ struct FNet {
     CRITICAL_SECTION cs; Vec<FServer> servers; Vec<Str> domains[2]; Str log, passwordSeen;   // log of every call (the password must never be in it: we log only user names)
     Vec<Str> conns; int rootDelay; unsigned long rootRc; int adds, cancels, scopeCalls;
     Vec<Str> sids; Vec<NetRegDrive> reg[4]; Str sidNames[4]; Vec<NetRegDrive> own; Str ownOwner;
-    FNet() : rootDelay(0), rootRc(0), adds(0), cancels(0), scopeCalls(0) { InitializeCriticalSection(&cs); }
+    Str domainName; Vec<NetNode> domainNodes; unsigned long domainRc; int domainDelay, domainCalls;      // the fake directory of the domain (enumDomain); domainRc 1355 = not a domain member
+    FNet() : rootDelay(0), rootRc(0), adds(0), cancels(0), scopeCalls(0), domainRc(1355), domainDelay(0), domainCalls(0) { InitializeCriticalSection(&cs); }
 };
 FNet* g_n = nullptr;
 
@@ -88,7 +89,14 @@ unsigned long FEnumShares(const Str& server, Vec<NetNode>& out)
     for (size_t i = 0; i < s->shares.size(); ++i) { NetNode n; n.kind = 2; n.name = s->shares[i].name; out.push_back(n); }
     return 0;
 }
-const NetApi kNet = { FSids, FRegDrives, FSidName, FOwn, FEnumNet, FEnumShares };
+unsigned long FEnumDomain(Str& domain, Vec<NetNode>& out)
+{
+    if (g_n->domainDelay) Sleep((DWORD)g_n->domainDelay);
+    EnterCriticalSection(&g_n->cs); g_n->domainCalls++; LeaveCriticalSection(&g_n->cs);
+    if (g_n->domainRc) return g_n->domainRc;
+    domain = g_n->domainName; out = g_n->domainNodes; return 0;
+}
+const NetApi kNet = { FSids, FRegDrives, FSidName, FOwn, FEnumNet, FEnumShares, FEnumDomain };
 
 const char* const kPw = "Br0wse-Pw-\xc3\xa4-99";
 
@@ -166,6 +174,76 @@ VM2B_TEST("smb", netbrowse_levels)
     // an empty neighbourhood: empty list plus a hint, not an error; a failing one too
     s.n.domains[0].clear(); s.n.domains[1].clear(); T_CHECK(NetBrowse("", "", "", r, e)); T_CHECK(r.get("entries").size() == 0 && r.get("hint").str().find("server") >= 0);
     s.n.rootRc = 1222; T_CHECK(NetBrowse("", "", "", r, e)); T_CHECK(r.get("entries").size() == 0 && r.get("hint").str().find("1222") >= 0);
+    return true;
+}
+
+NetNode DomNode(const char* name, const char* comment) { NetNode n; n.kind = 1; n.name = name; n.comment = comment; return n; }
+
+VM2B_TEST("smb", netbrowse_root_in_a_domain_lists_the_domain_servers)
+{
+    // a modern domain member: the NetBIOS list is empty, the root shows the controller and the servers of the domain (DsGetDcName + LDAP)
+    Scope s(c_, "nbdom"); Json r; Str e; FNet& n = s.n;
+    n.domains[0].clear(); n.domains[1].clear();
+    n.domainRc = 0; n.domainName = "corp.example";
+    n.domainNodes.push_back(DomNode("dc01.corp.example", "domain controller")); n.domainNodes.push_back(DomNode("files01.corp.example", "Windows Server 2022 Standard"));
+    n.domainNodes.push_back(DomNode("dc01.corp.example", "again")); n.domainNodes.push_back(DomNode("bad name!.corp.example", "hostile")); n.domainNodes.push_back(DomNode("nas", "short name only"));
+    T_CHECK(NetBrowse("", "", "", r, e)); T_CHECK(r.get("kind").str() == "root");
+    const Json& ent = r.get("entries"); c_.note("domain root: %d entries: %s", (int)ent.size(), ent.dump().c_str());
+    T_CHECK(ent.size() == 3); T_CHECK(Has(ent, "dc01.corp.example", "server") && Has(ent, "files01.corp.example", "server") && Has(ent, "nas", "server"));
+    T_CHECK(r.get("domain").str() == "corp.example"); T_CHECK(!r.has("hint")); T_CHECK(n.domainCalls == 1);
+    T_CHECK(ent.at(0).get("path").str() == "\\\\dc01.corp.example"); T_CHECK(ent.at(0).get("comment").str() == "domain controller");
+    // the WNet list and the directory name the same server (short and full name): one entry, the WNet one stays
+    n.domains[0].push_back("dc01"); n.domains[0].push_back("legacy");
+    T_CHECK(NetBrowse("", "", "", r, e)); const Json& e2 = r.get("entries");
+    T_CHECK(e2.size() == 4); T_CHECK(Has(e2, "dc01", "server") && Has(e2, "legacy", "server") && Has(e2, "files01.corp.example", "server") && Has(e2, "nas", "server") && !Has(e2, "dc01.corp.example", "server"));
+    // a server of the domain is browsable like any other (its shares)
+    T_CHECK(NetBrowse("\\\\nas", "", "", r, e)); T_CHECK(Has(r.get("entries"), "backup", "share"));
+    return true;
+}
+
+VM2B_TEST("smb", netbrowse_root_answers_with_the_domain_when_the_netbios_walk_hangs)
+{
+    // found on the real domain (Server 2022): the NetBIOS walk of the root takes longer than the deadline, but the directory answers at once: the servers of the domain are returned
+    Scope s(c_, "nbdomslow"); Json r; Str e; FNet& n = s.n;
+    n.domains[0].clear(); n.domains[1].clear(); n.domainRc = 0; n.domainName = "corp.example";
+    n.domainNodes.push_back(DomNode("dc01.corp.example", "domain controller")); n.domainNodes.push_back(DomNode("files01.corp.example", "Windows Server 2022"));
+    n.rootDelay = 6000; NetBrowseSetDeadlineMs(2500);
+    DWORD t0 = GetTickCount(); bool ok = NetBrowse("", "", "", r, e); DWORD dt = GetTickCount() - t0;
+    c_.note("a hanging NetBIOS walk: %s after %lu ms, %d entries [%s]", ok ? "ok" : "error", (unsigned long)dt, ok ? (int)r.get("entries").size() : 0, e.c_str());
+    T_CHECK(ok); T_CHECK(dt < 4500); T_CHECK(r.get("kind").str() == "root"); T_CHECK(r.get("entries").size() == 2 && Has(r.get("entries"), "dc01.corp.example", "server"));
+    T_CHECK(r.get("domain").str() == "corp.example"); T_CHECK(r.get("hint").str().find("incomplete") >= 0);
+    return true;
+}
+
+VM2B_TEST("smb", netbrowse_root_remembers_the_last_directory_answer)
+{
+    // the directory lookup is slower than one request may wait: the first request times out, the worker finishes in the background, the next request answers at once from what was found
+    Scope s(c_, "nbdomcache"); Json r; Str e; FNet& n = s.n;
+    n.domains[0].clear(); n.domains[1].clear(); n.domainRc = 0; n.domainName = "corp.example";
+    n.domainNodes.push_back(DomNode("dc01.corp.example", "domain controller"));
+    n.domainDelay = 2500; NetBrowseSetDeadlineMs(1500);
+    T_CHECK(!NetBrowse("", "", "", r, e)); T_CHECK(e.find("1460") >= 0);
+    for (int i = 0; i < 100 && n.domainCalls < 1; ++i) Sleep(50);
+    Sleep(2800);                                                                    // the abandoned worker has stored its answer
+    n.domainDelay = 6000;
+    DWORD t0 = GetTickCount(); bool ok = NetBrowse("", "", "", r, e); DWORD dt = GetTickCount() - t0;
+    c_.note("second request, the directory is slow again: %s after %lu ms, %d entries", ok ? "ok" : e.c_str(), (unsigned long)dt, ok ? (int)r.get("entries").size() : 0);
+    T_CHECK(ok); T_CHECK(dt < 3500); T_CHECK(r.get("entries").size() == 1 && Has(r.get("entries"), "dc01.corp.example", "server"));
+    return true;
+}
+
+VM2B_TEST("smb", netbrowse_root_without_a_domain_keeps_the_hint)
+{
+    // no domain (workgroup): the old behaviour, the empty root explains itself; a directory that fails or is slow changes nothing
+    Scope s(c_, "nbnodom"); Json r; Str e; FNet& n = s.n;
+    n.domains[0].clear(); n.domains[1].clear(); n.domainRc = 1355;
+    T_CHECK(NetBrowse("", "", "", r, e)); T_CHECK(r.get("entries").size() == 0); T_CHECK(r.get("hint").str().find("server") >= 0); T_CHECK(!r.has("domain")); T_CHECK(n.domainCalls == 1);
+    n.domains[0].push_back("nas"); T_CHECK(NetBrowse("", "", "", r, e)); T_CHECK(r.get("entries").size() == 1 && !r.has("hint") && !r.has("domain"));
+    n.domainRc = 1355 + 2; T_CHECK(NetBrowse("", "", "", r, e)); T_CHECK(r.get("entries").size() == 1);             // the directory is unreachable: the WNet answer stands
+    n.domainRc = 0; n.domainName = "corp.example"; n.domainDelay = 6000; NetBrowseSetDeadlineMs(2500);
+    DWORD t0 = GetTickCount(); bool ok = NetBrowse("", "", "", r, e); DWORD dt = GetTickCount() - t0;
+    c_.note("a slow directory: %s after %lu ms [%s]", ok ? "ok" : "error", (unsigned long)dt, e.c_str());
+    T_CHECK(dt < 4500); T_CHECK(ok || e.find("1460") >= 0);                                                          // the deadline holds: no hanging request
     return true;
 }
 

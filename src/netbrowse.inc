@@ -118,7 +118,66 @@ unsigned long RealEnumShares(const Str& server, Vec<NetNode>& out)
     return rc;
 }
 
-const NetApi kRealNet = { RealRegSids, RealRegDrives, RealSidName, RealOwnDrives, RealEnumNet, RealEnumShares };
+// ---- the servers of the domain: DsGetDcName + LDAP (wldap32 is loaded by name: no link-time dependency, nothing happens on a computer without a domain) ----
+struct DsDcInfo { LPWSTR dcName, dcAddress; ULONG addrType; GUID guid; LPWSTR domainName, forestName; ULONG flags; LPWSTR dcSite, clientSite; };
+struct LdapTimeval { LONG sec, usec; };
+
+Str LdapFirst(void* (*getVals)(void*, void*, const wchar_t*), int (*freeVals)(void*), void* ld, void* entry, const wchar_t* attr)
+{
+    void* v = getVals(ld, entry, attr); if (!v) return Str();
+    wchar_t** a = (wchar_t**)v; Str r = a[0] ? FromWide(a[0]) : Str(); freeVals(v); return r;
+}
+
+unsigned long RealEnumDomain(Str& domain, Vec<NetNode>& out)
+{
+    DWORD t0 = GetTickCount();
+    typedef DWORD (WINAPI *DsGetFn)(LPCWSTR, LPCWSTR, GUID*, LPCWSTR, ULONG, void**);
+    typedef DWORD (WINAPI *FreeFn)(LPVOID);
+    HMODULE na = LoadLibraryW(L"netapi32.dll"); if (!na) return ERROR_NO_NETWORK;
+    DsGetFn ds = (DsGetFn)(void*)GetProcAddress(na, "DsGetDcNameW"); FreeFn fr = (FreeFn)(void*)GetProcAddress(na, "NetApiBufferFree");
+    if (!ds || !fr) return ERROR_NO_NETWORK;
+    void* p = nullptr; DWORD rc = ds(nullptr, nullptr, nullptr, nullptr, 0x40000000u /* DS_RETURN_DNS_NAME */, &p);
+    if (rc != 0 || !p) return rc ? rc : ERROR_NO_SUCH_DOMAIN;
+    DsDcInfo* info = (DsDcInfo*)p; Str dc = info->dcName ? FromWide(info->dcName) : Str(); domain = info->domainName ? FromWide(info->domainName) : Str(); fr(p);
+    while (dc.starts_with("\\")) dc = dc.substr(1);
+    if (domain.empty()) return ERROR_NO_SUCH_DOMAIN;
+    if (!dc.empty()) { NetNode n; n.kind = 1; n.name = dc; n.comment = "domain controller"; out.push_back(n); }
+    // base of the search from the DNS name of the domain: vm2b.test -> DC=vm2b,DC=test (only letters, digits, '-' and '.' are accepted)
+    Str base; { size_t from = 0; for (size_t i = 0; i <= domain.size(); ++i) if (i == domain.size() || domain[i] == '.') {
+        Str lab = domain.substr(from, i - from); from = i + 1; if (lab.empty()) return 0;
+        for (size_t k = 0; k < lab.size(); ++k) { char c = lab[k]; if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '-')) return 0; }
+        if (!base.empty()) base += ","; base += "DC=" + lab; } }
+    HMODULE lh = LoadLibraryW(L"wldap32.dll"); if (!lh) return 0;
+    typedef void* (__cdecl *InitFn)(wchar_t*, ULONG); typedef ULONG (__cdecl *SetOptFn)(void*, int, void*); typedef ULONG (__cdecl *BindFn)(void*, wchar_t*, wchar_t*, ULONG);
+    typedef ULONG (__cdecl *SearchFn)(void*, wchar_t*, ULONG, wchar_t*, wchar_t**, ULONG, void*, void*, LdapTimeval*, ULONG, void**);
+    typedef void* (__cdecl *FirstFn)(void*, void*); typedef void* (__cdecl *GetValsFn)(void*, void*, const wchar_t*); typedef int (__cdecl *FreeValsFn)(void*); typedef int (__cdecl *MsgFreeFn)(void*); typedef ULONG (__cdecl *UnbindFn)(void*);
+    InitFn init = (InitFn)(void*)GetProcAddress(lh, "ldap_initW"); SetOptFn setopt = (SetOptFn)(void*)GetProcAddress(lh, "ldap_set_optionW"); BindFn bind = (BindFn)(void*)GetProcAddress(lh, "ldap_bind_sW");
+    SearchFn search = (SearchFn)(void*)GetProcAddress(lh, "ldap_search_ext_sW"); FirstFn first = (FirstFn)(void*)GetProcAddress(lh, "ldap_first_entry"); FirstFn next = (FirstFn)(void*)GetProcAddress(lh, "ldap_next_entry");
+    GetValsFn getvals = (GetValsFn)(void*)GetProcAddress(lh, "ldap_get_valuesW"); FreeValsFn freevals = (FreeValsFn)(void*)GetProcAddress(lh, "ldap_value_freeW"); MsgFreeFn msgfree = (MsgFreeFn)(void*)GetProcAddress(lh, "ldap_msgfree");
+    UnbindFn unbind = (UnbindFn)(void*)GetProcAddress(lh, "ldap_unbind");
+    if (!init || !setopt || !bind || !search || !first || !next || !getvals || !freevals || !msgfree || !unbind) return 0;
+    Wide host(dc.empty() ? domain : dc);
+    void* ld = init((wchar_t*)host.c_str(), 389); if (!ld) return 0;
+    ULONG v3 = 3; setopt(ld, 0x11 /* LDAP_OPT_PROTOCOL_VERSION */, &v3);
+    ULONG brc = bind(ld, nullptr, nullptr, 0x0486 /* LDAP_AUTH_NEGOTIATE: the account of the process (LocalSystem = the computer account) */);
+    if (brc != 0) { unbind(ld); return 0; }
+    static wchar_t a1[] = L"name", a2[] = L"dNSHostName", a3[] = L"operatingSystem"; wchar_t* attrs[] = { a1, a2, a3, nullptr };
+    Wide wb(base), wf(Str("(&(objectCategory=computer)(|(operatingSystem=*Server*)(userAccountControl:1.2.840.113556.1.4.803:=8192)))"));
+    LdapTimeval tv = { 8, 0 }; void* res = nullptr;
+    ULONG src = search(ld, (wchar_t*)wb.c_str(), 2 /* LDAP_SCOPE_SUBTREE */, (wchar_t*)wf.c_str(), attrs, 0, nullptr, nullptr, &tv, 2000, &res);
+    if ((src == 0 || src == 4 /* LDAP_SIZELIMIT_EXCEEDED */) && res) {
+        for (void* e = first(ld, res); e && out.size() < (size_t)kMaxBrowseEntries; e = next(ld, e)) {
+            Str name = LdapFirst(getvals, freevals, ld, e, L"dNSHostName"); if (name.empty()) name = LdapFirst(getvals, freevals, ld, e, L"name");
+            if (name.empty()) continue;
+            NetNode n; n.kind = 1; n.name = name; n.comment = LdapFirst(getvals, freevals, ld, e, L"operatingSystem"); out.push_back(n);
+        }
+    }
+    if (res) msgfree(res);
+    unbind(ld);
+    return 0;
+}
+
+const NetApi kRealNet = { RealRegSids, RealRegDrives, RealSidName, RealOwnDrives, RealEnumNet, RealEnumShares, RealEnumDomain };
 const NetApi* volatile g_net = &kRealNet;
 const NetApi& Net() { return *g_net; }
 
@@ -134,7 +193,8 @@ bool AddDrive(Json& arr, const NetRegDrive& d, const Str& owner, const char* sou
 
 } // namespace
 
-void NetBrowseSetApi(const NetApi* api) { g_net = api ? api : &kRealNet; }
+namespace { void DomCacheClear(); }
+void NetBrowseSetApi(const NetApi* api) { g_net = api ? api : &kRealNet; DomCacheClear(); }
 void NetBrowseSetDeadlineMs(int ms) { g_browseDeadlineMs = ms > 0 ? ms : 15000; }
 int NetBrowseLiveWorkers() { return (int)g_liveWorkers; }
 
@@ -164,7 +224,8 @@ struct BrowseJob {
     Str path, user, pass; int level;             // 0 root, 1 server, 2 share, 3 folder
     Str host, root; DWORD startTick, budgetMs;
     Json result; Str err; bool ok;
-    BrowseJob() : refs(2), abandoned(0), done(CreateEventW(nullptr, TRUE, FALSE, nullptr)), level(0), startTick(GetTickCount()), budgetMs(0), ok(false) {}
+    Json partial; volatile LONG partialReady;      // root: the servers of the domain, published before the slow NetBIOS walk; the caller uses them when the walk does not finish in time
+    BrowseJob() : refs(2), abandoned(0), partialReady(0), done(CreateEventW(nullptr, TRUE, FALSE, nullptr)), level(0), startTick(GetTickCount()), budgetMs(0), ok(false) {}
     ~BrowseJob() { if (done) CloseHandle(done); Wipe(pass); Wipe(user); }
     bool late() const { return abandoned || (DWORD)(GetTickCount() - startTick) > budgetMs; }
 };
@@ -191,9 +252,29 @@ void PutEntries(Json& result, Vec<Json>& v, size_t cap, bool& truncated)
 
 Str ServerFromToken(const Str& host) { return "\\\\" + host; }
 
+// The last good answer of the directory lookup: the lookup can take a long time (measured 48 s for the LDAP bind on a busy test domain), longer than one request may wait. The worker
+// finishes it in the background and stores it here; the next request (and a request that times out) answers with it at once.
+struct DomCache { CRITICAL_SECTION cs; Json partial; DWORD tick; bool have; DomCache() : tick(0), have(false) { InitializeCriticalSection(&cs); } };
+DomCache& GetDomCache() { static DomCache c; return c; }
+void DomCacheClear() { DomCache& c = GetDomCache(); EnterCriticalSection(&c.cs); c.have = false; c.partial = Json(); LeaveCriticalSection(&c.cs); }
+
 void BrowseRoot(BrowseJob* j)
 {
     Vec<Str> seen; Vec<Json> servers; unsigned long lastRc = 0; bool partial = false, truncated = false; int containers = 0;
+    // the domain of this computer FIRST (fast: DsGetDcName + one LDAP search): the NetBIOS walk below is slow and on a modern domain member empty; if it does not finish in time
+    // the caller answers with these servers (partialReady)
+    Str domain; unsigned long drc = 1355; Vec<NetNode> dn;
+    { DomCache& c = GetDomCache(); EnterCriticalSection(&c.cs); if (c.have && GetTickCount() - c.tick < 3600000u) { j->partial = c.partial; InterlockedExchange(&j->partialReady, 1); } LeaveCriticalSection(&c.cs); }
+    if (Net().enumDomain) drc = Net().enumDomain(domain, dn);
+    if (drc != 0 && drc != 1355) j->result["domain_error"] = (i64)drc;      // diagnostics: the directory lookup failed with this Windows error (the list is then the NetBIOS one)
+    if (drc == 0 && dn.size()) {
+        Vec<Json> early; Vec<Str> es; bool tr2 = false;
+        for (size_t i = 0; i < dn.size(); ++i) { const NetNode& nd = dn[i]; if (nd.kind != 1 || !HostOk(nd.name)) continue; Str l = nd.name.lower(); bool dup = false; for (size_t k = 0; k < es.size(); ++k) if (es[k] == l) dup = true; if (dup || early.size() >= (size_t)kMaxBrowseEntries) continue;
+            es.push_back(l); Json o = Json::object(); o["name"] = nd.name; o["path"] = ServerFromToken(nd.name); o["kind"] = "server"; if (!nd.comment.empty()) o["comment"] = nd.comment; early.push_back(o); }
+        PutEntries(j->partial, early, kMaxBrowseEntries, tr2); j->partial["domain"] = domain; j->partial["hint"] = "The list may be incomplete: the network was slow to answer. Type a server name if yours is missing.";
+        { DomCache& c = GetDomCache(); EnterCriticalSection(&c.cs); c.partial = j->partial; c.tick = GetTickCount(); c.have = true; LeaveCriticalSection(&c.cs); }
+        InterlockedExchange(&j->partialReady, 1);
+    }
     for (int scope = 0; scope < 2 && servers.empty(); ++scope) {
         struct Item { Str token; int depth; }; Vec<Item> queue; Item first; first.depth = 0; queue.push_back(first);
         for (size_t qi = 0; qi < queue.size(); ++qi) {
@@ -211,6 +292,17 @@ void BrowseRoot(BrowseJob* j)
                 } else if (nd.kind == 0 && depth + 1 < kMaxWalkDepth && containers < kMaxContainers) { ++containers; Item it; it.token = nd.token; it.depth = depth + 1; queue.push_back(it); }
             }
         }
+    }
+    if (drc == 0) {
+        for (size_t i = 0; i < dn.size(); ++i) {
+            const NetNode& nd = dn[i]; if (nd.kind != 1 || !HostOk(nd.name)) continue;
+            Str l = nd.name.lower(), lshort = l.substr(0, l.find('.') >= 0 ? (size_t)l.find('.') : l.size()); bool dup = false;
+            for (size_t k = 0; k < seen.size(); ++k) { Str o = seen[k], os = o.substr(0, o.find('.') >= 0 ? (size_t)o.find('.') : o.size()); if (o == l || os == lshort) dup = true; }       // "dc01" from WNet and "dc01.corp.local" from the directory are one server
+            if (dup) continue;
+            if (servers.size() >= (size_t)kMaxBrowseEntries) { truncated = true; break; }
+            seen.push_back(l); Json o = Json::object(); o["name"] = nd.name; o["path"] = ServerFromToken(nd.name); o["kind"] = "server"; if (!nd.comment.empty()) o["comment"] = nd.comment; servers.push_back(o);
+        }
+        if (!domain.empty()) j->result["domain"] = domain;
     }
     PutEntries(j->result, servers, kMaxBrowseEntries, truncated);
     if (truncated) j->result["truncated"] = true;
@@ -317,7 +409,12 @@ bool NetBrowse(const Str& pathIn, const Str& userIn, const Str& password, Json& 
     DWORD w = WaitForSingleObject(j->done, (DWORD)deadline);
     bool ok;
     if (w != WAIT_OBJECT_0) {                                          // the worker keeps its own copies, wipes them, cancels its connection and ends by itself
-        InterlockedExchange(&j->abandoned, 1); ReleaseJob(j);
+        InterlockedExchange(&j->abandoned, 1);
+        if (j->level == 0 && j->partialReady) {                         // the NetBIOS walk is stuck, but the domain's servers were already found: answer with them
+            result = j->partial; result["path"] = ""; result["kind"] = "root"; result["parent"] = ""; if (!result.has("truncated")) result["truncated"] = false;
+            ReleaseJob(j); return true;
+        }
+        ReleaseJob(j);
         err = Str::fmt("the network did not answer within %d seconds: this is temporary, try again (1460)", (deadline + 500) / 1000); return false;
     }
     ok = j->ok; if (ok) {

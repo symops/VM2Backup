@@ -1,7 +1,77 @@
-[314s] executors initialised
-  domainlock: 4 passed, 0 failed, 0 skipped (1 round, seed 20887)
-[430s] ================ SUMMARY (domain, seed 20887, 430s) ================
-  domainlock: rc=0 (╤З╨╕╤Б╨╗╨╛ ╤Г╨┐╨░╨▓╤И╨╕╤Е ╤В╨╡╤Б╤В╨╛╨▓)
-  log domainlock: 4 passed, 0 failed, 0 skipped (1 round, seed 20887)
-  log domainreal: 6 passed, 0 failed, 0 skipped (1 round, seed 28465)
-  log gui: 4 passed, 0 failed, 0 skipped (1 round, seed 28465)
+[87s] executors initialised
+  domainreal: 6 passed, 0 failed, 0 skipped (1 round, seed 8383)
+[253s] memory: free 998 MB, available 10893 MB; disk: 19G free
+INFO secedit (SeServiceLogonRight VM2B\vm2bgmsa$ = S-1-5-21-2654800744-2395553686-865210323-1112): Выполнено 6 проц. (0/15) 	Обработка области Privilege Rights  Выполнено 13 проц. (1/15) 	Обработка области Privilege Rig
+INFO sc config obj=VM2B\vm2bgmsa$: [SC] ChangeServiceConfig: успех
+INFO sc start:  Имя_службы: VM2BackupService Тип : 10 WIN32_OWN_PROCESS Состояние : 2 START_PENDING (NOT_STOPPABLE, NOT_PAUSABLE, IGNORES_SHUTDOWN) Код_выхода_Win32 : 0 (0x0) Код_выхода_службы : 0 (0x0) Контрольная_точка : 0x1 Ожидание : 0x3a98 ID_процесса : 2168 Флаги : 
+INFO backup 0 (gMSA): Success
+INFO gMSA state before: id=01-00-00-00-4B-44-53-4B-02-00-00-00-6C-01-00-00-1F-00-00-00-13-00-00-00-45-DA-69-2E-7C-A3-A5-5E-40-7 pwdLastSet=134549320202869833 interval=1
+INFO method A: Set-ADObject -Replace @{pwdLastSet=0}: error: Отказано в доступе
+INFO Test-ADServiceAccount right after pwdLastSet=0: True
+INFO gMSA state after method A: id=01-00-00-00-4B-44-53-4B-02-00-00-00-6C-01-00-00-1F-00-00-00-13-00-00-00-45-DA-69-2E-7C-A3-A5-5E-40-7 pwdLastSet=134549320202869833 interval=1
+INFO ROTATION_A_CHANGED=False
+INFO service pid before restart 2168, now 2168 (same process = the service kept running without a restart)
+INFO backup in the service started BEFORE the method-A change, no restart: Success
+INFO service pid after the restart: 5924
+INFO backup after the restart: Success
+INFO gMSA state at the end of rot1: id=01-00-00-00-4B-44-53-4B-02-00-00-00-6C-01-00-00-1F-00-00-00-13-00-00-00-45-DA-69-2E-7C-A3-A5-5E-40-7 pwdLastSet=134549320202869833 interval=1
+INFO SERVERID=0e4e399ec854
+INFO [before] clock on DC: 2026-10-28T13:10:42; MaxPasswordAge 42.00:00:00
+INFO [before] user expuser : PasswordExpired=False PasswordNeverExpires=False PasswordLastSet=10/28/2026 13:07:49 expiry=2026-12-09T13:07:49 lockedOut=False
+INFO [before] user bkuser : PasswordExpired=False PasswordNeverExpires=True PasswordLastSet=10/28/2026 10:19:44 expiry=? lockedOut=False
+INFO [before] user svcbackup : PasswordExpired=False PasswordNeverExpires=True PasswordLastSet=10/28/2026 10:19:44 expiry=? lockedOut=False
+INFO [before] gMSA: id=01-00-00-00-4B-44-53-4B-02-00-00-00-6C-01-00-00-1F-00-00-00-13-00-00-00-45-DA-69-2E-7C-A3-A5-5E-40-7 pwdLastSet=134549320202869833 interval=1
+INFO [before] KDS root key: 2026-10-28T10:19:40 effective 2026-10-28T00:19:40
+[462s] clocks set to host time +300 days (2027-08-24 13:10:55): dc 24.08.2027 13:10:57,60, member 24.08.2027 13:10:57,35
+INFO [shifted] clock on DC: 2027-08-24T13:14:12; MaxPasswordAge 42.00:00:00
+INFO [shifted] user expuser : PasswordExpired=True PasswordNeverExpires=False PasswordLastSet=10/28/2026 13:07:49 expiry=2026-12-09T13:07:49 lockedOut=False
+INFO [shifted] user bkuser : PasswordExpired=False PasswordNeverExpires=True PasswordLastSet=10/28/2026 10:19:44 expiry=? lockedOut=False
+INFO [shifted] user svcbackup : PasswordExpired=False PasswordNeverExpires=True PasswordLastSet=10/28/2026 10:19:44 expiry=? lockedOut=False
+INFO [shifted] gMSA: id=01-00-00-00-4B-44-53-4B-02-00-00-00-6C-01-00-00-1F-00-00-00-13-00-00-00-45-DA-69-2E-7C-A3-A5-5E-40-7 pwdLastSet=134549320202869833 interval=1
+INFO [shifted] KDS root key: 2026-10-28T10:19:40 effective 2026-10-28T00:19:40
+INFO clock on member: 2027-08-24T13:14:48
+INFO gMSA state after the shift, before the new password request: id=01-00-00-00-4B-44-53-4B-02-00-00-00-6C-01-00-00-1F-00-00-00-13-00-00-00-45-DA-69-2E-7C-A3-A5-5E-40-7 pwdLastSet=134549320202869833 interval=1
+INFO Test-ADServiceAccount after the shift: True
+INFO gMSA state after Test-ADServiceAccount: id=01-00-00-00-4B-44-53-4B-02-00-00-00-6C-01-00-00-1F-00-00-00-13-00-00-00-45-DA-69-2E-7C-A3-A5-5E-40-7 pwdLastSet=134549320202869833 interval=1
+INFO service pid before the shift 5924, now 5924
+INFO backup in the service started BEFORE the rotation, no restart: Success
+INFO net start: Служба "VM2Backup Service" запускается. Служба "VM2Backup Service" успешно запущена. 
+INFO backup after the rotation and the restart: Success
+INFO gMSA state at the end: id=01-00-00-00-4B-44-53-4B-02-00-00-00-6D-01-00-00-07-00-00-00-03-00-00-00-45-DA-69-2E-7C-A3-A5-5E-40-7 pwdLastSet=134635761600995240 interval=1
+INFO ROTATION_B_CHANGED=True (pwdLastSet changed: True)
+INFO sc config obj=LocalSystem: [SC] ChangeServiceConfig: успех
+INFO sc start:  Имя_службы: VM2BackupService Тип : 10 WIN32_OWN_PROCESS Состояние : 2 START_PENDING (NOT_STOPPABLE, NOT_PAUSABLE, IGNORES_SHUTDOWN) Код_выхода_Win32 : 0 (0x0) Код_выхода_службы : 0 (0x0) Контрольная_точка : 0x0 Ожидание : 0x7d0 ID_процесса : 1340 Флаги : 
+WNET rc=1208 user=VM2B\expuser remote=\\dc.vm2b.test\Backups
+WNetGetLastError rc=0 providerCode=2242 (0x8C2) provider=[Microsoft Windows Network] text=[╨Я╨░╤А╨╛╨╗╤М ╨┤╨░╨╜╨╜╨╛╨│╨╛ ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤П ╨┐╤А╨╛╤Б╤А╨╛╤З╨╡╨╜.]
+  domainexpire: 1 passed, 0 failed, 0 skipped (1 round, seed 8383)
+INFO [end] clock on DC: 2027-08-24T13:19:30; MaxPasswordAge 42.00:00:00
+INFO [end] user expuser : PasswordExpired=False PasswordNeverExpires=False PasswordLastSet=08/24/2027 13:18:45 expiry=2027-10-05T13:18:45 lockedOut=False
+INFO [end] user bkuser : PasswordExpired=False PasswordNeverExpires=True PasswordLastSet=10/28/2026 10:19:44 expiry=? lockedOut=False
+INFO [end] user svcbackup : PasswordExpired=False PasswordNeverExpires=True PasswordLastSet=10/28/2026 10:19:44 expiry=? lockedOut=False
+INFO [end] gMSA: id=01-00-00-00-4B-44-53-4B-02-00-00-00-6D-01-00-00-07-00-00-00-03-00-00-00-45-DA-69-2E-7C-A3-A5-5E-40-7 pwdLastSet=134635761600995240 interval=1
+INFO [end] KDS root key: 2026-10-28T10:19:40 effective 2026-10-28T00:19:40
+[982s] clocks set to host time +0 days (2026-10-28 13:19:40): dc 28.10.2026 13:19:42,10, member 28.10.2026 13:19:40,32
+Команда выполнена успешно.
+28.10.2026 13:20:00,75
+secure channel: True
+gMSA: True
+[1025s] PHASE rotate: 22 pass, 0 fail (rc=0)
+[1025s] ================ SUMMARY (domain, seed 8383, 1025s) ================
+  domainreal: rc=0 (╤З╨╕╤Б╨╗╨╛ ╤Г╨┐╨░╨▓╤И╨╕╤Е ╤В╨╡╤Б╤В╨╛╨▓)
+  rotate: 22 pass, 0 fail (rc=0)
+  domainexpire: rc=0 (╤З╨╕╤Б╨╗╨╛ ╤Г╨┐╨░╨▓╤И╨╕╤Е ╤В╨╡╤Б╤В╨╛╨▓)
+  log domainexpire: 1 passed, 0 failed, 0 skipped (1 round, seed 8383)
+  log domainlock: 4 passed, 0 failed, 0 skipped (1 round, seed 4242)
+  log domainreal: 6 passed, 0 failed, 0 skipped (1 round, seed 8383)
+  log ftpbig10: 1 passed, 0 failed, 0 skipped (1 round, seed 1017)
+  log ftpbig1: 1 passed, 0 failed, 0 skipped (1 round, seed 117)
+  log ftpbig2: 1 passed, 0 failed, 0 skipped (1 round, seed 217)
+  log ftpbig3: 1 passed, 0 failed, 0 skipped (1 round, seed 317)
+  log ftpbig4: 1 passed, 0 failed, 0 skipped (1 round, seed 417)
+  log ftpbig5: 1 passed, 0 failed, 0 skipped (1 round, seed 517)
+  log ftpbig6: 1 passed, 0 failed, 0 skipped (1 round, seed 617)
+  log ftpbig7: 1 passed, 0 failed, 0 skipped (1 round, seed 717)
+  log ftpbig8: 1 passed, 0 failed, 0 skipped (1 round, seed 817)
+  log ftpbig9: 1 passed, 0 failed, 0 skipped (1 round, seed 917)
+  log gui: 4 passed, 0 failed, 0 skipped (1 round, seed 4242)
+[1026s] ╨Т╨Ь ╨╛╤Б╤В╨░╨▓╨╗╨╡╨╜╤Л (--keep): ╤Г╨┤╨░╨╗╨╕╤В╤М - .winvm/dom/destroy-dom.sh <╨╝╨╡╤В╨║╨░>

@@ -337,8 +337,10 @@ bool Config::saveServer(const Json& in, Json& saved, Str& err)
         else s.remove(*f);
     }
     if (idx >= 0) arr.item((size_t)idx) = s; else arr.push(s);
+    Json prevServers = m_cfg.get("servers");
     m_cfg["servers"] = arr;
     bool ok = saveCfg(err);
+    if (!ok) m_cfg["servers"] = prevServers;                  // a record that could not be written must not stay in memory (the answer says "failed", the list must not show it)
     if (ok) {
         if (m_state.get(kBlocksKey).has(id.c_str()) && m_state.get(kBlocksKey).get(id.c_str()).get("creds_fp").str() != fingerprintOf(s)) { m_state[kBlocksKey].remove(id.c_str()); persistState(); }
         saved = publicServerWithBlock(s);
@@ -360,8 +362,10 @@ bool Config::deleteServer(const Str& id, Str& err)
         if (e.get("source").get("server").str() == id || e.get("target").get("server").str() == id) { if (!users.empty()) users += ", "; users += ts.at(i).get("name").str(); break; }
     }
     if (!users.empty()) { unlock(); err = "the server is used by the tasks: " + users; return false; }
+    Json prevServers = m_cfg.get("servers");
     m_cfg["servers"] = out;
     bool ok = saveCfg(err);
+    if (!ok) m_cfg["servers"] = prevServers;
     if (ok && m_state.get(kBlocksKey).has(id.c_str())) { m_state[kBlocksKey].remove(id.c_str()); persistState(); }
     unlock();
     return ok;
@@ -496,8 +500,10 @@ bool Config::saveTask(const Json& in, Json& saved, Str& err)
     }
     t["elements"] = els;
     if (idx >= 0) arr.item((size_t)idx) = t; else arr.push(t);
+    Json prevTasks = m_cfg.get("tasks");
     m_cfg["tasks"] = arr;
     bool ok = saveCfg(err);
+    if (!ok) m_cfg["tasks"] = prevTasks;
     if (ok) saved = publicTask(t);
     unlock();
     return ok;

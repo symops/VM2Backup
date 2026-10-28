@@ -29,6 +29,7 @@ powershell -NoProfile -Command "$ErrorActionPreference='Continue'; $a=Get-NetAda
 ipconfig /all >> "%SRC%\results\net-setup.txt"
 rem Имя компьютера в домене: DC / MEMBER (тесты и задание пользователя используют \\dc и member$); автовход - по локальной учётной записи ".".
 powershell -NoProfile -Command "Rename-Computer -NewName @SHORT@ -Force" >> "%SRC%\results\net-setup.txt" 2>&1
-reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v DefaultDomainName /t REG_SZ /d . /f >nul
+rem Автовход: имя встроенного администратора берётся из SID -500 (на русской ОС это «Администратор», а не Administrator), иначе автовход после перезагрузки не срабатывает.
+powershell -NoProfile -Command "$n=(Get-LocalUser | Where-Object { $_.SID.Value -like 'S-1-5-21-*-500' }).Name; $w='HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'; Set-ItemProperty $w AutoAdminLogon '1'; Set-ItemProperty $w DefaultUserName $n; Set-ItemProperty $w DefaultDomainName '.'; Set-ItemProperty $w DefaultPassword 'Adm1n-Vm2b#2026'; Remove-ItemProperty $w AutoLogonCount -ErrorAction SilentlyContinue; 'autologon: ' + $n" >> "%SRC%\results\net-setup.txt" 2>&1
 echo executor installed %DATE% %TIME% > "%SRC%\results\executor-ready.txt"
 shutdown /r /t 10

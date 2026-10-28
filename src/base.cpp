@@ -416,8 +416,14 @@ bool WriteWholeFile(const char* path, const void* p, size_t n, Str& err)
 #ifdef _WIN32
     wchar_t w[4096], wt[4106];
     if (!Widen(path, w, 4096) || !Widen(tmp.c_str(), wt, 4106)) { err = "bad path"; return false; }
-    HANDLE f = CreateFileW(wt, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (f == INVALID_HANDLE_VALUE) { err = WinErr("cannot write", tmp.c_str()); return false; }
+    HANDLE f = INVALID_HANDLE_VALUE;
+    for (int attempt = 0;; ++attempt) {                                  // the .tmp file of the previous save may still be held for a moment by a scanner / indexer (the previous write's close is being scanned): wait, do not lose the save
+        f = CreateFileW(wt, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (f != INVALID_HANDLE_VALUE) break;
+        DWORD le = GetLastError();
+        if (attempt >= 12 || (le != ERROR_SHARING_VIOLATION && le != ERROR_LOCK_VIOLATION && le != ERROR_ACCESS_DENIED)) { SetLastError(le); err = WinErr("cannot write", tmp.c_str()); return false; }
+        Sleep(150);
+    }
     size_t done = 0; bool ok = true;
     while (done < n) {
         DWORD k = 0;

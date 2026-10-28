@@ -23,6 +23,10 @@ struct NetApi {
     // "\\\\server" (token starting with two backslashes) = the shares of that server. Returns a Win32 error (0 = ok).
     unsigned long (*enumNet)(const Str& token, int scope, Vec<NetNode>& out);
     unsigned long (*enumShares)(const Str& server, Vec<NetNode>& out);   // NetShareEnum level 1 (disk shares); the fallback
+    // The servers of the domain this computer belongs to: DsGetDcName (the domain controller) + an LDAP search of the domain's computers with a server operating system
+    // (modern Windows does not enumerate NetBIOS neighbours, so the root of the network neighbourhood is empty in a domain). `domain` gets the DNS name of the domain.
+    // Returns a Win32 error: 0 = ok (out may still be empty), ERROR_NO_SUCH_DOMAIN (1355) = the computer is not a domain member (the root then shows the WNet list only). May be null.
+    unsigned long (*enumDomain)(Str& domain, Vec<NetNode>& out);
 };
 void NetBrowseSetApi(const NetApi* api);                                 // nullptr = the real one
 void NetBrowseSetDeadlineMs(int ms);                                     // test hook: the time one browse may take (default 15000); <= 0 = default

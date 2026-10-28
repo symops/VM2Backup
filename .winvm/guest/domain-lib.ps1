@@ -14,6 +14,15 @@ $global:Dom = @{
     Group = 'VM2B-Backup-Operators'; Gmsa = 'vm2bgmsa'
     OU = 'OU=VM2B-Test,DC=vm2b,DC=test'
 }
+# Имя встроенного администратора (SID -500) на этой машине: «Администратор» на русской Windows; в домене то же имя носит доменный администратор.
+function Get-BuiltinAdminName { $a = Get-WmiObject Win32_UserAccount -Filter "LocalAccount=True" | Where-Object { $_.SID -like 'S-1-5-21-*-500' } | Select-Object -First 1; if ($a) { return $a.Name }; return 'Administrator' }
+# Автовход Winlogon: $domain - '.' (локальная запись) или NetBIOS-имя домена
+function Set-AutoLogon([string]$domain, [string]$name, [string]$pw) {
+    $wl = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+    Set-ItemProperty $wl AutoAdminLogon '1'; Set-ItemProperty $wl DefaultUserName $name; Set-ItemProperty $wl DefaultDomainName $domain; Set-ItemProperty $wl DefaultPassword $pw
+    Remove-ItemProperty $wl AutoLogonCount -ErrorAction SilentlyContinue
+    Write-Output ("INFO autologon set: $domain\$name")
+}
 function Dom-AdminCred { New-Object Management.Automation.PSCredential($global:Dom.AdminUser, (ConvertTo-SecureString $global:Dom.AdminPw -AsPlainText -Force)) }
 # сервис и данные продукта
 $global:SvcName = 'VM2BackupService'; $global:DataDir = "$env:ProgramData\VM2Backup"
@@ -54,3 +63,19 @@ function Run-Backup($w, $name, $srcDir, $vmName, $targetServer, $targetDir) {
 }
 function Make-Data($dir, $mb) { Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force "$dir\vmS" | Out-Null; $rnd = New-Object Random 7; $buf = New-Object byte[] (1MB); $fs = [IO.File]::Create("$dir\vmS\disk.vmdk"); for ($i = 0; $i -lt $mb; $i++) { $rnd.NextBytes($buf); $fs.Write($buf, 0, $buf.Length) }; $fs.Close() }
 function Wait-Dns([string]$name, [int]$sec = 300) { $t0 = Get-Date; while (((Get-Date) - $t0).TotalSeconds -lt $sec) { try { if (Resolve-DnsName $name -ErrorAction Stop) { return $true } } catch {}; Start-Sleep -Seconds 5 }; return $false }
+# --- gMSA: состояние пароля (msDS-ManagedPasswordId, pwdLastSet) с контроллера под учётной записью администратора домена
+function Get-GmsaState {
+    try { $o = Get-ADServiceAccount $global:Dom.Gmsa -Properties 'msDS-ManagedPasswordId', pwdLastSet, 'msDS-ManagedPasswordInterval' -Server dc.vm2b.test -Credential (Dom-AdminCred) -ErrorAction Stop
+          $id = $o.'msDS-ManagedPasswordId'; $hex = if ($id) { [BitConverter]::ToString([byte[]]$id) } else { '' }
+          return @{ Id = $hex; PwdLastSet = [Int64]$o.pwdLastSet; Interval = $o.'msDS-ManagedPasswordInterval'; Dn = $o.DistinguishedName; Error = '' } }
+    catch { return @{ Id = ''; PwdLastSet = 0; Interval = 0; Dn = ''; Error = $_.Exception.Message } }
+}
+function Gmsa-Line($s) { if ($s.Error) { return 'error: ' + $s.Error } else { return ('id=' + $s.Id.Substring(0, [Math]::Min(100, $s.Id.Length)) + ' pwdLastSet=' + $s.PwdLastSet + ' interval=' + $s.Interval) } }
+# одна копия через службу с пустым пользователем на \\dc.vm2b.test\Backups; результат: 'Success' или текст сбоя (запись истории)
+function Backup-Once($w, [string]$tag, [string]$srv) {
+    $h = Run-Backup $w ($tag + '-' + (Get-Date).ToString('HHmmss')) 'C:\vm2b\domdata' 'vmS' $srv '{VM}'
+    if (-not $h) { return 'no history record' }
+    if ($h.status -eq 'Success') { return 'Success' }
+    $msg = ''; try { $a = @{ id = $h.id }; $r = Api $w 'history.get' $a; $msg = ($r.Result.results | ForEach-Object { $_.message }) -join ' | ' } catch {}
+    return ('status=' + $h.status + ' ' + $msg)
+}

@@ -787,6 +787,7 @@ VM2B_TEST("ftp", ftp_large_streamed)
     // A big file is streamed from / checked against the pattern generator, never held in memory.
     u64 n = (u64)c_.range(60, 200) << 20;
     const char* key = c_.coin() ? "ftp" : "ftps"; if (!FtpSrv(c_, key)) key = "ftp"; if (!FtpSrv(c_, key)) key = "ftpes";
+    { char kv[16]; if (GetEnvironmentVariableA("VM2B_FTP_KEY", kv, sizeof(kv)) && FtpSrv(c_, kv)) { static char forced[16]; strcpy(forced, kv); key = forced; } }      // repeat runs (tools/ftp-repeat.sh) pin the kind of server: ftp / ftpes / ftps
     const Json* s = FtpSrv(c_, key); if (!s) return true;
     Target* t = MakeFtp(c_, FtpCfg(*s, key, Uniq(c_, "big"))); T_CHECK(t && t->connect()); if (!t) return false;
     DWORD t0 = GetTickCount();

@@ -706,6 +706,50 @@ VM2B_TEST("smb", auth_guard_codes_transient_and_independence)
     return true;
 }
 
+// ---- a save that cannot be written does not leave a ghost record (the "records did not get an id" race found on the domain stand) ----------------
+namespace { struct HoldTmp { HANDLE h; DWORD ms; }; DWORD WINAPI ReleaseLater(LPVOID p) { HoldTmp* x = (HoldTmp*)p; Sleep(x->ms); CloseHandle(x->h); return 0; } }
+
+VM2B_TEST("smb", config_save_waits_for_a_held_tmp_file)
+{
+    // an indexer / scanner holding config.json.tmp from the previous save for a moment: the next save waits instead of failing
+    Tmp tmp(c_, "cfgtmp"); Str dir = tmp.sub("data"), e; MakeDirs(dir, e);
+    Str tmpPath = JoinPath(dir, "x.json.tmp"); Wide wt(tmpPath);
+    HANDLE h = CreateFileW(wt.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr); T_CHECK(h != INVALID_HANDLE_VALUE); if (h == INVALID_HANDLE_VALUE) return false;
+    HoldTmp ht = { h, 700 }; HANDLE th = CreateThread(nullptr, 0, ReleaseLater, &ht, 0, nullptr);
+    DWORD t0 = GetTickCount(); Str body = "{\"a\":1}\n"; bool ok = WriteWholeFile(JoinPath(dir, "x.json").c_str(), body.data(), body.size(), e);
+    c_.note("save with the .tmp file held for 700 ms: %s after %lu ms %s", ok ? "ok" : "FAILED", (unsigned long)(GetTickCount() - t0), e.c_str());
+    WaitForSingleObject(th, 5000); CloseHandle(th);
+    T_CHECK(ok); T_CHECK(ReadAll(JoinPath(dir, "x.json")) == body);
+    return true;
+}
+
+VM2B_TEST("smb", config_failed_save_leaves_no_ghost_record)
+{
+    Tmp tmp(c_, "cfgghost"); Str dir = tmp.sub("data"), e; MakeDirs(dir, e);
+    Config cfg; T_CHECK(cfg.open(dir, e));
+    size_t n0 = cfg.servers().size();
+    Json sv = Json::object(); sv["type"] = "smb"; sv["name"] = "Ghost"; sv["path"] = "\\\\h\\s"; sv["user"] = "u"; sv["password"] = "pw-ghost-1"; Json saved;
+    Str blocker = JoinPath(dir, "config.json.tmp"); T_CHECK(MakeDirs(blocker, e));            // a folder where the temporary file must be: the write cannot succeed
+    bool ok = cfg.saveServer(sv, saved, e);
+    c_.note("save with an unwritable config.json.tmp: ok=%d err=[%s], servers %d -> %d", ok ? 1 : 0, e.c_str(), (int)n0, (int)cfg.servers().size());
+    T_CHECK(!ok); T_CHECK(!e.empty()); T_CHECK(cfg.servers().size() == n0);                     // the failed save is not in the list (it used to stay in memory: the record existed, the answer had no id)
+    RemoveTree(blocker);
+    T_CHECK(cfg.saveServer(sv, saved, e)); T_CHECK(!saved.get("id").str().empty()); T_CHECK(cfg.servers().size() == n0 + 1);
+    T_CHECK(ReadAll(JoinPath(dir, "config.json")).find("Ghost") >= 0);
+    return true;
+}
+
+VM2B_TEST("smb", extended_error_maps_provider_status_to_the_account_codes)
+{
+    // Windows answers ERROR_EXTENDED_ERROR (1208) for an expired password etc.; the code behind it (WNetGetLastError) is a Win32 code or an NTSTATUS
+    T_CHECK(SmbMapProviderError(2242) == 1330);                                    // NERR_PasswordExpired, measured on the real domain
+    T_CHECK(SmbMapProviderError(1330) == 1330); T_CHECK(SmbMapProviderError(1326) == 1326);
+    T_CHECK(SmbMapProviderError(0xC0000071ul) == 1330); T_CHECK(SmbMapProviderError(0xC0000224ul) == 1907); T_CHECK(SmbMapProviderError(0xC0000234ul) == 1909);
+    T_CHECK(SmbMapProviderError(0xC000006Dul) == 1326); T_CHECK(SmbMapProviderError(0xC0000072ul) == 1331);
+    T_CHECK(SmbIsAuthCode(SmbMapProviderError(0xC0000071ul)));
+    return true;
+}
+
 VM2B_TEST("smb", auth_guard_old_state_file_is_read)
 {
     Tmp tmp(c_, "smbag5"); Str dir = tmp.sub("data");

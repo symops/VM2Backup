@@ -59,6 +59,10 @@ bool SmbIsTransientCode(unsigned long code);
 // The codes that mean "the credentials were refused" (wrong / locked / disabled / expired password, logon not allowed): 86, 1326, 1909, 1331, 1330, 1907, 1385, 1327, 1328.
 // 1219 (a conflict with another connection of this computer) and 5 (access denied for a valid account) are NOT among them.
 bool SmbIsAuthCode(unsigned long code);
+// The code behind ERROR_EXTENDED_ERROR (WNetGetLastError): a Win32 code stays, an NTSTATUS (high bit) becomes its Win32 code (0xC0000071 -> 1330, 0xC0000224 -> 1907, 0xC0000234 -> 1909, 0xC000006D -> 1326)
+unsigned long SmbMapProviderError(unsigned long pe);
+// A result of WNetAddConnection2W: ERROR_EXTENDED_ERROR (1208) is replaced by the provider's own code (WNetGetLastError, mapped); any other value stays
+unsigned long SmbResolveExtendedError(unsigned long rc);
 
 // Network drives of the logged-in user (GUI): letters ("Z:") and the UNC path each one points at.
 void SmbListNetworkDrives(Vec<Str>& letters, Vec<Str>& uncs);

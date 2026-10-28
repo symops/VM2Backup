@@ -8,7 +8,8 @@
 //               "nouser_name": "VM2B\\nouser", "nouser_password": "...",         (верный пароль, но прав на шару нет -> 5)
 //               "locked_user": "VM2B\\lockuser", "locked_password": "...",       (политика: блокировка после 5 неверных попыток; группа domainlock)
 //               "mustchange_user", "mustchange_password", "expired_user", "expired_password", "disabled_user", "disabled_password",
-//               "badpwd_script": "C:\\vm2b\\guest\\domain-badpwd.ps1" }          (печатает badPwdCount пользователя с контроллера домена; необязателен)
+//               "badpwd_script": "C:\\vm2b\\guest\\domain-badpwd.ps1",         (печатает badPwdCount пользователя с контроллера домена; необязателен)
+//               "expired_new_password", "chpwd_script": "C:\\vm2b\\guest\\domain-chpwd.ps1" }   (группа domainexpire: смена пароля expuser после его истечения)
 // Под Wine SMB-клиента нет: тесты пропускаются (в servers.json нет "domain").
 #include "autotest.h"
 #include "engine.h"
@@ -24,7 +25,7 @@ namespace vm2b {
 namespace {
 
 struct DomCfg {
-    Str fqdn, shortUnc, ip, restricted, uNet, uUpn, uShort, pw, wrongPw, noUser, noPw, lockUser, lockPw, chgUser, chgPw, expUser, expPw, disUser, disPw, badpwd;
+    Str fqdn, shortUnc, ip, restricted, uNet, uUpn, uShort, pw, wrongPw, noUser, noPw, lockUser, lockPw, chgUser, chgPw, expUser, expPw, expNewPw, disUser, disPw, badpwd, chpwd;
     bool ok;
     explicit DomCfg(Ctx& c) : ok(false) {
         const Json& s = c.servers.get("domain");
@@ -34,10 +35,11 @@ struct DomCfg {
         noUser = s.get("nouser_name").str(); noPw = s.get("nouser_password").str(); lockUser = s.get("locked_user").str(); lockPw = s.get("locked_password").str();
         chgUser = s.get("mustchange_user").str(); chgPw = s.get("mustchange_password").str(); expUser = s.get("expired_user").str(); expPw = s.get("expired_password").str();
         disUser = s.get("disabled_user").str(); disPw = s.get("disabled_password").str(); badpwd = s.get("badpwd_script").str();
+        expNewPw = s.get("expired_new_password").str(); chpwd = s.get("chpwd_script").str();
         ok = !fqdn.empty() && !uNet.empty() && !pw.empty();
     }
     bool leaks(const Str& t) const {
-        const Str* all[] = { &pw, &wrongPw, &noPw, &lockPw, &chgPw, &expPw, &disPw };
+        const Str* all[] = { &pw, &wrongPw, &noPw, &lockPw, &chgPw, &expPw, &expNewPw, &disPw };
         for (const Str* p : all) if (p->size() >= 4 && t.find(p->c_str()) >= 0) return true;
         return false;
     }
@@ -61,7 +63,7 @@ unsigned long CountingAdd(const wchar_t* remote, const wchar_t* user, const wcha
     typedef DWORD (WINAPI *AddFn)(LPNETRESOURCEW, LPCWSTR, LPCWSTR, DWORD);
     AddFn f = (AddFn)(void*)GetProcAddress(h, "WNetAddConnection2W"); if (!f) return ERROR_NO_NETWORK;
     NETRESOURCEW nr; memset(&nr, 0, sizeof(nr)); nr.dwType = RESOURCETYPE_DISK; nr.lpRemoteName = (LPWSTR)remote;
-    DWORD rc = f(&nr, pass, user, CONNECT_TEMPORARY); g_lastRc = (LONG)rc; return rc;
+    DWORD rc = (DWORD)SmbResolveExtendedError(f(&nr, pass, user, CONNECT_TEMPORARY)); g_lastRc = (LONG)rc; return rc;
 }
 unsigned long CountingCancel(const wchar_t* remote, int force)
 {
@@ -100,6 +102,16 @@ Str Roundtrip(Ctx& c, const DomCfg& d, const Str& unc, const Str& user, const St
     }
     delete t;
     return why;
+}
+
+// Скрипт гостя с аргументами: весь вывод (пусто = не удалось запустить)
+Str RunScript(const Str& script, const Str& a1, const Str& a2, const Str& a3)
+{
+    if (script.empty()) return Str();
+    Str cmd = Str("powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"") + script + "\" \"" + a1 + "\" \"" + a2 + "\" \"" + a3 + "\" 2>&1";
+    FILE* f = _popen(cmd.c_str(), "r"); if (!f) return Str();
+    char buf[512]; Str out; size_t n; while ((n = fread(buf, 1, sizeof(buf), f)) > 0) out.append(buf, n);
+    _pclose(f); return out;
 }
 
 // Резервная копия + проверка + восстановление ВМ через цель (как в smbreal).
@@ -182,6 +194,7 @@ VM2B_TEST("domainreal", domain_account_states_give_clear_permanent_errors)
         Str e; Target* t = MakeTarget(SmbJson(dc.fqdn, k.user, k.pw, ""), e); T_CHECK(t != nullptr); if (!t) return false;
         bool ok = t->connect(); unsigned long code = SmbErrorCodeOf(t->err);
         c_.note("%s: ok=%d transient=%d code=%lu text=[%s]", k.what, ok ? 1 : 0, t->transient ? 1 : 0, code, t->err.c_str());
+        if (ok && k.code == 1330) { c_.note("   the password of the expiring user is still valid (the clocks were not shifted: see the group domainexpire)"); delete t; T_CHECK(SmbOpenConnections() == 0); continue; }
         T_CHECK(!ok); T_CHECK(!t->transient); T_CHECK(!dc.leaks(t->err));
         // Windows может ответить и общим 1326 («неверное имя или пароль»): тогда текст верен, но подсказки нет - это тоже записываем, но НЕ считаем ошибкой продукта
         if (code == 1907 || code == 1330) T_CHECK(t->err.lower().find("password") >= 0 && t->err.lower().find("changed") + t->err.lower().find("expired") > -2 && t->err.find("\xd0") < 0 && t->err.find("\xd1") < 0);   // понятный английский текст, не системный русский
@@ -280,6 +293,55 @@ VM2B_TEST("domainlock", domain_scheduled_task_with_wrong_password_is_tried_once)
     return true;
 }
 
+VM2B_TEST("domainexpire", domain_expired_password_is_1330_guard_blocks_new_password_unblocks)
+{
+    // Срок пароля истёк по-настоящему (часы обеих ВМ сдвинуты на +45 суток при максимальном возрасте пароля домена 42 суток; фаза rotate): Windows отвечает 1330, продукт
+    // даёт постоянную понятную ошибку без пароля, защита от блокировки помечает сервер и расписание его больше не трогает; смена пароля пользователя и запись сервера с НОВЫМ
+    // паролем снимают метку, следующий запуск копирует.
+    NEED_DOMAIN();
+    if (dc.expUser.empty() || dc.expPw.empty() || dc.expNewPw.empty() || dc.chpwd.empty()) { c_.skip("no expired_user / expired_new_password / chpwd_script"); return true; }
+    // 1. сама цель: 1330, постоянная ошибка, одно обращение
+    { CountScope cs; Str e; Target* t = MakeTarget(SmbJson(dc.fqdn, dc.expUser, dc.expPw, ""), e); T_CHECK(t != nullptr); if (!t) return false;
+      bool ok = t->connect(); unsigned long code = SmbErrorCodeOf(t->err);
+      c_.note("expired password: ok=%d transient=%d code=%lu auth_failed=%d text=[%s] logon calls %d", ok ? 1 : 0, t->transient ? 1 : 0, code, t->auth_failed ? 1 : 0, t->err.c_str(), cs.count());
+      T_CHECK(!ok); T_CHECK(code == 1330); T_CHECK(!t->transient); T_CHECK(t->auth_failed); T_CHECK(!dc.leaks(t->err)); T_CHECK(t->err.find("expired") >= 0);
+      T_CHECK(t->err.find("\xd0") < 0 && t->err.find("\xd1") < 0);                  // английский текст продукта, не системный русский
+      delete t; T_CHECK(cs.count() == 1); }
+    // 2. задача по расписанию (служба в процессе, поддельные часы)
+    CountScope cs;
+    Svc s(c_, "domexp", true); if (!s.up) return false; s.record = true;
+    Str vms = s.tmp.sub("vms"); WriteBytes(JoinPath(vms, "vm1\\disk.vmdk"), Random(c_, 80000)); Str src = s.addDirServer(vms);
+    Json sv = Json::object(); sv["type"] = "smb"; sv["name"] = "Expiring user share"; sv["path"] = dc.fqdn; sv["user"] = dc.expUser; sv["password"] = dc.expPw;
+    Json sa = Json::object(); sa["server"] = sv; Str id = s.ok("servers.save", sa).get("id").str(); T_CHECK(!id.empty());
+    g_fakeNow = (i64)UnixNow() + 3600; i64 t0 = g_fakeNow;
+    Json sch = Json::object(); sch["enabled"] = true; sch["mode"] = "every"; Json ev = Json::object(); ev["value"] = 10; ev["unit"] = "minutes"; sch["every"] = ev;
+    sch["first_time"] = FormatLocalMin(UnixToLocalMin(t0)).replace_all(" ", "T");
+    Json el = Svc::Element(src, "vm1", "{VM}"); Json tg = Json::object(); tg["server"] = id; tg["directory"] = Unique(c_, "dexp") + "\\{VM}"; el["target"] = tg; el["verify"] = false;
+    Str task = s.saveTask("Expired password", el, sch); T_CHECK(!task.empty());
+    s.ok("scheduler.set", [] { Json a = Json::object(); a["enabled"] = true; return a; }()); Sleep(300);
+    const int N = 6;
+    for (int i = 0; i < N; ++i) { int h = s.historyCount(); g_fakeNow += 10 * 60; T_CHECK(s.waitHistory(h + 1, 30000)); }
+    c_.note("%d scheduler runs with the expired password: logon calls %d", N, cs.count());
+    T_CHECK(cs.count() == 1);
+    auto markOf = [&]() { Json list = s.ok("servers.list", Json::object()); Json m; for (size_t i = 0; i < list.size(); ++i) if (list.at(i).get("id").str() == id) m = list.at(i).get("auth_blocked"); return m; };
+    Json mark = markOf(); T_CHECK(mark.is_object()); T_CHECK(mark.get("code").integer() == 1330); T_CHECK(mark.get("text").str().find("expired") >= 0); T_CHECK(!dc.leaks(mark.dump()));
+    Json hl = s.ok("history.list", [] { Json a = Json::object(); a["limit"] = 1; return a; }());
+    if (hl.size()) { Json ha = Json::object(); ha["id"] = hl.at(0).get("id").str(); Json rec = s.ok("history.get", ha); T_CHECK(rec.get("status").str() == "Failed"); T_CHECK(rec.get("results").at(0).get("skipped").boolean());
+                     Str m = rec.get("results").at(0).get("message").str(); c_.note("last run: %s", m.c_str()); T_CHECK(m.find("1330") >= 0 && m.find("expired") >= 0); }
+    // 3. пользователь меняет пароль (скрипт гостя: Set-ADAccountPassword), 4. запись сервера с новым паролем снимает метку, копия идёт
+    Str ch = RunScript(dc.chpwd, dc.expUser, dc.expPw, dc.expNewPw); c_.note("password change: %s", ch.c_str()); T_CHECK(ch.find("CHPWD=OK") >= 0);
+    { Str e; Target* t = MakeTarget(SmbJson(dc.fqdn, dc.expUser, dc.expPw, ""), e); bool ok = t && t->connect(); c_.note("the OLD password after the change: ok=%d [%s]", ok ? 1 : 0, t ? t->err.c_str() : ""); T_CHECK(!ok); delete t; }
+    sv["id"] = id; sv["password"] = dc.expNewPw; Json sb = Json::object(); sb["server"] = sv; s.ok("servers.save", sb);
+    T_CHECK(!markOf().is_object());
+    int before = cs.count(); { int h = s.historyCount(); g_fakeNow += 10 * 60; T_CHECK(s.waitHistory(h + 1, 120000)); }
+    Json hl2 = s.ok("history.list", [] { Json a = Json::object(); a["limit"] = 1; return a; }());
+    c_.note("after the new password: logon calls +%d, last result %s", cs.count() - before, hl2.size() ? hl2.at(0).get("status").str().c_str() : "?");
+    T_CHECK(cs.count() > before); T_CHECK(hl2.size() && hl2.at(0).get("status").str() == "Success");
+    T_CHECK(!dc.leaks(s.transcript));
+    Json off = Json::object(); off["enabled"] = false; s.ok("scheduler.set", off);
+    return true;
+}
+
 VM2B_TEST("domainlock", domain_lockout_policy_gives_1909_without_retries)
 {
     // lockuser: политика блокирует после 5 неверных попыток.  Неверные пароли - вручную (по одной попытке), потом с верным паролем: 1909 и ни одного повтора.
@@ -342,9 +404,14 @@ VM2B_TEST("domainreal", domain_net_browse_server_share_and_network)
     Json rw; Str ew; bool okw = NetBrowse(server, dc.uUpn, dc.wrongPw, rw, ew);
     c_.note("net.browse with the wrong password: ok=%d [%s]", okw ? 1 : 0, ew.c_str()); T_CHECK(!okw); T_CHECK(ew.find("password") >= 0); T_CHECK(!dc.leaks(ew));
     // корень сетевого окружения: находит ли он контроллер и его шары (на домене без NetBIOS-обзора может быть пусто) - только запись
-    Json r4; Str e4; bool ok4 = NetBrowse("", "", "", r4, e4);
+    Json r4; Str e4; NetBrowseSetDeadlineMs(90000); DWORD tr0 = GetTickCount(); bool ok4 = NetBrowse("", "", "", r4, e4); NetBrowseSetDeadlineMs(0);
+    c_.note("network root took %lu ms (domain lookup %lld ms, error %lld) [%s]", (unsigned long)(GetTickCount() - tr0), (long long)r4.get("domain_ms").integer(-1), (long long)r4.get("domain_error").integer(0), r4.get("domain_diag").str().c_str());
     Str names; for (size_t k = 0; k < r4.get("entries").size(); ++k) { names += r4.get("entries").at(k).get("name").str(); names += " "; }
-    c_.note("network root: ok=%d entries=%d [%s] %s", ok4 ? 1 : 0, (int)r4.get("entries").size(), names.c_str(), e4.c_str());
+    c_.note("network root: ok=%d entries=%d domain=[%s] [%s] %s", ok4 ? 1 : 0, (int)r4.get("entries").size(), r4.get("domain").str().c_str(), names.c_str(), e4.c_str());
+    // в домене корень показывает контроллер и серверы домена (DsGetDcName + LDAP): контроллер (имя до первой точки = короткое имя из unc_short) и этот рядовой сервер есть в списке
+    T_CHECK(ok4); { Str dcShort = dc.shortUnc.substr(2, (size_t)(dc.shortUnc.rfind('\\') - 2)).lower(); bool foundDc = false, foundMe = false; wchar_t me[64]; DWORD mn = 64; Str meS = GetComputerNameW(me, &mn) ? FromWide(me).lower() : Str();
+      for (size_t k = 0; k < r4.get("entries").size(); ++k) { Str nm = r4.get("entries").at(k).get("name").str().lower(); Str sh = nm.substr(0, nm.find('.') >= 0 ? (size_t)nm.find('.') : nm.size()); if (sh == dcShort) foundDc = true; if (!meS.empty() && sh == meS) foundMe = true; }
+      c_.note("the root lists the controller (%s): %d, this server (%s): %d", dcShort.c_str(), foundDc ? 1 : 0, meS.c_str(), foundMe ? 1 : 0); T_CHECK(foundDc); T_CHECK(foundMe); T_CHECK(r4.get("domain").str().size() > 0); }
     Json dr; Str de; bool okd = NetListDrives(dr, de); c_.note("net.drives: ok=%d drives=%d %s", okd ? 1 : 0, okd ? (int)dr.get("drives").size() : 0, de.c_str()); T_CHECK(okd);
     return true;
 }

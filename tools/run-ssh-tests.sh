@@ -53,6 +53,7 @@ ssh-keygen -q -t rsa -b 2048 -N '' -f $K/host_rsa </dev/null
 # user keys: every kind the client supports
 PASSPH='pass phrase 123'
 ssh-keygen -q -t ed25519 -N '' -f $K/u_ed25519 </dev/null
+ssh-keygen -q -t ed25519 -N '' -f $K/n_unauthorized </dev/null        # a key the servers do not know (not in authorized_keys: the lock-out guard tests)
 ssh-keygen -q -t ed25519 -N "$PASSPH" -f $K/u_ed25519_pw </dev/null
 ssh-keygen -q -t ed25519 -N "$PASSPH" -Z aes256-cbc -f $K/u_ed25519_cbc </dev/null
 ssh-keygen -q -t ed25519 -N "$PASSPH" -Z aes128-ctr -f $K/u_ed25519_ctr128 </dev/null
@@ -67,7 +68,7 @@ ssh-keygen -q -t ecdsa -b 521 -N '' -f $K/u_ecdsa521 </dev/null
 ssh-keygen -q -t ecdsa -b 256 -m PEM -N '' -f $K/u_ecdsa_pem </dev/null
 ssh-keygen -q -t ed25519 -m PKCS8 -N '' -f $K/u_ed25519_pkcs8 </dev/null
 cat $K/u_*.pub > $WORK/authorized_keys
-chmod 644 $WORK/authorized_keys $K/*.pub; chmod 644 $K/u_*     # the test (root) reads them; they are throw-away keys
+chmod 644 $WORK/authorized_keys $K/*.pub; chmod 644 $K/u_* $K/n_unauthorized     # the test (root) reads them; they are throw-away keys
 fp() { ssh-keygen -lf "$1" | awk '{print $2}'; }
 FP_ED=$(fp $K/host_ed25519.pub); FP_E256=$(fp $K/host_ecdsa256.pub); FP_E384=$(fp $K/host_ecdsa384.pub); FP_E521=$(fp $K/host_ecdsa521.pub); FP_RSA=$(fp $K/host_rsa.pub)
 
@@ -171,6 +172,7 @@ xentry idle 22310 "UnusedConnectionTimeout 3" "ChannelTimeout session=3"
 xentry smallgrace 22311 "LoginGraceTime 3"
 xentry fewauth 22312 "MaxAuthTries 1"
 xentry maxstart 22313 "MaxStartups 2:100:2"
+xentry authlog 22315 "LogLevel VERBOSE"       # the log of this server is read by the lock-out guard tests (attempts of the client are counted)
 xentry rekey64k 22314 "Ciphers aes128-ctr" "KexAlgorithms diffie-hellman-group14-sha256" "MACs hmac-sha2-256" "RekeyLimit 64K 1"
 # ---- paramiko servers (password / keyboard-interactive // fault injection / hostile / corrupting relay) ----
 PM_JSON=""
@@ -197,7 +199,7 @@ W() {      # a Linux path as the test program sees it (Wine: Z:<path>; the Windo
     echo "\"scp\":{\"type\":\"scp\",\"host\":\"$SH\",\"port\":$MAIN_PORT,\"user\":\"$UNAME\",\"password\":\"$UPASS\",\"host_key\":\"$FP_ED\"},"
     echo "\"scp_rekey\":{\"type\":\"scp\",\"host\":\"$SH\",\"port\":$REKEY_PORT,\"user\":\"$UNAME\",\"password\":\"$UPASS\",\"host_key\":\"$FP_ED\"},"
     for e in "${XENTRIES[@]}"; do echo "$e,"; done
-    echo "\"x\":{\"small_dir\":\"small\"},"
+    echo "\"x\":{\"small_dir\":\"small\",\"authlog\":\"$(W $WORK/log/sshd-22315.log)\"},"
     [ -n "$PM_JSON" ] && echo "\"pm\":$PM_JSON,"
     printf '"ssh_matrix":['; first=1; for e in "${ENTRIES[@]}"; do [ $first = 1 ] || printf ','; first=0; printf '%s' "$e"; done; echo ']'
     echo "}"

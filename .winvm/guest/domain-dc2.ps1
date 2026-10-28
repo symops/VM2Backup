@@ -29,8 +29,11 @@ Add-ADGroupMember -Identity $d.Group -Members $d.Svc, $d.Bk, $d.Lock, $d.MustCha
 # 1907: «требуется смена пароля при входе»; 1330: пароль истёк (PasswordNeverExpires выключен, pwdLastSet 200 суток назад при максимуме 42); 1331: учётная запись отключена
 Set-ADUser $d.MustChange -PasswordNeverExpires $false -ChangePasswordAtLogon $true
 Set-ADUser $d.Expired -PasswordNeverExpires $false
-# 1330 (срок действия пароля истёк) в домене без ожидания 42 суток получить нельзя: pwdLastSet принимает только 0 или -1; expuser получает то же состояние, что chguser
-Set-ADUser $d.Expired -ChangePasswordAtLogon $true
+# 1330 (срок действия пароля истёк): expuser - обычный пользователь с ограниченным сроком пароля (политика домена по умолчанию, максимум 42 суток), смена при входе НЕ требуется.
+# Состояние «истёк» наступает только при синхронном сдвиге часов обеих ВМ на +45 суток (фаза rotate): до этого expuser входит нормально.
+Set-ADUser $d.Expired -ChangePasswordAtLogon $false -PasswordNeverExpires $false
+# встроенный администратор домена (SID -500, на русской Windows «Администратор») срок пароля не ограничен: после сдвига часов автовход и исполнитель обязаны жить
+Get-ADUser -Identity ((Get-ADDomain).DomainSID.Value + '-500') | Set-ADUser -PasswordNeverExpires $true
 Disable-ADAccount $d.Disabled
 # PSO: блокировка после 5 неверных попыток - только у lockuser (остальные учётные записи не блокируются: домен по умолчанию порога не имеет)
 $pso = Get-ADFineGrainedPasswordPolicy -Filter "Name -eq 'VM2B-Lockout'"; if ($pso) { Remove-ADFineGrainedPasswordPolicy $pso -Confirm:$false }

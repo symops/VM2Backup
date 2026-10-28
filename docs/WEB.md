@@ -179,7 +179,7 @@ A browser cannot list the network or the drive letters of a user; the service ca
 * `net.drives {}` -> `{drives:[{letter:"Z:", unc:"\\\\server\\share", user:"DOMAIN\\name or empty", owner:"Windows account whose drive it is", source:"profile|service"}]}`.
   Read from `HKEY_USERS\<SID>\Network\<letter>` (RemotePath, UserName) of every loaded profile, plus the service's own remote drives; entries without a UNC path are skipped; no passwords.
 * `net.browse {path, user?, password?}` -> `{path, kind:"root|server|share|folder", parent, entries:[{name, path, kind:"server|share|folder", comment?}], truncated, hint?}`.
-  `path` `""` = network neighbourhood (can be empty on modern networks: `hint` explains that a server name can be typed); `\\\\server` = disk shares; `\\\\server\\share[\\sub]` = sub-folders (hidden/system hidden, max 5000, `truncated`).
+  `path` `""` = network neighbourhood (can be empty on modern networks: `hint` explains that a server name can be typed; on a member of an Active Directory domain the list also holds the domain controller and the domain's computers with a server operating system, found with `DsGetDcName` + an LDAP search under the service's own account, and the answer carries `domain`; without a domain nothing changes); `\\\\server` = disk shares; `\\\\server\\share[\\sub]` = sub-folders (hidden/system hidden, max 5000, `truncated`).
   `user`/`password` serve only a temporary connection; never stored, logged or returned. Errors are one English line ending with the Windows code: `(1326)` wrong user/password (permanent), `(53)` server not found, `(1460)` no answer within ~15 s or lookups pending (temporary).
 
 ### Network picker in the UI

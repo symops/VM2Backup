@@ -12,16 +12,20 @@
 #   domainreal  автотесты domainreal (три формы пользователя x три формы адреса, копия/проверка/восстановление, 5, 1907/1330/1331, обзор сети)
 #   domainlock  автотесты domainlock (число попыток при неверном пароле, блокировка 1909) + badPwdCount с контроллера
 #   auth     Kerberos или NTLM: события безопасности контроллера за время тестов
-#   svc      служба под LocalSystem / VM2B\svcbackup / gMSA (ротация пароля) / без прав на папку данных; DPAPI; права на папку данных (guest/domain-svc.ps1)
+#   browse   обзор сети на member: WNetOpenEnum, NetServerEnum, DsGetDcName, LDAP - что находит контроллер и серверы домена (от пользователя и от SYSTEM)
+#   svc      служба под LocalSystem / VM2B\svcbackup / gMSA / без прав на папку данных; DPAPI; права на папку данных (guest/domain-svc.ps1); два прохода подряд
+#   reboot   перезапуск ОБЕИХ ВМ: исполнитель обязан подняться сам (автовход по имени из SID -500), потом третий проход svc (svc3)
 #   web      сайт и панель на Server 2022: TLS, вход admin/admin, /selftest, /guitest
 #   installer  обновление / удаление / переустановка установщика
+#   ftp      ftp_large_streamed 10 раз на member (FTP-серверы на хосте, журнал DEBUG), журналы серверов в результаты
+#   rotate   синхронный сдвиг часов ОБЕИХ ВМ на +45 суток: ротация пароля gMSA (способ А: pwdLastSet=0 до сдвига, способ Б: сдвиг), срок пароля expuser (1330), возврат часов
 set -u
 if [ -z "${VM2B_RUNDOM_COPY:-}" ]; then      # скрипт идёт часами: работаем с собственной копией (правка файла посреди прогона ломает разбор)
   SELF_DIR=$(cd "$(dirname "$0")" && pwd); TMPC=$(mktemp /tmp/run-domain.XXXXXX.sh); cp "$0" "$TMPC"
   VM2B_RUNDOM_COPY=1 VM2B_RUNDOM_DIR=$SELF_DIR exec bash "$TMPC" "$@"
 fi
 R=$(cd "$VM2B_RUNDOM_DIR/.." && pwd); W=$R/.winvm; D=$W/dom
-KEEP=0; CREATE=1; BUILD=1; SEED=$RANDOM; PHASES=create,dc,join,install,domainreal,domainlock,auth,svc,web,installer
+KEEP=0; CREATE=1; BUILD=1; SEED=$RANDOM; PHASES=create,dc,join,install,domainreal,domainlock,auth,browse,svc,reboot,web,installer,ftp,rotate
 while [ $# -gt 0 ]; do case "$1" in
   --keep) KEEP=1; shift;; --no-create) CREATE=0; shift;; --no-build) BUILD=0; shift;; --phases) PHASES=$2; shift 2;; --seed) SEED=$2; shift 2;;
   *) echo "unknown argument $1"; exit 2;; esac; done
@@ -55,7 +59,8 @@ json_domain() { # servers-domain.json: как тесты видят домен
     "user_netbios": "VM2B\\bkuser", "user_upn": "bkuser@vm2b.test", "user_short": "bkuser", "password": "Bk-User#2026a", "wrong_password": "Wr0ng-Pa55#not",
     "nouser_name": "VM2B\\nouser", "nouser_password": "No-User#2026a", "locked_user": "VM2B\\lockuser", "locked_password": "Lock-User#2026a",
     "mustchange_user": "VM2B\\chguser", "mustchange_password": "Chg-User#2026a", "expired_user": "VM2B\\expuser", "expired_password": "Exp-User#2026a",
-    "disabled_user": "VM2B\\disuser", "disabled_password": "Dis-User#2026a", "badpwd_script": "C:\\vm2b\\guest\\domain-badpwd.ps1" } }
+    "disabled_user": "VM2B\\disuser", "disabled_password": "Dis-User#2026a", "badpwd_script": "C:\\vm2b\\guest\\domain-badpwd.ps1",
+    "expired_new_password": "Exp-User#2026b", "chpwd_script": "C:\\vm2b\\guest\\domain-chpwd.ps1" } }
 JEOF
 }
 runtests() { # runtests <группа> <имя задания> [доп. аргументы]
@@ -124,15 +129,28 @@ if want auth; then
   tr -d '\r' < "$RM/09-auth.out" | grep -aE '^INFO' | head -60 | tee -a "$SUM"
   tally auth $RC member:09-auth
 fi
-if want svc; then
-  gj member 10-svc 5400 "$PS C:\\vm2b\\guest\\domain-svc.ps1" > /dev/null; RC=$?
-  tr -d '\r' < "$RM/10-svc.out" | grep -aE '^INFO' | head -80 | tee -a "$SUM"
-  if tr -d '\r' < "$RM/10-svc.out" | grep -aq 'CLOCKSHIFTED=1'; then      # скрипт сдвинул часы обеих ВМ на +2 суток (ротация gMSA): возвращаем их заданиями с хоста
-    say "returning the clocks of both VMs by 2 days"
-    for r in dc member; do gj $r 10-clock-$r 120 'powershell -NoProfile -Command "Set-Date ((Get-Date).AddDays(-2)); Start-Service w32time -ErrorAction SilentlyContinue"' 'echo %DATE% %TIME%' > /dev/null; done
-    gj member 10-clock-check 120 'w32tm /resync /force' 'echo %DATE% %TIME%' > /dev/null; tr -d '\r' < "$RM/10-clock-check.out" | tail -2 | tee -a "$SUM"
-  fi
-  tally svc $RC member:10-svc
+run_svc() { # run_svc <N>: один проход domain-svc.ps1 (разбор нестабильных проверок: журнал ответов servers.save без идентификатора)
+  local n=$1 nm=10-svc; [ "$n" = 1 ] || nm=10-svc$n
+  gj member $nm 5400 "$PS C:\\vm2b\\guest\\domain-svc.ps1" > /dev/null; local rc=$?
+  tr -d '\r' < "$RM/$nm.out" | grep -aE '^INFO' | head -80 | tee -a "$SUM"
+  tally svc$n $rc member:$nm
+}
+if want browse; then
+  gj member 13-browse 600 "$PS C:\\vm2b\\guest\\domain-browse.ps1" > /dev/null
+  tr -d '\r' < "$RM/13-browse.out" | grep -aE '^INFO' | head -120 | tee -a "$SUM"
+  gj member 13-browse-sys 600 'del C:\vm2b\browse-sys.txt 2>nul' 'schtasks /create /tn vm2bbrowse /tr "powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\domain-browse.ps1 -Out C:\vm2b\browse-sys.txt" /sc once /st 00:00 /ru SYSTEM /f' 'schtasks /run /tn vm2bbrowse' \
+    "powershell -NoProfile -Command \"for(\$i=0;\$i -lt 120;\$i++){ if((Test-Path C:\\vm2b\\browse-sys.txt) -and (Select-String -Path C:\\vm2b\\browse-sys.txt -Pattern 'INFO DONE' -Quiet)){break}; Start-Sleep 2 }\"" 'type C:\vm2b\browse-sys.txt' 'schtasks /delete /tn vm2bbrowse /f' > /dev/null
+  tr -d '\r' < "$RM/13-browse-sys.out" | iconv -f UTF-8 -t UTF-8 -c | grep -aE '^INFO' | head -120 | tee -a "$SUM"
+fi
+if want svc; then run_svc 1; run_svc 2; fi
+if want reboot; then
+  say "restarting both VMs: the executor must come back by itself (autologon), no manual login"
+  reboot_vm dc 14-reboot-dc & PR1=$!; reboot_vm member 14-reboot-member & PR2=$!; wait $PR1; E1=$?; wait $PR2; E2=$?
+  gj member 14-after-reboot 300 "$PS C:\\vm2b\\guest\\domain-member2.ps1" > /dev/null; tally reboot $(( E1 + E2 )) member:14-after-reboot
+  tr -d '\r' < "$RM/14-after-reboot.out" | grep -aE '^INFO w32tm|^INFO time' | head -6 >> "$SUM"
+  gj member 14-who 120 'whoami' 'query session' > /dev/null; tr -d '\r' < "$RM/14-who.out" | head -8 | sed 's/^/  member session: /' | tee -a "$SUM"
+  gj dc 14-who 120 'whoami' 'query session' > /dev/null; tr -d '\r' < "$RD/14-who.out" | head -8 | sed 's/^/  dc session: /' | tee -a "$SUM"
+  run_svc 3
 fi
 if want web; then
   gj member 11-web 900 "$PS C:\\vm2b\\guest\\web.ps1" > /dev/null; RC=$?
@@ -147,6 +165,46 @@ if want installer; then
   gj member 12-installer 1800 'call C:\vm2b\guest\uninstall-update.cmd' > /dev/null; RC=$?
   tr -d '\r' < "$RM/12-installer.out" | grep -aE '_RC=|service pid|FileVersion|STATE' | tee -a "$SUM"
   tally installer $RC member:12-installer
+fi
+
+if want ftp; then
+  GW=$(docker network inspect vm2b-domnet -f '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null); [ -n "$GW" ] || GW=172.17.0.1
+  gj member 15-hosts 120 "findstr /c:\"vm2b-host.test\" %SystemRoot%\\System32\\drivers\\etc\\hosts >nul || echo $GW vm2b-host.test>>%SystemRoot%\\System32\\drivers\\etc\\hosts" 'ipconfig /flushdns' > /dev/null
+  VM2B_BIND_ADDR=$GW VM2B_SRV_DIR=$D/shared-member/srv VM2B_SHARED_ROOT=$D/shared-member VM2B_FTP_LOGLEVEL=DEBUG VM2B_SEED=$SEED "$R/tools/winvm-servers.sh" start ftp > /dev/null 2>&1 || say "FTP servers did not start"
+  gj member 15-ftp 5400 'for /l %%i in (1,1,10) do ( set TAG=ftpbig%%i& set ARGS=--seed %%i17 --only ftp_large_streamed --servers \\10.0.2.4\qemu\srv\ftp\servers.json& call C:\vm2b\guest\autotest.cmd )' > /dev/null
+  for i in 1 2 3 4 5 6 7 8 9 10; do L=$RM/autotest-ftpbig$i.txt; [ -f "$L" ] && tr -d '\r' < "$L" | grep -aE '^(PASS|FAIL)|upload|download' | tr '\n' ' ' | sed "s/^/  ftpbig$i: /" | tee -a "$SUM"; echo | tee -a "$SUM" > /dev/null; done
+  mkdir -p "$RM/srv-ftp"; cp "$D/shared-member/srv/ftp/"*.log "$RM/srv-ftp/" 2>/dev/null
+  "$R/tools/winvm-servers.sh" stop-all > /dev/null 2>&1; rm -rf "$D/shared-member/srv"
+fi
+
+# ---- сдвиг часов: B (ротация пароля gMSA) и C (срок пароля 1330) -------------------------------------------------
+set_clocks() { # set_clocks <суток вперёд от времени ХОСТА>: ОБЕ ВМ получают одно и то же абсолютное время (host + N суток); w32time выключен (иначе одна ВМ вернёт время по другой)
+  local days=$1 t; t=$(date -d "+$days days" '+%Y-%m-%d %H:%M:%S')
+  for r in dc member; do gj $r 16-clock-$r 120 'sc config w32time start= disabled' 'net stop w32time' "powershell -NoProfile -Command \"Set-Date '$t' | Out-Null\"" 'echo %DATE% %TIME%' > /dev/null & done; wait
+  say "clocks set to host time +$days days ($t): dc $(tr -d '\r' < "$RD/16-clock-dc.out" | tail -1), member $(tr -d '\r' < "$RM/16-clock-member.out" | tail -1)"
+}
+shift_clocks() { set_clocks "$1"; }
+return_clocks() { # вернуть часы (время хоста), включить w32time, проверить канал домена
+  set_clocks 0
+  for r in dc member; do gj $r 16-w32on-$r 120 'sc config w32time start= auto' 'net start w32time' > /dev/null & done; wait
+  gj member 16-resync 180 'w32tm /resync /force' 'echo %DATE% %TIME%' "powershell -NoProfile -Command \"'secure channel: ' + (Test-ComputerSecureChannel); 'gMSA: ' + (Test-ADServiceAccount vm2bgmsa)\"" > /dev/null
+  tr -d '\r' < "$RM/16-resync.out" | tail -4 | tee -a "$SUM"
+}
+if want rotate; then
+  free_check; DAYS=${ROTATE_DAYS:-45}
+  gj dc 16-reset-exp 300 "powershell -NoProfile -Command \"Import-Module ActiveDirectory; Set-ADAccountPassword expuser -Reset -NewPassword (ConvertTo-SecureString 'Exp-User#2026a' -AsPlainText -Force); Set-ADUser expuser -ChangePasswordAtLogon \$false -PasswordNeverExpires \$false\"" > /dev/null
+  gj member 16-rot1 1800 "$PS C:\\vm2b\\guest\\domain-rot1.ps1" > /dev/null; RC1=$?
+  tr -d '\r' < "$RM/16-rot1.out" | grep -aE '^INFO' | tee -a "$SUM"
+  gj dc 16-dcinfo-before 300 "$PS C:\\vm2b\\guest\\domain-dcinfo.ps1 before" > /dev/null; tr -d '\r' < "$RD/16-dcinfo-before.out" | grep -aE '^INFO' | tee -a "$SUM"
+  shift_clocks $DAYS
+  gj dc 16-dcinfo-after 300 "$PS C:\\vm2b\\guest\\domain-dcinfo.ps1 shifted" > /dev/null; tr -d '\r' < "$RD/16-dcinfo-after.out" | grep -aE '^INFO' | tee -a "$SUM"
+  gj member 16-rot2 1800 "$PS C:\\vm2b\\guest\\domain-rot2.ps1" > /dev/null; RC2=$?
+  tr -d '\r' < "$RM/16-rot2.out" | grep -aE '^INFO' | tee -a "$SUM"
+  gj member 16-wneterr 120 "$PS C:\\vm2b\\guest\\domain-wneterr.ps1 \\\\dc.vm2b.test\\Backups VM2B\\expuser Exp-User#2026a" > /dev/null; tr -d '\r' < "$RM/16-wneterr.out" | iconv -f cp866 -t utf8 -c | grep -aE '^(WNET|WNetGetLastError)' | tee -a "$SUM"
+  runtests domainexpire 16-at-domainexpire
+  gj dc 16-dcinfo-end 300 "$PS C:\\vm2b\\guest\\domain-dcinfo.ps1 end" > /dev/null; tr -d '\r' < "$RD/16-dcinfo-end.out" | grep -aE '^INFO' | tee -a "$SUM"
+  return_clocks
+  tally rotate $(( RC1 + RC2 )) member:16-rot1 member:16-rot2
 fi
 
 # ---------------------------------------------------------------- итог

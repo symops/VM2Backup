@@ -196,20 +196,47 @@ namespace {
 typedef DWORD (WINAPI *AddFn)(LPNETRESOURCEW, LPCWSTR, LPCWSTR, DWORD);
 typedef DWORD (WINAPI *CancelFn)(LPCWSTR, DWORD, BOOL);
 typedef DWORD (WINAPI *GetConnFn)(LPCWSTR, LPWSTR, LPDWORD);
+typedef DWORD (WINAPI *GetLastFn)(LPDWORD, LPWSTR, DWORD, LPWSTR, DWORD);
 
 struct Mpr {                                    // mpr.dll is loaded when needed: the installer and the launcher do not link it
-    HMODULE h; AddFn add; CancelFn cancel; GetConnFn getConn;
-    Mpr() : h(LoadLibraryW(L"mpr.dll")), add(nullptr), cancel(nullptr), getConn(nullptr) {
-        if (h) { add = (AddFn)(void*)GetProcAddress(h, "WNetAddConnection2W"); cancel = (CancelFn)(void*)GetProcAddress(h, "WNetCancelConnection2W"); getConn = (GetConnFn)(void*)GetProcAddress(h, "WNetGetConnectionW"); }
+    HMODULE h; AddFn add; CancelFn cancel; GetConnFn getConn; GetLastFn getLast;
+    Mpr() : h(LoadLibraryW(L"mpr.dll")), add(nullptr), cancel(nullptr), getConn(nullptr), getLast(nullptr) {
+        if (h) { getLast = (GetLastFn)(void*)GetProcAddress(h, "WNetGetLastErrorW"); add = (AddFn)(void*)GetProcAddress(h, "WNetAddConnection2W"); cancel = (CancelFn)(void*)GetProcAddress(h, "WNetCancelConnection2W"); getConn = (GetConnFn)(void*)GetProcAddress(h, "WNetGetConnectionW"); }
     }
 };
 Mpr& GetMpr() { static Mpr m; return m; }
+
+} // namespace
+
+unsigned long SmbMapProviderError(unsigned long pe)
+{
+    if (pe == 2242) return 1330;                       // NERR_PasswordExpired: what the real Windows SMB client reports for an expired password ("Microsoft Windows Network", measured on Server 2022)
+    if (!(pe & 0x80000000u)) return pe;
+    typedef ULONG (WINAPI *NtDosFn)(LONG); HMODULE nt = GetModuleHandleW(L"ntdll.dll"); NtDosFn f = nt ? (NtDosFn)(void*)GetProcAddress(nt, "RtlNtStatusToDosError") : nullptr;
+    if (f) { ULONG d = f((LONG)pe); if (d != 0 && d != ERROR_MR_MID_NOT_FOUND) return d; }
+    return pe;
+}
+
+unsigned long SmbResolveExtendedError(unsigned long rc)
+{
+    Mpr& m = GetMpr();
+    if (rc == ERROR_EXTENDED_ERROR && m.getLast) {
+        DWORD pe = 0; wchar_t eb[512], pn[128]; eb[0] = pn[0] = 0;
+        if (m.getLast(&pe, eb, 512, pn, 128) == NO_ERROR && pe != 0 && pe != ERROR_EXTENDED_ERROR) rc = SmbMapProviderError(pe);
+    }
+    return rc;
+}
+
+namespace {
 
 unsigned long RealAdd(const wchar_t* remote, const wchar_t* user, const wchar_t* pass)
 {
     Mpr& m = GetMpr(); if (!m.add) return ERROR_NO_NETWORK;
     NETRESOURCEW nr; memset(&nr, 0, sizeof(nr)); nr.dwType = RESOURCETYPE_DISK; nr.lpRemoteName = (LPWSTR)remote;   // no local name: a connection without a drive letter
-    return m.add(&nr, pass, user, CONNECT_TEMPORARY);
+    DWORD rc = m.add(&nr, pass, user, CONNECT_TEMPORARY);
+    // Windows answers ERROR_EXTENDED_ERROR (1208) when the provider (the SMB client) has its own verdict, for example "the password has expired": found on the real domain (Server 2022,
+    // 1330 never comes back directly). The real code is behind WNetGetLastErrorW: a Win32 code or an NTSTATUS (STATUS_PASSWORD_EXPIRED 0xC0000071 ...), which ntdll turns into a Win32 code.
+    return SmbResolveExtendedError(rc);
 }
 unsigned long RealCancel(const wchar_t* remote, int force)
 {

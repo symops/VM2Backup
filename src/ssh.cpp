@@ -172,7 +172,11 @@ bool SshSession::fail_rc(int rc, const char* what)
         return fail(Str("key exchange failed (no common algorithm, or the server's key was refused)") + (detail.empty() ? Str() : ": " + detail), false);
     case LIBSSH2_ERROR_INVALID_MAC: case LIBSSH2_ERROR_MAC_FAILURE: case LIBSSH2_ERROR_DECRYPT: case LIBSSH2_ERROR_ENCRYPT: case LIBSSH2_ERROR_PROTO:
         return fail("the SSH stream is damaged" + (detail.empty() ? Str() : ": " + detail), true);
-    case LIBSSH2_ERROR_FILE: return fail("cannot read the key file" + (detail.empty() ? Str() : ": " + detail), false);
+    case LIBSSH2_ERROR_FILE:
+        // a key that cannot be decrypted (wrong passphrase) or parsed is a refusal of the credentials for the guard: the server never even sees an attempt, but every pass of the
+        // scheduler would open a new connection; a missing / unreadable key file is a different (local, fixable without a change of the record) problem
+        if (detail.find("assphrase") >= 0) { authRefused = true; authRc = rc; return fail("the private key cannot be opened: wrong passphrase or unsupported key format", false); }
+        return fail("cannot read the key file" + (detail.empty() ? Str() : ": " + detail), false);
     case LIBSSH2_ERROR_ALLOC: return fail("out of memory", false);
     default: break;
     }

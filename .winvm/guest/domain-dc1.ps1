@@ -13,7 +13,5 @@ $r = Install-ADDSForest -DomainName $d.Name -DomainNetbiosName $d.Netbios -SafeM
 Write-Output ("INFO Install-ADDSForest: " + (($r | Out-String) -replace '\s+', ' '))
 Check 'forest created (Status Success / needs restart)' ($r.Status -match 'Success|Error' -and $r.Status -notmatch 'Error') ($r | Out-String)
 # автовход после повышения: уже доменный Administrator (локального больше нет)
-$wl = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
-Set-ItemProperty $wl AutoAdminLogon '1'; Set-ItemProperty $wl DefaultUserName 'Administrator'; Set-ItemProperty $wl DefaultDomainName $d.Netbios; Set-ItemProperty $wl DefaultPassword $d.AdminPw
-Set-ItemProperty $wl AutoLogonCount 65000 -ErrorAction SilentlyContinue
+Set-AutoLogon $d.Netbios (Get-BuiltinAdminName) $d.AdminPw
 Write-Output ("FAILED=" + $global:Failed); exit $global:Failed
