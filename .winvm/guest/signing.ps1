@@ -2,6 +2,7 @@
 #   signing.ps1 info                  политика UAC, хранилища сертификатов, подписи всех вариантов установщика (Get-AuthenticodeSignature)
 #   signing.ps1 trust                 тестовый корень -> LocalMachine\Root, сертификат подписи -> LocalMachine\TrustedPublisher
 #   signing.ps1 untrust               убрать оба
+#   signing.ps1 smartscreen on|off    включить SmartScreen для приложений и файлов (на тестовых ВМ его выключает bootstrap.cmd политикой EnableSmartScreen=0: тогда окна «Windows protected your PC» нет вовсе) / вернуть как было
 #   signing.ps1 uac on|off|reset      включить запрос UAC на безопасном рабочем столе для теста (ConsentPromptBehaviorAdmin=2) / вернуть исходные значения
 #   signing.ps1 launch <вариант> [nomotw]   вариант = signed | unsigned | tampered: копия в Загрузки\<вариант>\VM2Backup-Setup.exe с Mark of the Web (ZoneId=3),
 #                                     запуск «двойным щелчком» (explorer.exe); возвращается сразу, снимки делает хост
@@ -43,6 +44,20 @@ switch ($Mode) {
  'untrust' {
     foreach ($st in 'Root', 'TrustedPublisher') { foreach ($f in @($rootCer, $signCer)) { $t = Get-Thumb $f; Get-ChildItem "Cert:\LocalMachine\$st" | Where-Object Thumbprint -eq $t | Remove-Item -Force } }
     "INFO  trust removed"
+ }
+ 'smartscreen' {
+    $pol = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System'; $ex = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer'; $bak = "$work\smartscreen-backup.txt"
+    if ($Arg1 -eq 'on') {
+        $old = (Get-ItemProperty $pol -ErrorAction SilentlyContinue).EnableSmartScreen; $oldEx = (Get-ItemProperty $ex -ErrorAction SilentlyContinue).SmartScreenEnabled
+        if (-not (Test-Path $bak)) { "policy=$old;explorer=$oldEx" | Set-Content $bak }
+        Remove-ItemProperty $pol -Name EnableSmartScreen -ErrorAction SilentlyContinue; Set-ItemProperty $ex -Name SmartScreenEnabled -Value 'Warn' -Type String
+        New-Item -Path 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppHost' -Force | Out-Null; Set-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppHost' -Name EnableWebContentEvaluation -Value 1 -Type DWord
+        "INFO  SmartScreen switched on (policy EnableSmartScreen removed, Explorer SmartScreenEnabled=Warn); was: $(Get-Content $bak)"
+    } else {
+        $t = (Get-Content $bak -ErrorAction SilentlyContinue); if ($t -match 'policy=(\d+)') { Set-ItemProperty $pol -Name EnableSmartScreen -Value ([int]$Matches[1]) -Type DWord } else { Set-ItemProperty $pol -Name EnableSmartScreen -Value 0 -Type DWord }
+        if ($t -match 'explorer=(\w+)') { Set-ItemProperty $ex -Name SmartScreenEnabled -Value $Matches[1] -Type String } else { Remove-ItemProperty $ex -Name SmartScreenEnabled -ErrorAction SilentlyContinue }
+        "INFO  SmartScreen restored: $t"
+    }
  }
  'uac' {
     $p = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'; $bak = "$work\uac-backup.txt"

@@ -38,6 +38,7 @@ for MODE in single unpacked; do
     EXE=$SETUP; [ $MODE = unpacked ] && EXE=$UNPACKED
     $LOW timeout 180 wine "$EXE" /install /silent /autostart; RC=$?
     check "[$MODE] silent install returns 0" "[ $RC -eq 0 ]"
+    TEMPDIR=$(ls -d "$WINEPREFIX"/drive_c/users/*/AppData/Local/Temp 2>/dev/null | head -1)      # the prefix exists only after the first wine run (round 8: the "temporary folder is gone" checks were vacuous with an empty TEMPDIR)
     # Wine runs the 64-bit installer (the machine is 64-bit): the program must be the x64 build
     check "[$MODE] VM2Backup.exe is in Program Files and is the x64 build" "same '$PF/VM2Backup.exe' '$B64/VM2Backup.exe'"
     check "[$MODE] VM2BackupService.exe is in Program Files and is the x64 build" "same '$PF/VM2BackupService.exe' '$B64/VM2BackupService.exe'"
@@ -80,5 +81,19 @@ open(sys.argv[2], 'wb').write(d)
 PY
     check "[signed] a file changed after signing fails the signature check" "osslsigncode verify -in '$W/tampered-setup.exe' -CAfile '$PKI/test-root.pem' 2>&1 | grep -q 'MISMATCH'"
 fi
+# РАУНД 8: пакет с повреждённым байтом ВНУТРИ cab (изменён после сборки / скачан не до конца): тихая установка завершается кодом != 0, причина записана в %TEMP%\VM2Backup-Setup.log
+# (без окна: раньше код 1 был единственным следом), временная папка убрана, ничего не установлено
+python3 - "$SETUP" "$W/damaged-setup.exe" <<'PY2'
+import sys
+d = bytearray(open(sys.argv[1], 'rb').read()); c = d.find(b'MSCF'); assert c > 0
+size = int.from_bytes(d[c + 8:c + 12], 'little'); d[c + size // 2] ^= 0xFF
+open(sys.argv[2], 'wb').write(d)
+PY2
+rm -f "$TEMPDIR/VM2Backup-Setup.log"
+$LOW timeout 120 wine "$W/damaged-setup.exe" /install /silent; RC=$?
+check "[damaged cabinet] silent install fails (return $RC, not 0)" "[ $RC -ne 0 ]"
+check "[damaged cabinet] the reason is in VM2Backup-Setup.log: damaged or incomplete package" "grep -q 'damaged or incomplete' '$TEMPDIR/VM2Backup-Setup.log'"
+check "[damaged cabinet] the temporary extraction folder is gone" "[ -z \"\$(ls -d '$TEMPDIR'/VM2Backup-Setup-* 2>/dev/null)\" ]"
+check "[damaged cabinet] nothing was installed" "[ ! -e '$PF/VM2Backup.exe' ]"
 echo "package test: $FAILS failure(s)"
 [ $FAILS -eq 0 ]

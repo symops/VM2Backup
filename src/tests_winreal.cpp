@@ -5,6 +5,7 @@
 #include "engine.h"
 #include "config.h"
 #include "tar.h"
+#include "schedule.h"
 #include <winioctl.h>
 
 namespace vm2b {
@@ -456,6 +457,206 @@ VM2B_TEST("winbig", sparse_6gib_vmdk_whole_pipeline)
     }
     delete t;
     RemoveTree(tmp.path);
+    return true;
+}
+
+// ---- Расписание на границах перехода на летнее время (раунд 8, настоящая Windows: _localtime64_s / _mktime64 из UCRT; под Wine / glibc это проверялось отдельно) ----
+// Эталон не зависит от продукта: пояс гостя читается через Win32 (GetTimeZoneInformation + SystemTimeToTzSpecificLocalTime). Пояс задаёт обвязка (tzutil /s).
+namespace {
+struct DstTransition { i64 unix; int deltaMin; };      // unix: первая минута ПОСЛЕ перехода (UTC)
+i64 OracleLocalMin(i64 u)
+{
+    ULARGE_INTEGER v; v.QuadPart = ((ULONGLONG)u + 11644473600ULL) * 10000000ULL; FILETIME ft; ft.dwLowDateTime = v.LowPart; ft.dwHighDateTime = v.HighPart;
+    SYSTEMTIME utc, loc; FileTimeToSystemTime(&ft, &utc); TIME_ZONE_INFORMATION tz; GetTimeZoneInformation(&tz);
+    SystemTimeToTzSpecificLocalTime(&tz, &utc, &loc);
+    return CivilToMin(loc.wYear, loc.wMonth, loc.wDay, loc.wHour, loc.wMinute);
+}
+void CivilFromDay(i64 z, int& y, int& m, int& d)       // дни с 1970-01-01 -> дата (алгоритм Говарда Хиннанта)
+{
+    z += 719468; i64 era = (z >= 0 ? z : z - 146096) / 146097; i64 doe = z - era * 146097; i64 yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    i64 yy = yoe + era * 400; i64 doy = doe - (365 * yoe + yoe / 4 - yoe / 100); i64 mp = (5 * doy + 2) / 153;
+    d = (int)(doy - (153 * mp + 2) / 5 + 1); m = (int)(mp < 10 ? mp + 3 : mp - 9); y = (int)(yy + (m <= 2));
+}
+// переходы пояса гостя между 2026-11-01 и 2028-01-01 (UTC), не более maxCount штук
+Vec<DstTransition> FindTransitions(int maxCount)
+{
+    Vec<DstTransition> out; i64 from = CivilToMin(2026, 11, 1, 0, 0) * 60, to = CivilToMin(2028, 1, 1, 0, 0) * 60;
+    i64 prevOff = OracleLocalMin(from) - from / 60;
+    for (i64 u = from + 900; u < to && (int)out.size() < maxCount; u += 900) {
+        i64 off = OracleLocalMin(u) - u / 60;
+        if (off != prevOff) {
+            i64 q = u - 900; while (OracleLocalMin(q) - q / 60 == prevOff) q += 60;      // первая минута с новым смещением
+            DstTransition t; t.unix = q; t.deltaMin = (int)(off - prevOff); out.push_back(t); prevOff = off;
+        }
+    }
+    return out;
+}
+Json DailyWeekly(const char* hhmm) { Json sp = Json::object(); sp["enabled"] = true; sp["mode"] = "weekly"; sp["start_time"] = hhmm; Json d = Json::array(); for (int k = 0; k < 7; ++k) d.push(k); sp["weekdays"] = d; sp["week_interval"] = 1; return sp; }
+Json EveryMin(int minutes, const char* first) { Json sp = Json::object(); sp["enabled"] = true; sp["mode"] = "every"; Json ev = Json::object(); ev["value"] = minutes; ev["unit"] = "minutes"; sp["every"] = ev; sp["first_time"] = first; return sp; }
+Json EveryDay(const char* first) { Json sp = Json::object(); sp["enabled"] = true; sp["mode"] = "every"; Json ev = Json::object(); ev["value"] = 1; ev["unit"] = "days"; sp["every"] = ev; sp["first_time"] = first; return sp; }
+Vec<i64> AllRuns(const Json& sp, i64 from, i64 to)
+{
+    Vec<i64> r; i64 cur = from;
+    for (int i = 0; i < 20000; ++i) { i64 n; if (!ScheduleNext(sp, cur, n) || n >= to) break; r.push_back(n); if (n <= cur) break; cur = n; }
+    return r;
+}
+}
+
+// UnixToLocalMin совпадает с эталоном Windows в каждую минуту у перехода; ежедневное 02:30 (две записи расписания), каждые 30 минут и один раз 02:30 не пропускаются,
+// не повторяются и не идут назад; окно через полночь (22:00-06:00) открыто ровно по местным часам.
+VM2B_TEST("winreal", schedule_across_dst_transitions_matches_the_windows_clock)
+{
+    if (OnWine() && !getenv("VM2B_TZ_ON_WINE")) { c_.skip("Wine: the CRT (glibc, per-year rules) and GetTimeZoneInformation (rule of the current year) disagree there; this test is for real Windows (VM2B_TZ_ON_WINE=1 forces it)"); return true; }
+    Vec<DstTransition> tr = FindTransitions(4);
+    if (tr.empty()) { c_.skip("the time zone of this machine has no daylight saving transitions in 2027 (set one with tzutil /s)"); return true; }
+    TIME_ZONE_INFORMATION tzi; GetTimeZoneInformation(&tzi);
+    c_.note("time zone: %ls; %d transition(s) found", tzi.StandardName, (int)tr.size());
+    for (size_t k = 0; k < tr.size(); ++k) {
+        i64 T = tr[k].unix; int dl = tr[k].deltaMin;
+        c_.note("transition %d: %s local (first minute after it), clock %+d min", (int)k, FormatLocalMin(OracleLocalMin(T)).c_str(), dl);
+        // a) UnixToLocalMin == эталон в каждую минуту на 36 часов в обе стороны
+        int bad = 0; for (i64 u = T - 36 * 3600; u <= T + 36 * 3600; u += 60) if (UnixToLocalMin(u) != OracleLocalMin(u)) { if (bad++ < 3) c_.note("UnixToLocalMin(%lld) = %s, Windows says %s", (long long)(u / 60), FormatLocalMin(UnixToLocalMin(u)).c_str(), FormatLocalMin(OracleLocalMin(u)).c_str()); }
+        T_CHECK(bad == 0);
+        // б) ежедневные запуски в 02:30 (оба вида записи): по одному на местные сутки, расстояние 22..26 часов
+        i64 a = T - 4 * 86400, b = T + 4 * 86400;
+        int y, mo, dd; CivilFromDay(OracleLocalMin(T) / 1440 - 6, y, mo, dd);
+        Str first = Str::fmt("%04d-%02d-%02dT02:30", y, mo, dd);
+        const Json sps[2] = { DailyWeekly("02:30"), EveryDay(first.c_str()) };
+        for (int w = 0; w < 2; ++w) {
+            Vec<i64> r = AllRuns(sps[w], a, b);
+            T_CHECK(r.size() >= 7 && r.size() <= 9);
+            Vec<i64> days; bool incr = true, gapok = true; int early = 0;
+            for (size_t i = 0; i < r.size(); ++i) {
+                if (i && r[i] <= r[i - 1]) incr = false;
+                if (OracleLocalMin(r[i]) % 1440 < 150) { ++early; c_.note("daily[%d]: run at %s local is EARLIER than 02:30 of its day", w, FormatLocalMin(OracleLocalMin(r[i])).c_str()); }
+                if (i) { i64 gap = (r[i] - r[i - 1]) / 60; if (gap < 22 * 60 || gap > 26 * 60) { gapok = false; c_.note("daily[%d]: gap %lld min between %s and %s local", w, (long long)gap, FormatLocalMin(OracleLocalMin(r[i - 1])).c_str(), FormatLocalMin(OracleLocalMin(r[i])).c_str()); } }
+                i64 lm = OracleLocalMin(r[i]); bool dup = false; for (size_t q = 0; q < days.size(); ++q) if (days[q] == lm / 1440) dup = true;
+                if (!dup) days.push_back(lm / 1440);
+                if (llabs((long long)(r[i] - T)) < 86400) c_.note("daily[%d]: run next to the transition at %s local", w, FormatLocalMin(lm).c_str());
+            }
+            T_CHECK(incr); T_CHECK(gapok); T_CHECK(days.size() == r.size()); T_CHECK(early == 0);     // каждое местное число ровно один раз; ни один запуск не раньше 02:30
+        }
+        // в) каждые 30 минут: не назад, не чаще 25 минут, не реже 2 часов
+        {
+            Vec<i64> r = AllRuns(EveryMin(30, "2026-01-01T00:00"), T - 6 * 3600, T + 6 * 3600);
+            bool incr = true, gapok = true; i64 maxgap = 0, mingap = 1 << 30;
+            for (size_t i = 1; i < r.size(); ++i) { i64 gap = (r[i] - r[i - 1]) / 60; if (r[i] <= r[i - 1]) incr = false; if (gap > maxgap) maxgap = gap; if (gap < mingap) mingap = gap; if (gap < 25 || gap > 120) gapok = false; }
+            c_.note("every 30 min around the transition: %d runs in 12 h, gaps %lld..%lld min", (int)r.size(), (long long)mingap, (long long)maxgap);
+            T_CHECK(incr); T_CHECK(gapok); T_CHECK(r.size() >= 12);
+        }
+        // г) один раз в 02:30 в день перехода (несуществующий / повторяющийся час): сработать ровно один раз
+        {
+            int y2, m2, d2; CivilFromDay(OracleLocalMin(T) / 1440, y2, m2, d2);
+            Json sp = Json::object(); sp["enabled"] = true; sp["mode"] = "once"; sp["at"] = Str::fmt("%04d-%02d-%02dT02:30", y2, m2, d2);
+            Vec<i64> r = AllRuns(sp, T - 2 * 86400, T + 2 * 86400);
+            T_CHECK(r.size() == 1);
+            if (r.size() == 1) { c_.note("once 02:30 on the transition day fires at %s local", FormatLocalMin(OracleLocalMin(r[0])).c_str()); T_CHECK(llabs((long long)(r[0] - T)) < 6 * 3600); T_CHECK(OracleLocalMin(r[0]) % 1440 >= 150); }     // не раньше 02:30
+        }
+        // д) окно 22:00-06:00 через полночь: открыто в каждую минуту ровно когда местное время в этих часах
+        {
+            Json win = Json::array(); Json w = Json::object(); Json d = Json::array(); for (int q = 0; q < 7; ++q) d.push(q); w["days"] = d; w["from"] = "22:00"; w["to"] = "06:00"; w["mbit"] = 0; win.push(w);
+            int wrong = 0;
+            for (i64 u = T - 36 * 3600; u <= T + 36 * 3600; u += 60) {
+                i64 lm = OracleLocalMin(u); int mod = (int)(lm % 1440); bool want = mod >= 22 * 60 || mod < 6 * 60;
+                WindowState st = WindowsAt(win, UnixToLocalMin(u)); if (st.allowed != want && wrong++ < 3) c_.note("window at %s local: allowed=%d, want %d", FormatLocalMin(lm).c_str(), (int)st.allowed, (int)want);
+            }
+            T_CHECK(wrong == 0);
+        }
+    }
+    // е) ежемесячно 31-го в 02:30 (в коротких месяцах - последний день месяца, как в VM Explorer) и в последний день: по 12 раз за 2027 год, каждый раз в 02:30 местного времени
+    {
+        Json sp = Json::object(); sp["enabled"] = true; sp["mode"] = "monthly"; sp["start_time"] = "02:30"; sp["day"] = 31; sp["month_interval"] = 1;
+        i64 y0 = LocalMinToUnix(CivilToMin(2027, 1, 1, 0, 0)) - 1, y1 = LocalMinToUnix(CivilToMin(2028, 1, 1, 0, 0));
+        Vec<i64> r = AllRuns(sp, y0, y1);
+        c_.note("monthly on the 31st at 02:30 in 2027: %d runs", (int)r.size()); T_CHECK(r.size() == 12);
+        int off = 0; for (size_t i = 0; i < r.size(); ++i) if (OracleLocalMin(r[i]) % 1440 != 150) ++off;           // 02:30 существует в этот день года (переходы в 2027 не на последний день месяца у этих поясов)
+        c_.note("runs not at 02:30 local: %d", off); T_CHECK(off == 0);
+        sp["day"] = "last"; r = AllRuns(sp, y0, y1);
+        c_.note("monthly on the last day at 02:30 in 2027: %d runs", (int)r.size()); T_CHECK(r.size() == 12);
+    }
+    return true;
+}
+
+// Настоящий планировщик службы (часы подменяются g_fakeNow) идёт минута за минутой через переход: каждый ожидаемый запуск (по ScheduleNext) выполнен ровно один раз
+// и не позднее чем через 16 минут; лишних запусков нет (ежедневно в 02:30 и каждые 30 минут одновременно).
+VM2B_TEST("winreal", scheduler_runs_each_slot_once_across_dst_transitions)
+{
+    if (OnWine() && !getenv("VM2B_TZ_ON_WINE")) { c_.skip("Wine: the CRT (glibc, per-year rules) and GetTimeZoneInformation (rule of the current year) disagree there; this test is for real Windows (VM2B_TZ_ON_WINE=1 forces it)"); return true; }
+    Vec<DstTransition> tr = FindTransitions(4);
+    if (tr.empty()) { c_.skip("the time zone of this machine has no daylight saving transitions in 2027 (set one with tzutil /s)"); return true; }
+    bool haveSpring = false, haveAutumn = false;
+    for (size_t k = 0; k < tr.size(); ++k) {
+        int dl = tr[k].deltaMin; if ((dl > 0 && haveSpring) || (dl < 0 && haveAutumn)) continue;
+        if (dl > 0) haveSpring = true; else haveAutumn = true;
+        i64 T = tr[k].unix; i64 start = T - 26 * 3600, end = T + 26 * 3600;
+        Str nm = Str::fmt("svcdst%d", (int)k);
+        Svc s(c_, nm.c_str(), true); if (!s.up) return false;
+        g_fakeNow = start;
+        Str root = s.tmp.sub("vms"); WriteBytes(JoinPath(root, "vm1\\disk.vmdk"), Random(c_, 3000)); Str srv = s.addDirServer(root);
+        Json d = DailyWeekly("02:30"), e30 = EveryMin(30, "2026-01-01T00:00");
+        Json el = Svc::Element(srv, "vm1", JoinPath(s.tmp.sub("store"), "{VM}"), "xz", 0); el["verify"] = false; el["keep"] = 1;
+        s.saveTask("Daily0230", el, d); s.saveTask("Every30", el, e30);
+        Json on = Json::object(); on["enabled"] = true; s.ok("scheduler.set", on); Sleep(250);
+        // первый тик службы учитывает слот в пределах льготного окна (misfire_grace_min) до своего запуска: эти запуски не считаем, ожидание строим от start
+        Sleep(400); { DWORD w1 = GetTickCount(); while (s.core.runningJobs() && GetTickCount() - w1 < 15000) Sleep(5); }
+        Vec<i64> steps; for (i64 t = start; t <= end; ) { t += (llabs((long long)(t - T)) <= 3 * 3600) ? 60 : 900; steps.push_back(t); }
+        i64 lastT = steps.empty() ? end : steps.back();                                // ожидание строим до последнего шага: слот между end и последним шагом тоже будет замечен
+        Vec<i64> expD = AllRuns(d, start, lastT + 1), expE = AllRuns(e30, start, lastT + 1), gotD, gotE;
+        int cntD = 0, cntE = 0;
+        { Json a0 = Json::object(); a0["limit"] = 1000; Json h0 = s.ok("history.list", a0); for (size_t i = 0; i < h0.size(); ++i) { Str n = h0.at(i).get("name").str(); if (n == "Daily0230") ++cntD; else if (n == "Every30") ++cntE; } }
+        const int baseD = cntD, baseE = cntE;
+        for (size_t si = 0; si < steps.size(); ++si) {
+            i64 t = steps[si]; g_fakeNow = t;
+            // сколько запусков уже должно было быть к этому моменту: ждём их появления в истории (до 10 с), чтобы задержка службы не выглядела как опоздание на шаг
+            int needD = 0, needE = 0; for (size_t i = 0; i < expD.size(); ++i) if (expD[i] <= t) ++needD; for (size_t i = 0; i < expE.size(); ++i) if (expE[i] <= t) ++needE;
+            int nd = 0, ne = 0; DWORD w0 = GetTickCount();
+            for (;;) {
+                Sleep(40); Json a = Json::object(); a["limit"] = 1000; Json h = s.ok("history.list", a); nd = 0; ne = 0;
+                for (size_t i = 0; i < h.size(); ++i) { Str n = h.at(i).get("name").str(); if (n == "Daily0230") ++nd; else if (n == "Every30") ++ne; }
+                bool enough = nd >= needD + baseD && ne >= needE + baseE;
+                if ((enough && !s.core.runningJobs() && GetTickCount() - w0 >= 120) || GetTickCount() - w0 > 10000) break;
+            }
+            if (nd < needD + baseD || ne < needE + baseE) { static int shown = 0; if (shown++ < 6) { c_.note("step %d (%s local): waited 10 s for a run that did not start: daily %d of %d, every30 %d of %d", (int)si, FormatLocalMin(OracleLocalMin(t)).c_str(), nd - baseD, needD, ne - baseE, needE); fflush(stdout); } }
+            for (; cntD < nd; ++cntD) gotD.push_back(t);
+            for (; cntE < ne; ++cntE) gotE.push_back(t);
+            if (si % 100 == 0) { printf("      ... %s transition, step %d of %d\n", dl > 0 ? "spring" : "autumn", (int)si, (int)steps.size()); fflush(stdout); }
+        }
+        Json off = Json::object(); off["enabled"] = false; s.ok("scheduler.set", off);
+        c_.note("%s transition at %s local: daily expected %d got %d, every30 expected %d got %d", dl > 0 ? "spring" : "autumn", FormatLocalMin(OracleLocalMin(T)).c_str(), (int)expD.size(), (int)gotD.size(), (int)expE.size(), (int)gotE.size());
+        for (int q = 0; q < 2; ++q) {
+            const Vec<i64>& ex = q ? expE : expD; const Vec<i64>& got = q ? gotE : gotD;
+            if (got.size() != ex.size()) {
+                c_.note("%s: expected / detected around the transition (UTC | local):", q ? "every30" : "daily");
+                for (size_t i = 0; i < ex.size() || i < got.size(); ++i) {
+                    i64 e = i < ex.size() ? ex[i] : 0, g = i < got.size() ? got[i] : 0; i64 ref = e ? e : g;
+                    if (llabs((long long)(ref - T)) > 4 * 3600) continue;
+                    c_.note("   #%d expected %s UTC (%s local)   detected %s UTC (%s local)", (int)i, e ? FormatLocalMin(e / 60).c_str() : "-", e ? FormatLocalMin(OracleLocalMin(e)).c_str() : "-", g ? FormatLocalMin(g / 60).c_str() : "-", g ? FormatLocalMin(OracleLocalMin(g)).c_str() : "-");
+                }
+            }
+            T_CHECK(got.size() == ex.size());
+            for (size_t i = 0; i < ex.size() && i < got.size(); ++i) if (got[i] < ex[i] || got[i] - ex[i] > 16 * 60) { c_.note("%s run %d: expected %s local, detected %s local", q ? "every30" : "daily", (int)i, FormatLocalMin(OracleLocalMin(ex[i])).c_str(), FormatLocalMin(OracleLocalMin(got[i])).c_str()); T_CHECK(false); break; }
+        }
+    }
+    return true;
+}
+
+// Служба живёт неделями: смена часового пояса администратором (tzutil /s, «Параметры») должна подхватываться без перезапуска. Среда выполнения C (msvcrt) читает пояс один раз
+// при первом вызове; расписание теперь перечитывает его каждые пару секунд (_tzset). Тест меняет пояс машины на время проверки и возвращает его.
+VM2B_TEST("winreal", schedule_follows_a_time_zone_change_without_a_restart)
+{
+    if (OnWine()) { c_.skip("Wine: the time zone comes from the TZ variable of the process, tzutil does not exist"); return true; }
+    DYNAMIC_TIME_ZONE_INFORMATION dz; memset(&dz, 0, sizeof(dz)); GetDynamicTimeZoneInformation(&dz);
+    Str orig = FromWide(dz.TimeZoneKeyName);
+    if (orig.empty() || !RunCmd("tzutil /g >nul")) { c_.skip("tzutil is not available"); return true; }
+    bool ok = true; i64 t = CivilToMin(2027, 6, 15, 12, 0) * 60;                         // июнь: никакого перехода рядом
+    auto offsetNow = [&](const char* zone, int wantMin) {
+        Str out; if (!RunCmd(Str("tzutil /s \"") + zone + "\"", &out)) { c_.note("tzutil /s %s failed", zone); return false; }
+        for (int i = 0; i < 12; ++i) { Sleep(500); if (UnixToLocalMin(t) - t / 60 == wantMin) return true; }
+        c_.note("zone %s: the schedule still sees the offset %lld min (want %d)", zone, (long long)(UnixToLocalMin(t) - t / 60), wantMin); return false;
+    };
+    ok = offsetNow("Tokyo Standard Time", 540) && offsetNow("UTC", 0) && offsetNow("Pacific Standard Time", -420) && offsetNow("W. Europe Standard Time", 120);
+    Str dummy; RunCmd(Str("tzutil /s \"") + orig + "\"", &dummy);
+    T_CHECK(ok);
     return true;
 }
 

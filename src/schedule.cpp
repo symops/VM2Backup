@@ -1,5 +1,8 @@
 #include "schedule.h"
 #include <time.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace vm2b {
 
@@ -223,8 +226,17 @@ WindowState WindowsAt(const Json& w, i64 minute)
 
 // ---- time zone -------------------------------------------------------------------------------------------------
 #ifdef _WIN32
-static bool LocalTm(i64 t, struct tm* m) { __time64_t s = (__time64_t)t; return _localtime64_s(m, &s) == 0; }
-static i64 MkTime(struct tm* t) { return (i64)_mktime64(t); }
+// The C runtime (msvcrt.dll) reads the machine's time zone ONCE, at its first use: a service that runs for weeks would go on with the old zone after the administrator
+// changed it (found on a real Windows 10: tzutil /s while the service ran -> "next run" and the scheduler still in the old zone until the service was restarted).
+// _tzset() reads the zone again; every few seconds is enough (the scheduler asks several times per tick).
+static void RefreshZone()
+{
+    static volatile LONG64 last = 0;
+    LONG64 now = (LONG64)GetTickCount64();
+    if (last == 0 || now - last > 2000 || now < last) { last = now; _tzset(); }
+}
+static bool LocalTm(i64 t, struct tm* m) { RefreshZone(); __time64_t s = (__time64_t)t; return _localtime64_s(m, &s) == 0; }
+static i64 MkTime(struct tm* t) { RefreshZone(); return (i64)_mktime64(t); }
 #else
 static bool LocalTm(i64 t, struct tm* m) { time_t s = (time_t)t; return localtime_r(&s, m) != nullptr; }
 static i64 MkTime(struct tm* t) { return (i64)mktime(t); }
@@ -243,7 +255,21 @@ i64 LocalMinToUnix(i64 lm)
     struct tm t; memset(&t, 0, sizeof(t));
     t.tm_year = y - 1900; t.tm_mon = mo - 1; t.tm_mday = d; t.tm_hour = mm / 60; t.tm_min = mm % 60; t.tm_isdst = -1;
     i64 r = MkTime(&t);
-    return r == -1 ? lm * 60 : r;
+    if (r == -1) return lm * 60;
+    // A wall-clock minute that does not exist (the clock jumped over it in spring) is placed differently by the C libraries: glibc puts it behind the gap, the
+    // Windows CRT one hour BEFORE it (found on a real Windows 10 in the W. Europe zone: "daily at 02:30" ran at 01:30 on the day of the change; a "once at 02:30"
+    // job ran an hour early). A task must never start before its time, so everywhere the answer is the first instant at or after the requested minute.
+    if (UnixToLocalMin(r) != lm) {
+        i64 from = r - 3 * 3600, to = r + 3 * 3600;
+        for (i64 u = from - from % 60; u <= to; u += 60) if (UnixToLocalMin(u) >= lm) { r = u; break; }
+        return r;
+    }
+    // A minute that happens TWICE (the clock was set back in autumn): the answer is the FIRST occurrence. The Windows CRT returns the second one (standard time), and then the
+    // scheduler, which walks through the first pass in real time, never meets the slot: "every 30 minutes" lost 1-2 hours and a daily 01:30 never ran on that day (found on a
+    // real Windows 10, GMT / W. Europe / Pacific). A slot of the repeated hour runs once, in its first pass; the second pass does not repeat it.
+    static const int kShifts[] = { 7200, 3600, 1800 };
+    for (int k = 0; k < 3; ++k) if (UnixToLocalMin(r - kShifts[k]) == lm) { r -= kShifts[k]; break; }
+    return r;
 }
 
 bool ScheduleNext(const Json& sp, i64 afterUnix, i64& nextUnix)

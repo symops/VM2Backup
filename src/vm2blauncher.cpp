@@ -17,10 +17,32 @@ static const char kMagic[8] = { 'V', 'M', '2', 'B', 'P', 'K', 'G', '1' };
 
 static bool Russian() { return PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_RUSSIAN; }
 static bool g_quiet = false;     // /silent: an unattended run must end with an exit code, not wait forever for somebody to press OK
+static bool g_cabFailed = false;  // the cabinet itself could not be read (SetupIterateCabinet failed)
+static DWORD g_extractError = 0; // its Windows error (Wine leaves 0)
+// A silent run shows no window, so the reason is written to %TEMP%\VM2Backup-Setup.log (English, one line per error: the exit code alone says nothing to the person who deploys the package).
+static void LogSilentError(const wchar_t* text)
+{
+    wchar_t temp[MAX_PATH], path[MAX_PATH];
+    GetTempPathW(MAX_PATH, temp);
+    _snwprintf(path, MAX_PATH, L"%lsVM2Backup-Setup.log", temp);
+    path[MAX_PATH - 1] = 0;
+    HANDLE h = CreateFileW(path, FILE_APPEND_DATA, FILE_SHARE_READ, nullptr, OPEN_ALWAYS, 0, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return;
+    SYSTEMTIME t; GetLocalTime(&t);
+    wchar_t line[MAX_PATH + 400];
+    _snwprintf(line, MAX_PATH + 400, L"%04d-%02d-%02d %02d:%02d:%02d error: %ls\r\n", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond, text);
+    line[MAX_PATH + 399] = 0;
+    char utf8[(MAX_PATH + 400) * 3];
+    int n = WideCharToMultiByte(CP_UTF8, 0, line, -1, utf8, sizeof(utf8), nullptr, nullptr);
+    DWORD wrote = 0;
+    if (n > 1) WriteFile(h, utf8, (DWORD)n - 1, &wrote, nullptr);
+    CloseHandle(h);
+    OutputDebugStringW(line);
+}
 static void Error(const wchar_t* en, const wchar_t* ru, const wchar_t* extra = L"")
 {
-    if (g_quiet) return;
     wchar_t text[MAX_PATH + 300];
+    if (g_quiet) { _snwprintf(text, MAX_PATH + 300, L"%ls%ls", en, extra); text[MAX_PATH + 299] = 0; LogSilentError(text); return; }
     _snwprintf(text, MAX_PATH + 300, L"%s%s", Russian() ? ru : en, extra);
     text[MAX_PATH + 299] = 0;
     MessageBoxW(nullptr, text, L"VM2Backup", MB_OK | MB_ICONERROR);
@@ -111,7 +133,7 @@ static bool ExtractPayload(wchar_t* root, bool* failed)
     }
     if (out != INVALID_HANDLE_VALUE) CloseHandle(out);
     CloseHandle(f);
-    ok = ok && SetupIterateCabinetW(cab, 0, CabCallback, root);
+    if (ok) { ok = SetupIterateCabinetW(cab, 0, CabCallback, root) != FALSE; if (!ok) { g_cabFailed = true; g_extractError = GetLastError(); } }
     DeleteFileW(cab);
     if (ok) *failed = false;
     return ok;
@@ -144,7 +166,12 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR cmdLine, int show)
     wchar_t root[MAX_PATH], setup[MAX_PATH];
     bool failed = false, extracted = ExtractPayload(root, &failed);
     if (failed) {
-        Error(L"The installer could not be unpacked to a temporary folder.", L"Не удалось распаковать установщик во временную папку.");
+        wchar_t code[80] = L"";
+        if (g_extractError) _snwprintf(code, 80, L" (Windows error %lu)", (unsigned long)g_extractError);
+        // the cabinet is unreadable: wrong data (13), CRC (23), corrupt file (1392), checksum (323) or no error code at all (Wine) = damaged; a full disk or denied access is something else
+        bool damaged = g_cabFailed && (g_extractError == 0 || g_extractError == ERROR_INVALID_DATA || g_extractError == ERROR_CRC || g_extractError == ERROR_FILE_CORRUPT || g_extractError == ERROR_DATA_CHECKSUM_ERROR);
+        if (damaged) Error(L"The installation package is damaged or incomplete (it was changed after it was built, or the download was cut short). Download Setup again", L"Пакет установки повреждён или неполон (файл изменён после сборки или скачан не до конца). Скачайте установщик заново", code);
+        else Error(L"The installer could not be unpacked to a temporary folder", L"Не удалось распаковать установщик во временную папку", code);
         RemoveTree(root);
         return 1;
     }

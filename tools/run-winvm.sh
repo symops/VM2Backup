@@ -15,6 +15,12 @@
 #   win11     Windows 11 specifics (wmic, Smart App Control, SMB client policy, terminal, event source ...), informational
 #   defender  Microsoft Defender at the end of the run: real-time ON, no detections, no exclusions (nothing is ever disabled)
 #   signing   (w11) the SIGNED Setup with Mark of the Web, four cases (unsigned / signed untrusted / signed trusted / tampered): SmartScreen, UAC, screenshots (docs/SIGNING.md)
+#   signinst  (раунд 8) подписанный пакет: Get-AuthenticodeSignature, тихая установка, обновление поверх старой версии, подписи exe в Program Files, MOTW, изменённые файлы (guest/signinst.ps1)
+#   leaks     (раунд 8) 36 минут нагрузки: счётчики процесса службы и долгоживущей панели каждые 2 минуты (HandleCount, GDI / USER, память, потоки), панель открыта и закрыта 200 раз (guest/leaks.ps1)
+#   ntfsav    (раунд 8) EFS, сжатые и разреженные файлы NTFS, имя 255 символов, 5000 файлов, EICAR и Defender, файл исчез посреди копии (guest/ntfsav.ps1)
+#   eicar     (раунд 8) EICAR и «файл исчез по ходу» при ВКЛЮЧЁННОМ Defender (политика bootstrap.cmd на время снимается, потом возвращается; два перезапуска)
+#   ftprepeat (раунд 8) ftp_large_streamed 10 раз подряд на госте с DEBUG-журналом FTP-сервера (журналы по прогонам: results/srv-ftprepeat/run-N)
+#   tz        (раунд 8, ПОСЛЕДНЯЯ перед sac) пояса с переходом на летнее время (tzutil), часы гостя Set-Date при отключённом w32time: родные тесты расписания + настоящая служба (guest/tzreal.ps1)
 #   sac       (w11, ALWAYS LAST: cannot be undone) Smart App Control: try to switch it to On, restart, record what happens to the unsigned Setup and the service
 #   smartscreen  the Setup with Mark of the Web started like a double click, screenshots of what the user sees
 #   big       the 3 'big' autotests (4 GiB; VM2B_BIG=1)
@@ -39,7 +45,7 @@ R=$(cd "$VM2B_RUNWINVM_DIR/.." && pwd); W=$R/.winvm; RES=$W/shared/results
 OS=${1:-}; shift || true
 [ "$OS" = domain ] && exec bash "$R/tools/run-domain.sh" "$@"      # настоящий домен AD: две ВМ Server 2022 (tools/run-domain.sh)
 case "$OS" in x86|w10|w11) ;; *) sed -n 2,30p "$0"; exit 2;; esac
-KEEP=0; CREATE=1; BUILD=1; PHASES=sysinfo,autotest,winreal,install,installer,panel,web,net,smb,smbsign,svcacct,aclreal,speedlimit,restartjob,unicode,verify,big,winbig; [ "$OS" = w11 ] && PHASES=sysinfo,win11,autotest,winreal,install,installer,panel,web,net,smb,smbsign,svcacct,aclreal,speedlimit,restartjob,unicode,verify,big,winbig,defender,smartscreen,sac; SEED=$(( (RANDOM << 15 | RANDOM) % 1000000000 ))
+KEEP=0; CREATE=1; BUILD=1; PHASES=sysinfo,autotest,winreal,install,installer,panel,web,net,smb,smbsign,svcacct,aclreal,speedlimit,restartjob,unicode,verify,big,winbig,signing,signinst,leaks,ntfsav,eicar,ftprepeat,tz; [ "$OS" = w11 ] && PHASES=sysinfo,win11,autotest,winreal,install,installer,panel,web,net,smb,smbsign,svcacct,aclreal,speedlimit,restartjob,unicode,verify,big,winbig,defender,smartscreen,signinst,leaks,ntfsav,eicar,ftprepeat,tz,sac; SEED=$(( (RANDOM << 15 | RANDOM) % 1000000000 ))
 while [ $# -gt 0 ]; do case "$1" in
   --keep) KEEP=1; shift;; --no-create) CREATE=0; shift;; --no-build) BUILD=0; shift;; --phases) PHASES=$2; shift 2;; --seed) SEED=$2; shift 2;;
   *) echo "unknown argument $1"; exit 2;; esac; done
@@ -78,6 +84,8 @@ json_smb() { # json_smb <file> [drive]: servers.json for group smbreal as the gu
            "user": "vm2buser", "password": "Sm8 Real&Pw!42", "wrong_password": "Wr0ng-Pa55-not", "control": "$SMBCTL"${drive:+, \"drive\": \"$drive\"} } }
 EOF
 }
+
+variants_ready() { [ -f "$W/shared/pki/variants/signed.exe" ] && [ -f "$W/shared/pki/variants/tampered-cab.exe" ] || { say "building the signed / tampered installer variants (tools/winvm-variants.sh)"; bash "$R/tools/winvm-variants.sh" > "$W/variants.log" 2>&1 || { say "variants failed: see .winvm/variants.log"; return 1; }; }; }
 
 # ---------------------------------------------------------------- build + create
 if [ $CREATE = 1 ]; then
@@ -302,6 +310,7 @@ if want signing; then
   #   c) без подписи            a) подписан, корень НЕ доверен       b) подписан, корень в Root + издатель в TrustedPublisher      d) подписан + доверен, файл ИЗМЕНЁН после подписи
   # Снимки делает ХОСТ (qemu screendump): так виден и запрос UAC на безопасном рабочем столе. Тестовый сертификат: tools/make-test-cert.sh (.winvm/shared/pki).
   [ -f "$W/shared/pki/test-sign.cer" ] || bash "$R/tools/make-test-cert.sh" >/dev/null
+  variants_ready
   mkdir -p "$RES/shots/signing" "$W/shared/pki/variants"
   SG='powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\signing.ps1'
   sg() { local n=$1; shift; gj "20-sign-$n" 300 "$SG $*"; }
@@ -309,6 +318,7 @@ if want signing; then
   sg prep prep > /dev/null
   sg info-before info > /dev/null
   sg untrust untrust > /dev/null
+  [ "$OS" != w11 ] && sg ss-on smartscreen on > /dev/null      # на Windows 10 bootstrap.cmd выключает SmartScreen политикой: на время проверки включаем (окно «Windows protected your PC»)
   sg uac-on uac on > /dev/null; reboot_guest 20-sign-reboot-uac-on || say "the guest did not return after the restart (UAC on)"
   signing_case() { # signing_case <метка> <вариант>: файл с Mark of the Web, двойной щелчок; окно SmartScreen -> «Подробнее» -> «Выполнить в любом случае» -> окно «Открыть файл» -> «Запустить» -> UAC; состояние, события, уборка
     local tag=$1 var=$2
@@ -327,10 +337,79 @@ if want signing; then
   sg trust trust > /dev/null; sg info-after-trust info > /dev/null
   signing_case b-signed-trusted signed
   signing_case d-tampered-trusted tampered
+  [ "$OS" != w11 ] && sg ss-off smartscreen off > /dev/null
   sg uac-reset uac reset > /dev/null; reboot_guest 20-sign-reboot-uac-off || true
   for f in 20-sign-info-before 20-sign-info-after-trust 20-sign-trust; do tr -d '\r' < "$RES/$f.out" | grep -aE '^INFO' | tee -a "$SUM"; done
   for t in c-unsigned a-signed-untrusted b-signed-trusted d-tampered-trusted; do echo "--- $t" | tee -a "$SUM"; tr -d '\r' < "$RES/20-sign-$t-launch.out" | grep -aE '^INFO' | tee -a "$SUM"; for k in state events; do tr -d '\r' < "$RES/20-sign-$t-$k.out" 2>/dev/null | grep -aE '^INFO' | head -12 | tee -a "$SUM"; done; done
   RESULT[signing]="informational (20-sign-*.out, shots/signing/*.png)"
+fi
+
+
+if want signinst; then
+  if variants_ready; then
+    gj 21-signinst 3600 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\signinst.ps1' > /dev/null; RC=$?
+    tr -d '\r' < "$RES/21-signinst.out" | grep -aE '^INFO' | cut -c1-260 | tee -a "$SUM"
+    tally signinst $RC 21-signinst
+  else RESULT[signinst]="no variants"; fi
+fi
+
+if want leaks; then
+  gj 22-leaks 5400 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\leaks.ps1 36' > /dev/null; RC=$?
+  tr -d '\r' < "$RES/22-leaks.out" | grep -aE '^INFO' | cut -c1-300 | tee -a "$SUM"
+  tally leaks $RC 22-leaks
+fi
+
+if want ntfsav; then
+  gj 23-ntfsav 5400 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\ntfsav.ps1' > /dev/null; RC=$?
+  tr -d '\r' < "$RES/23-ntfsav.out" | grep -aE '^INFO' | cut -c1-400 | tee -a "$SUM"
+  tally ntfsav $RC 23-ntfsav
+fi
+
+if want eicar; then
+  # Defender на тестовых ВМ выключен политикой bootstrap.cmd: на время проверки политика снимается (перезапуск), потом возвращается (перезапуск). EICAR + «файл исчез по ходу» (guest/ntfsav.ps1 av)
+  DT='powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\defender-toggle.ps1'
+  gj 23b-av-on 300 "$DT on" > /dev/null; reboot_guest 23b-av-reboot || say "the guest did not return (Defender on)"
+  sleep 60
+  gj 23b-av-info 300 "$DT info" > /dev/null
+  gj 23b-eicar 3600 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\ntfsav.ps1 av' > /dev/null; RC=$?
+  tr -d '\r' < "$RES/23b-av-info.out" | grep -aE '^INFO' | tee -a "$SUM"; tr -d '\r' < "$RES/23b-eicar.out" | grep -aE '^INFO' | cut -c1-400 | tee -a "$SUM"
+  tally eicar $RC 23b-eicar
+  gj 23b-av-off 300 "$DT off" > /dev/null; reboot_guest 23b-av-reboot2 || true
+fi
+
+if want ftprepeat; then
+  # ftp_large_streamed 10 раз: на каждый прогон свои серверы с DEBUG-журналом (VM2B_FTP_LOGLEVEL), журналы -> results/srv-ftprepeat/run-N
+  FAILN=0; mkdir -p "$RES/srv-ftprepeat"; JS=$W/shared/srv
+  for i in $(seq 1 10); do
+    VM2B_FTP_LOGLEVEL=DEBUG VM2B_SEED=$(( SEED + i )) "$R/tools/winvm-servers.sh" start ftp > /dev/null 2>&1 || { say "ftprepeat $i: servers did not start"; continue; }
+    gj 24-ftpr-$i 1800 "set TAG=ftpr$i" "set ARGS=--seed $(( SEED + i )) --only ftp_large_streamed --servers $GS\\srv\\ftp\\servers.json" "set VM2B_WEB_DEFAULT=0" 'call C:\vm2b\guest\autotest.cmd' > /dev/null
+    L=$RES/autotest-ftpr$i.txt; mkdir -p "$RES/srv-ftprepeat/run-$i"; cp "$JS/ftp"/*.log "$RES/srv-ftprepeat/run-$i/" 2>/dev/null
+    if [ -f "$L" ] && tr -d '\r' < "$L" | grep -aq '^PASS'; then say "  ftprepeat run $i (seed $(( SEED + i ))): PASS $(tr -d '\r' < "$L" | grep -a '^PASS' | awk '{print $NF}' | head -1)"
+    else FAILN=$(( FAILN + 1 )); say "  ftprepeat run $i (seed $(( SEED + i ))): FAIL"; tr -d '\r' < "$L" 2>/dev/null | grep -aA6 '^FAIL' | sed 's/^/      /' | tee -a "$SUM"; fi
+    "$R/tools/winvm-servers.sh" stop-all > /dev/null
+  done
+  RESULT[ftprepeat]="$(( 10 - FAILN )) of 10 passed, $FAILN failed (logs: results/srv-ftprepeat/run-N)"; say "PHASE ftprepeat: ${RESULT[ftprepeat]}"
+fi
+
+if want tz; then
+  TZT='powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\tzreal.ps1'
+  gj 25-tz-prep 300 "$TZT prep" > /dev/null; RC0=$?
+  # 1) родные тесты: расписание через переход (UnixToLocalMin против эталона Windows, ScheduleNext, окна, настоящий планировщик на подменённых часах), в трёх поясах
+  TZRC=0
+  for z in "W. Europe Standard Time" "Pacific Standard Time" "Lord Howe Standard Time"; do
+    k=$(echo "$z" | tr -c 'A-Za-z\n' '_' | cut -c1-12)
+    gj "25-tz-native-$k" 3600 "tzutil /s \"$z\"" "set TAG=tz$k" "set ARGS=--seed $SEED --only schedule_across_dst_transitions_matches_the_windows_clock,scheduler_runs_each_slot_once_across_dst_transitions" "set VM2B_WEB_DEFAULT=0" 'call C:\vm2b\guest\autotest.cmd' > /dev/null
+    L=$RES/autotest-tz$k.txt
+    [ -f "$L" ] && { tr -d '\r' < "$L" | grep -aE ' passed, ' | tail -1 | sed "s/^/  tz native [$z]: /" | tee -a "$SUM"; tr -d '\r' < "$L" | grep -aE '^FAIL|^SKIP|^      ' | cut -c1-300 | sed 's/^/    /' | tee -a "$SUM"; } || say "  tz native [$z]: NO OUTPUT"
+  done
+  # 2) настоящая служба и настоящие часы: весна (несуществующий час) в W. Europe и Pacific, осень (повторяющийся полчаса) в Lord Howe
+  gj 25-tz-spring-eu 1800 "$TZT scenario \"W. Europe Standard Time\" \"2027-03-28 01:56:30\" 02:05 18 spring-eu" > /dev/null; RCA=$?
+  gj 25-tz-spring-us 1800 "$TZT scenario \"Pacific Standard Time\" \"2027-03-14 01:56:30\" 02:05 18 spring-us" > /dev/null; RCB=$?
+  gj 25-tz-autumn-lh 4500 "$TZT scenario \"Lord Howe Standard Time\" \"2027-04-04 01:43:00\" 01:45 52 autumn-lh" > /dev/null; RCC=$?
+  gj 25-tz-restore 300 "$TZT restore" > /dev/null; RCR=$?
+  for f in 25-tz-prep 25-tz-spring-eu 25-tz-spring-us 25-tz-autumn-lh 25-tz-restore; do tr -d '\r' < "$RES/$f.out" | grep -aE '^INFO' | cut -c1-260 | tee -a "$SUM"; done
+  tally tz $(( RC0 + RCA + RCB + RCC + RCR )) 25-tz-prep 25-tz-spring-eu 25-tz-spring-us 25-tz-autumn-lh 25-tz-restore
+  gj 25-tz-reboot 60 'echo done' > /dev/null; reboot_guest 25-tz-reboot-real || say "the guest did not return after the final restart"
 fi
 
 if want sac; then

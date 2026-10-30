@@ -33,6 +33,7 @@ phases, prints a summary, copies every result to `.winvm-results/<os>-<time>/` a
 | `guest/acltest.ps1`, `guest/svcacct.ps1` | (раунд 2) права на папку данных от обычного пользователя; служба под другими учётными записями |
 | `guest/smbsign.ps1`, `guest/restartjob.ps1` | (раунд 2) обязательная подпись SMB; перезапуск Windows посреди копии |
 | `guest/aclreal.ps1`, `guest/aclcheck.ps1`, `guest/speedlimit.ps1` | (раунд 3, x64 ru) права папки данных / канала от обычного пользователя с кириллическим именем и проверка SDDL (`aclcheck.ps1 old|new` вызывается и из `uninstall-update.cmd`); ограничение скорости на реальных данных |
+| `guest/signinst.ps1`, `leaks.ps1`, `ntfsav.ps1`, `defender-toggle.ps1`, `tzreal.ps1`, `tools/winvm-variants.sh` | (раунд 8) подписанный пакет и его варианты; утечки; NTFS / EFS / EICAR; Defender на время проверки; часы и пояса. Файлы `*.ps1` с кириллицей хранятся в UTF-8 С BOM (PowerShell 5 иначе ломает строки) |
 | `destroy.sh` + файл `.winvm/hold` | пока файл `hold` существует, `destroy.sh` ничего не удаляет (чтобы дочинить / перепроверить фазы на той же ВМ после одной длинной команды); убрать файл и запустить `destroy.sh` ещё раз |
 | `shared/smb-real.py` | runs inside the container: a password-protected Samba share + a control port (stop / start the server while a backup runs) |
 | `tools/winvm-servers.sh` | the ftp / ssh / esxi test servers on THIS host, listening on the Docker bridge address, files under `.winvm/shared/srv/` |
@@ -62,6 +63,12 @@ The launchers (`tools/testservers/launch.py`, `esxi_launch.py`, `pm_server.py`, 
 | `installer` | update in place over the running service, `/remove /silent` (data kept), reinstall | |
 | `defender` | (w11) Defender в конце прогона: защита в реальном времени включена, нет исключений и обнаружений | `16-defender.out` |
 | `signing` | (w11) подписанный установщик (`tools/sign.sh`, тестовый центр из `tools/make-test-cert.sh`) с Mark of the Web, четыре сочетания: (c) без подписи, (a) подписан, корень не доверен, (b) подписан, корень в `Root` + издатель в `TrustedPublisher`, (d) подписан, доверен, файл изменён после подписи; снимки SmartScreen и UAC. На время фазы включается UAC (на dockur `EnableLUA=0`) с перезапуском и затем возвращается | `20-sign-*.out`, `signing-observed.txt`, `shots/signing/*.png` |
+| `signinst` | (раунд 8) подписанный пакет на Windows 10: `Get-AuthenticodeSignature`, тихая установка (32-битный загрузчик на x86), подписи внутри Program Files, обновление поверх старой версии, файл с Mark of the Web, изменённые после подписи файлы (`guest/signinst.ps1`, варианты `tools/winvm-variants.sh`) | `21-signinst.out` |
+| `leaks` | (раунд 8) 36 минут нагрузки, замер каждые 2 минуты счётчиков службы и долгоживущей панели (HandleCount, потоки, закрытая память, WorkingSet, GDI / USER); панель открыта и закрыта не меньше 200 раз, служба перезапущена 2 раза (`guest/leaks.ps1`) | `22-leaks.out`, `leaks.csv` |
+| `ntfsav` | (раунд 8) файл под EFS, NTFS-сжатый и разреженный файлы, имя 255 символов, каталог с 5000 файлов, файл исчез посреди копии (`guest/ntfsav.ps1`) | `23-ntfsav.out` |
+| `eicar` | (раунд 8) EICAR при ВКЛЮЧЁННОМ Defender (политика bootstrap.cmd на время снимается, два перезапуска) и «файл исчез по ходу» (`ntfsav.ps1 av`, `defender-toggle.ps1`) | `23b-eicar.out` |
+| `ftprepeat` | (раунд 8) `ftp_large_streamed` 10 раз с журналом FTP-сервера DEBUG | `srv-ftprepeat/run-N/` |
+| `tz` | (раунд 8) пояса с переходом на летнее время: родные тесты расписания в трёх поясах + настоящие службы и часы (`guest/tzreal.ps1`, w32time выключен, `SetSystemTime`) | `25-tz-*.out` |
 | `sac` | (w11, ВСЕГДА ПОСЛЕДНЯЯ: необратима) включение Smart App Control через настоящий интерфейс «Безопасность Windows» (переключатель On, UI Automation), перезапуск, запуск вариантов установщика, службы и программ продукта без доверия к тестовому корню и с ним, пробы со свежесобранными неподписанными exe, события CodeIntegrity | `99-sac-*.out`, `shots/sac-*.png` |
 
 ### Group `smbreal` (servers json key `smb`; skipped without it, e.g. under Wine)
@@ -104,6 +111,11 @@ The phase `unicode` (`guest/unicode-user.ps1`) creates a local administrator wit
   server changed in place (same size) from its cache for ~10-20 s (measured: hash of a 1 MB file stays old; `FileInfoCacheLifetime=0`, `UtilizeNtCaching=0`, Samba `oplocks / smb2 leases = no`
   do not help), (2) names with characters Windows cannot hold (`pfx:vm`) arrive as mangled 8.3 names. They pass natively under Wine (62 of the 67 ESXi tests pass on the VM). The product's
   own paths (HTTP / SOAP to the mock) are not involved. A fix would be to run the mock datastore inside the guest.
+* **(раунд 8) Тесты `ssh/auth_guard_scp_*` на ВМ**: считают строки в журнале `sshd`, который дописывает хост, а гость читает его через SMB: кеш клиента SMB отдаёт старый файл (счётчики 0 при настоящих попытках). Под Wine проходят. `scp_fault_drop_listing` ("0 of 6 listings were cut") нестабилен по времени на ВМ.
+* **(раунд 8) Defender на тестовых ВМ выключен политикой** `DisableAntiSpyware=1` (`bootstrap.cmd`): служба не запущена. Для EICAR фаза `eicar` снимает политику на время проверки (перезапуск) и возвращает.
+* **(раунд 8) SmartScreen на тестовых ВМ выключен политикой** `EnableSmartScreen=0` (`bootstrap.cmd`): окна «Windows protected your PC» нет. Фаза `signing` на Windows 10 включает его на время фазы.
+* **(раунд 8) Жёсткий `system_reset` гостя оставляет открытые сеансы SMB прежнего гостя**: qemu-smbd отвечает NT_STATUS_IO_TIMEOUT при открытии `current.txt` / `*.out`, исполнитель встаёт. Перезапускать только `shutdown /r` или `system_powerdown` + `docker start vm2b-win`.
+* **(раунд 8) Windows возвращает время «с узла»** через 1 - 3 минуты после `SetSystemTime`, если не выключить службу w32time (событие `Kernel-General` 1, процесс `svchost.exe`): `tzreal.ps1 prep` её выключает и останавливает.
 * The guest sees the host as `172.17.0.1` through qemu's NAT: connection resets / half closes pass through qemu's user-mode TCP, so timing-sensitive network tests can differ from loopback.
 * **Windows Update** is switched off by the bootstrap (`wuauserv`, policy): without that the guest installed a cumulative update by itself in the middle of the first run (19045.3803 -> 19045.6456) and
   spent 40 minutes in "Preparing to configure Windows" after a restart.
@@ -575,7 +587,118 @@ FTP выполнены на той же ВМ (`--no-create --keep`, файл `ho
 
 * Репутация SmartScreen и допуск SAC для настоящего сертификата (OV / EV, облачная подпись): нужен настоящий сертификат.
 * Метка времени подписи (RFC 3161): не использовалась (сети не нужно).
-* Windows 10 / x86 с подписанным пакетом (проверено только загрузчиком под Wine и Windows 11).
+* ~~Windows 10 / x86 с подписанным пакетом~~ - проверено в раунде 8 (30.10.2026); не проверено на Windows 10 x64 ru (следующая ОС цикла).
+
+## Раунд 8: Windows 10 Pro x86 (22H2, сборка 19045.3803, 32-битная нагрузка), цикл 3, 30.10.2026
+
+Первая ОС третьего цикла (дальше по плану: Windows 10 x64 ru, Windows 11). Одна ВМ `vm2b-win` (ISO `WIN10X86.iso`, чистый qemu внутри `dockurr/windows`, RAM 3 ГБ / 4 ядра, установка 1812 с), удалена после прогона вместе с диском, тестовым центром сертификации (`.winvm/shared/pki`) и файлом `hold`. Результаты: `.winvm-results/x86-20261030-cycle3/` (`run1/` - первый полный прогон до правок продукта; `run2/` - перепроверки после правок: `winreal`, `signing` со включённым SmartScreen, `net` ftp / ssh, `tz`; `run3/` - `ntfsav` и `eicar`; `run4/` - последняя перепроверка `signinst` и осенний сценарий Lord Howe; `final-destroy-copy/` - копия, снятая `destroy.sh`; в каждом `results/*.out`, `results/autotest-*.txt`, снимки, журналы `r8-run*.log`). **Честная оговорка:** создание ВМ шло отдельной командой (`tools/run-winvm.sh x86 --keep --phases sysinfo`), пока писались новые фазы, потом `--no-create` с полным набором фаз; так что «одной командой с нуля» цикл 3 в этой ОС не повторялся (создание с нуля одной командой проверено в раундах 2 - 4).
+
+### Базовые фазы (первый прогон, seed 872173946, до правок продукта)
+
+| Фаза | Результат |
+|---|---|
+| `autotest` core / service / gui | 108 из 108 (3 пропуска) / 28 из 28 / 4 из 4 |
+| `winreal` | 10 из 11: упал новый тест расписания через переход на летнее время (см. «Найдено и исправлено»); после правок 12 из 12 |
+| `install` / `installer` (обновление, удаление, переустановка, ACL) / `unicode` | 32 / 0, 10 / 0, 2 / 0 |
+| `panel` (`/selftest`, окна на 100 / 125 / 150 %) | rc 0 на всех трёх масштабах, `gui` 4 из 4 на каждом |
+| `web` (TLS клиентов Windows, вход, DPAPI через перезапуск службы и Windows) | 38 / 0 |
+| `net`: ftp / ssh / esxi (эмулятор внутри гостя) | 32 из 33 (известный предел: активный FTP за NAT qemu) / 59 из 63 (см. ниже) / 65 из 65 |
+| `smb` (`smbreal`, диск `Y:`, `smbinfo`) / `smbsign` | 11 + 1 + 5 из 17 / 6 из 6 |
+| `svcacct` / `aclreal` / `speedlimit` / `restartjob` | 46 / 16 / 10 / 12, без падений |
+| `big` / `winbig` / `verify` | 3 из 3 (самый долгий 554 с) / 6 ГиБ разреженный vmdk: копия 147 с, 25 томов, 4,1 МБ, пик рабочего набора 50 МиБ / 94 из 94 |
+
+Падения сети, не связанные с продуктом:
+
+* `ftp_passive_active_and_listing_variants` - активный FTP (известный предел из раздела «Known limits»).
+* `ssh`: `auth_guard_scp_password_one_attempt`, `auth_guard_scp_key_one_attempt`, `auth_guard_scp_key_wrong_passphrase_one_attempt` (тесты добавлены 28.10, на x86 запущены впервые). Они считают строки в журнале `sshd`, который хост дописывает, а гость читает через SMB: клиент SMB Windows отдаёт кеш (счётчики 0 при настоящих попытках в журнале хоста) - тот же предел, что у ESXi (раунд 2). Те же тесты под Wine проходят (64 из 64). `scp_fault_drop_listing` ("0 of 6 listings were cut": ни одно из шести обрывов не попало) нестабилен по времени, под Wine один раз упал так же, в полном прогоне Wine прошёл. Это границы обвязки, не продукта.
+* Второй прогон `net`: `ftp_fault_injection_upload` один раз ("receive timed out", 74 с); в первом прогоне и в 10 повторах следующей проверки не воспроизвёлся.
+
+### Новые проверки раунда
+
+**(1) Подписанный установщик на Windows 10 x86** (`signing`, `signinst`; тестовый корень `tools/make-test-cert.sh`, варианты `tools/winvm-variants.sh`: unsigned / signed / tampered (байт в PE) / tampered-cab (байт внутри пакета), подписаны и все exe внутри пакета):
+
+| Проверка | Результат |
+|---|---|
+| `Get-AuthenticodeSignature` | неподписанный `NotSigned`; подписанный без доверия к корню `UnknownError` («корень не доверен»), после доверия `Valid`; изменённый после подписи `HashMismatch` (оба варианта) |
+| Загрузчик (32-битный PE, 0x14C) | тихая установка подписанного пакета `/install /silent`: rc 0; служба 32-битная (0x14C) |
+| Подписи внутри Program Files | `VM2Backup.exe`, `VM2BackupService.exe`, копия `VM2Backup-Setup.exe`: `Valid` (корень доверен) |
+| Обновление поверх старой версии (служба работала) | rc 0, новый процесс службы, данные (запись сервера) сохранены |
+| Изменён байт в загрузчике | подпись `HashMismatch`, но установщик работает как обычно (проверку подписи делает Windows), rc 0 |
+| Изменён байт внутри пакета | rc 1, без зависания, ничего не сломано (служба та же), временная папка убрана; **сообщение раньше было недоступно** (в тихом режиме окон нет, оставался только rc 1): теперь строка в `%TEMP%\VM2Backup-Setup.log`: «The installation package is damaged or incomplete (it was changed after it was built, or the download was cut short). Download Setup again (Windows error 13)»; без `/silent` то же в окне (по-русски на русской Windows) |
+| Удаление и переустановка подписанного | rc 0, файлы `Valid` |
+
+Что видит пользователь (снимки с включённым SmartScreen: `run2/results/shots/signing/<метка>-N-*.png`; первый прогон, SmartScreen выключен политикой bootstrap, показывает только UAC: `run1/results/shots/signing/`; англоязычная Windows 10 22H2; **на тестовых ВМ bootstrap выключает SmartScreen политикой `EnableSmartScreen=0`: на время фазы `signing` политика снимается, `SmartScreenEnabled=Warn`, потом возвращается**; интернет у ВМ есть):
+
+* Файл с Mark of the Web (ZoneId=3), двойной щелчок: окно **«Windows protected your PC»** («Microsoft Defender SmartScreen prevented an unrecognised app from starting. Running this app might put your PC at risk.»), кнопка «More info» открывает строки Application / Publisher и кнопку «Run anyway». Для подписанного и доверенного файла: **Publisher: Symo TEST Code Signing** (у неподписанного и недоверенного строка Publisher закрыта посторонним системным окном «How do you want to open this?», которое на этой ВМ после ручных нажатий клавиш в госте появлялось поверх снимков; их UAC-окна снимались без помех в первом прогоне); окно показывается всё равно (у тестового сертификата нет репутации, как на Windows 11 в раунде 7).
+* UAC после «Run anyway»: подписанный и доверенный - синяя шапка, значок и имя «VM2Backup», **«Verified publisher: Symo TEST Code Signing»**, «File origin: Hard drive on this computer»; неподписанный - жёлтая шапка «…from an unknown publisher…», «Publisher: Unknown»; подписанный недоверенный и изменённый - как неподписанный.
+* Запуск файла с Mark of the Web через ShellExecute из скрипта (как делает проводник) показывает окно **«Open File - Security Warning»** («Do you want to run this file?», Publisher: Symo TEST Code Signing, кнопки «Run» / «Cancel») **даже при SmartScreen выключенном**, и вызывающий скрипт стоит, пока кто-то не нажмёт: **при тихой установке из средств развёртывания надо запускать установщик через CreateProcess** (так делают msiexec / PsExec / SCCM и `Start-Process` с `UseShellExecute=false`) - тогда запроса нет. Окно записано снимком `run1/shot-win10-open-file-security-warning.png` (первый прогон, когда SmartScreen на ВМ ещё выключен). В повторных прогонах автоматическое нажатие «Run» не сработало: поверх окна каждый раз появлялось системное окно «How do you want to open this?» (выбор приложения; на этой ВМ оно возникло после ручных нажатий клавиш в госте и больше не уходило), поэтому ShellExecute в `signinst.ps1` оставлен справочным блоком без проверок (`INFO ShellExecute start ...`).
+* Окно SmartScreen не закрывается подписью тестового центра; пользователю по-прежнему нужны «More info» -> «Run anyway» (репутацию даёт настоящий сертификат и накопленные скачивания: `docs/SIGNING.md`).
+
+**(2) Часовые пояса и перевод времени на настоящей Windows** (фаза `tz`, `guest/tzreal.ps1`; w32time выключен и остановлен, задачи «Time Synchronization» выключены, `NoSync`; часы ставятся `SetSystemTime`, дальше идут сами):
+
+* Родные тесты `winreal/schedule_across_dst_transitions_matches_the_windows_clock` (каждая минута вокруг перехода сверена с эталоном Windows `SystemTimeToTzSpecificLocalTime`; ежедневно 02:30 двумя видами записи, каждые 30 минут, «один раз 02:30» в день перехода, окно 22:00-06:00, ежемесячно 31-го и в последний день) и `scheduler_runs_each_slot_once_across_dst_transitions` (настоящий планировщик службы на подменённых часах идёт минута за минутой через весенний и осенний переход; число и время запусков сверяются с ожиданием), пояса **W. Europe**, **Pacific**, **Lord Howe** (сдвиг 30 минут) и **GMT** (исходный пояс гостя): до правок падали, после правок **2 из 2 в каждом поясе**.
+* Настоящая служба и настоящие часы (две задачи: ежедневно в 02:05 и каждые 30 минут от 00:00; наблюдение по истории запусков):
+  * **Весна, W. Europe** (часы 2027-03-28 01:56:30; пропущенный час 02:00 -> 03:00): ежедневная в 02:05 (такой минуты нет) - **ровно один запуск в 03:00:00 по местному**, каждые 30 минут - один запуск в 03:00:00 (слоты 02:00 и 02:30 не накапливаются); 2 запуска за 18 минут, часы никто не трогал (`25-tz-spring-eu.out`, 8 проверок из 8).
+  * **Весна, Pacific** (2027-03-14 01:56:30): так же, оба запуска в 03:00:01 по местному, по одному (`25-tz-spring-us.out`; проверка «ровно один запуск» в этом прогоне упала только потому, что считала записи истории предыдущего сценария: сценарий теперь фильтрует записи по времени начала и очищает историю). **До правок** (`run1/results/25-tz-spring-us.out`) на той же службе `tasks.next` для «ежедневно в 02:05» отвечал «2027-03-15 02:05»: запуск в день перехода пропускался целиком.
+  * **Осень, Lord Howe** (сдвиг 30 минут, 2027-04-04 02:00 LHDT -> 01:30 LHST; часы ставятся на 01:43 ПЕРВОГО прохода): ежедневная в 01:45 (минута бывает дважды) - **один запуск в 01:45:02 первого прохода** (14:45 UTC), второй проход (01:45 LHST, 15:15 UTC) слот НЕ повторил; каждые 30 минут - запуск в 02:00:00 LHST (15:30 UTC), как положено после повторяющегося получаса; 2 запуска за 52 минуты, часы никто не трогал (`27-tz-autumn-lh.out`, 8 проверок из 8; первая попытка этого сценария началась уже ПОСЛЕ перехода из-за неоднозначного времени и в счёт не идёт: сценарий теперь берёт первый проход).
+* Служба и смена пояса без перезапуска: `winreal/schedule_follows_a_time_zone_change_without_a_restart` (Tokyo, UTC, Pacific, W. Europe подряд через `tzutil /s`): после правок проходит.
+
+**(3) Утечки ресурсов службы и панели** (`leaks`, `guest/leaks.ps1`, 36 минут нагрузки): 136 копий малой ВМ, 204 входа / выхода через сайт, 68 переключений порта сайта 8443 <-> 8444 (сайт перезапускался каждый раз), панель открыта и закрыта 816 раз (200 - порог), служба перезапущена 2 раза; замер каждые ~2 минуты (`results/leaks.csv`: HandleCount, потоки, PrivateMemorySize64, WorkingSet64, GDI / USER через `GetGuiResources`, которые на настоящей Windows возвращают значения).
+
+| Процесс (после прогрева 4 минуты, последний отрезок жизни) | Дескрипторы | Потоки | Закрытая память | GDI / USER |
+|---|---|---|---|---|
+| служба (5 замеров, 28 - 36 мин) | 225 -> 228 (+3; порог < 50) | 0 | 4,3 -> 4,8 МБ (+0,5; порог < 30) | 0 / 0 |
+| долгоживущая панель (16 замеров, 4 - 36 мин) | 190 -> 190 (0) | +2 | 1,9 -> 2,0 МБ | 30 / 35 -> 30 / 33 (не растёт) |
+
+Рост не монотонный: дескрипторы службы колеблются 222 - 245 в течение всех трёх отрезков (после перезапуска возвращаются к 225). **Утечек нет** (14 проверок, 14 прошли).
+
+**(4) NTFS и антивирус** (`ntfsav`, `eicar`, `guest/ntfsav.ps1`; служба работает под SYSTEM, задание ставит пользователь `Docker` из группы администраторов):
+
+| Случай | Что сделал продукт |
+|---|---|
+| (a) файл под EFS (`cipher /e` от того же пользователя; `Archive, Encrypted`) | задание **Failed** за 0,016 с: «cannot read enc.vmdk: Access is denied (5)» (имя файла и причина названы; служба продолжает работать; копия ВМ целиком не создаётся: один нечитаемый файл = неудача копии ВМ) |
+| (b) NTFS-сжатый файл (`compact /c`, 5,2 : 1) и разреженный файл (256 МБ логических, 2 МБ выделено, два диапазона) | **Success** (сырых 269 МБ, архив 2,15 МБ); восстановление побитно (SHA-256) совпало у обоих. Восстановленный разреженный файл **не разреженный** (на диске 256 МБ): содержимое верное, но место не экономится |
+| (c) EICAR (Defender запущен: политика `DisableAntiSpyware` на время снята, сигнатуры 1.303.25.0 от 2019 года достаточны) | Defender обнаружил `Virus:DOS/EICAR_Test_File` (события 1116, `Get-MpThreatDetection`: действие выполнено) уже после первых секунд (через 12 с файл ещё лежал); задание **Failed** за 0,08 с: «cannot read eicar.com.txt: Operation did not complete successfully because the file contains a virus or potentially unwanted software (225)»; без зависания, готовой копии не осталось |
+| (d) файл с именем из 255 символов и каталог с 5000 файлов | **Success**, все 5000 файлов и файл с длинным именем восстановлены с тем же содержимым (SHA-256 по всему набору) |
+| (e) файл исчез посреди копии (большой файл с ограничением 12 Мбит/с, через 6 с удалён ещё не прочитанный `z-vanish.vmx`, создан EICAR) | задание **Failed** через 14 с: «cannot read z-vanish.vmx: The system cannot find the file specified (2)»; незавершённой копии, считающейся успешной, нет (0 готовых копий); Defender удалил и второй EICAR |
+
+Журнал Defender записан в `results/23b-eicar.out` (события 1116, `Get-MpThreatDetection`); ничего в Defender не отключалось, политика `DisableAntiSpyware=1` возвращена после проверки.
+
+**(5) Повтор `ftp_large_streamed` 10 раз** на госте с журналом сервера DEBUG (`VM2B_FTP_LOGLEVEL`, свои серверы на каждый прогон): **10 из 10 прошли** (6,9 - 18,8 с; журналы `results/srv-ftprepeat/run-N/`). Закономерность одна: тест сам выбирает обычный FTP или FTPS по зерну: 7 прогонов шли через FTPS (в `ftps.log` 6 - 15 тысяч строк DEBUG на записи TLS, 7,1 - 18,8 с), 3 через обычный FTP (`ftp.log` 75 строк, 6,9 / 10,1 / 13,9 с); времени и размеру журнала сбой не соответствует, обрывов в журналах нет, в двух обычных прогонах `net` тест тоже прошёл. Редкий сбой не воспроизвёлся.
+
+### Итог перепроверки после правок (та же ВМ, seed 872173946)
+
+| Что | Результат |
+|---|---|
+| `winreal` (с двумя тестами расписания и тестом смены пояса) | 12 из 12 |
+| `tz`, родные тесты в поясах W. Europe / Pacific / Lord Howe | 2 из 2 в каждом |
+| `tz`, настоящая служба и часы | весна W. Europe 8 из 8; весна Pacific: оба запуска ровно по разу в 03:00:01 (одна проверка упала на записях истории прошлого сценария: ошибка обвязки, исправлена); осень Lord Howe 8 из 8 |
+| `signinst` | 30 из 30 |
+| `ntfsav` / `eicar` | 20 из 20 / 8 из 8 |
+| `net` ftp / ssh (второй прогон) | 31 из 33 (активный FTP; `ftp_fault_injection_upload` один раз по времени) / 59 из 63 (границы обвязки, см. выше) |
+| Wine, полный `tools/run-tests.sh --seed 7773` (логи в `wine/`) | все 10 наборов ok: native, core 150 / 0 (197 пропусков: тесты только для настоящей Windows), core32 65 / 0, ftp 33 / 0, ssh 64 / 0, esxi 67 / 0, web, gui 4 / 0, package (37 проверок, в том числе «damaged cabinet»), package2 |
+
+### Найдено и исправлено в продукте (регрессии - в тестах)
+
+1. **Несуществующая локальная минута (весенний переход) превращалась в момент на час РАНЬШЕ** (Windows CRT `_mktime64`, изоляция проверена на W. Europe и Pacific; glibc ставит такую минуту на час ПОЗЖЕ): «ежедневно в 02:30» запускалось в 01:30 дня перехода, «один раз в 02:30» - на час раньше срока, а «ежедневно в 02:05» на настоящей службе в Pacific не запускалось в этот день вовсе (расписание получало момент из прошлого и уходило на следующие сутки). **Исправление (`src/schedule.cpp`, `LocalMinToUnix`)**: несуществующая минута -> первый момент после «дыры» (03:00), одинаково на всех CRT. Регрессии: `tests/native/t_schedule.cpp` (`NonexistentMinute`: Berlin, New York, Lord Howe), `winreal/schedule_across_dst_transitions...` (запуск не раньше 02:30), настоящие часы `tz/spring-*` (запуск в 03:00 ровно один раз).
+2. **Минута, которая бывает дважды (осенний переход), превращалась во ВТОРОЕ вхождение**: планировщик идёт по первому проходу в реальном времени и никогда не встречал слот; «каждые 30 минут» терял 1 - 2 часа, «ежедневно в 01:30» в день перехода не запускалось вовсе. **Исправление:** первое вхождение (второй проход повторяющегося часа слот не повторяет: запуск ровно один раз). Регрессии: `t_schedule.cpp` (`AmbiguousMinute`: Berlin, New York, Lord Howe, London), `winreal/scheduler_runs_each_slot_once_across_dst_transitions` на настоящей Windows (до правки тест ждал недостающий запуск часами).
+3. **Служба не замечала смену часового пояса** (msvcrt читает пояс один раз при первом вызове): после `tzutil /s` службе нужен был перезапуск, до него «следующий запуск» и планировщик шли по старому поясу. **Исправление:** `_tzset()` не реже раза в 2 секунды в `UnixToLocalMin` / `LocalMinToUnix`. Регрессия: `winreal/schedule_follows_a_time_zone_change_without_a_restart`.
+4. **Тихая установка с повреждённым пакетом давала только rc 1 без объяснения.** **Исправление (`src/vm2blauncher.cpp`)**: причина записывается в `%TEMP%\VM2Backup-Setup.log`, окно (без `/silent`) называет повреждённый пакет вместо «не удалось распаковать»; регрессия `tools/test-package-wine.sh` («damaged cabinet»).
+
+Из логики настоящего времени: отсутствие повтора в повторяющийся час **задумано** (слоты расписания - минуты настенных часов): «каждые 30 минут» осенью занимает паузу до 90 реальных минут (`gaps 30..90 min` в тесте), «ежедневно в 01:30» в день перехода запускается ровно один раз.
+
+### Изменения обвязки и тестов раунда
+
+* Фазы `signinst`, `leaks`, `ntfsav`, `eicar`, `ftprepeat`, `tz` и расширенная `signing` (для Windows 10 включает SmartScreen на время фазы); по умолчанию входят в списки `x86`, `w10`, `w11`.
+* Скрипты `guest/signinst.ps1`, `leaks.ps1`, `ntfsav.ps1`, `defender-toggle.ps1`, `tzreal.ps1` (UTF-8 с BOM: иначе PowerShell 5 ломает строки с кириллицей); `tools/winvm-variants.sh`.
+* `tzreal.ps1`: часы ставятся `SetSystemTime` (не `Set-Date`: .NET держит пояс, прочитанный при запуске процесса); перед сценарием служба и задачи синхронизации времени выключаются (иначе `svchost` возвращал время «с узла» через 1 - 3 минуты: в журнале `Kernel-General` событие 1, процесс `svchost.exe`).
+* Знание про обвязку: **Defender на тестовых ВМ выключен политикой `DisableAntiSpyware=1` из `bootstrap.cmd`** (служба не запущена, `Get-MpComputerStatus` даёт `0x800106BA`); фаза `eicar` снимает политику на время проверки (перезапуск) и возвращает её (перезапуск); ничего в самом Defender не меняется.
+* Если тест (или человек) оставил на гостевом экране окно, исполнитель после жёсткого `system_reset` ждёт: после сброса остаются сеансы SMB прежнего гостя, и qemu-smbd отвечает «NT_STATUS_IO_TIMEOUT» на открытие файлов `current.txt` / `*.out`; надёжный выход - корректный перезапуск гостя (`shutdown /r`) или `system_powerdown` + `docker start`.
+
+### Не проверено
+
+* SmartScreen и «Open File - Security Warning» на русской Windows 10 (будет в x64 ru-прогоне цикла); репутация и допуск для настоящего сертификата (OV / EV); метка времени подписи (RFC 3161).
+* Несуществующее / повторяющееся время для поясов без перехода в 2027 году и для зон с годовыми правилами, отличающимися от правил текущего года (UCRT / msvcrt читают правила один раз).
 
 ## Results
 

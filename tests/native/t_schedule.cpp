@@ -42,6 +42,54 @@ static void DstProperty(const char* zone)
     }
     CHECK(bad == 0);
 }
+// Round 8 (a real Windows 10, W. Europe): a local minute that does not exist (spring forward) must convert to the FIRST instant at or after the gap on every
+// C library (the Windows CRT used to put it an hour before the gap: "daily 02:30" ran at 01:30). Every minute of the day of the change, three zones.
+static void NonexistentMinute(const char* zone, const char* date)
+{
+    setenv("TZ", zone, 1); tzset();
+    i64 day; ParseLocalTime(date, day);
+    i64 prev = -1; int gapMinutes = 0, bad = 0;
+    for (i64 lm = day; lm < day + 1440; ++lm) {
+        i64 u = LocalMinToUnix(lm), back = UnixToLocalMin(u);
+        if (back < lm) { if (bad++ < 5) printf("%s %s: local minute %s converts to an instant that is %lld min BEFORE it\n", zone, date, FormatLocalMin(lm).c_str(), (long long)(lm - back)); }
+        if (back > lm) { ++gapMinutes; if (UnixToLocalMin(u - 60) >= lm && bad++ < 5) printf("%s %s: nonexistent %s is not the first instant after the gap\n", zone, date, FormatLocalMin(lm).c_str()); }
+        if (prev >= 0 && u < prev) { if (bad++ < 5) printf("%s %s: conversion goes backwards at %s\n", zone, date, FormatLocalMin(lm).c_str()); }
+        prev = u;
+    }
+    CHECK(bad == 0); CHECK(gapMinutes > 0);
+    // "once at 02:30" / "daily 02:30" on that day: never earlier than 02:30 local time
+    for (int w = 0; w < 2; ++w) {
+        Json sp = Json::object(); sp["enabled"] = true;
+        if (w == 0) { sp["mode"] = "once"; sp["at"] = Str(date) + "T02:30"; }
+        else { sp["mode"] = "weekly"; sp["start_time"] = "02:30"; Json d = Json::array(); for (int k = 0; k < 7; ++k) d.push(k); sp["weekdays"] = d; sp["week_interval"] = 1; }
+        i64 n = 0; CHECK(ScheduleNext(sp, LocalMinToUnix(day) - 1, n));
+        CHECK(UnixToLocalMin(n) >= day + 150 && UnixToLocalMin(n) < day + 1440);
+    }
+}
+
+// Round 8: a local minute that happens twice (clock set back) converts to its FIRST occurrence on every C library (the Windows CRT returned the second one:
+// the scheduler never met such a slot and lost an hour of "every 30 minutes"; a daily slot of that hour did not run on that day at all).
+static void AmbiguousMinute(const char* zone, const char* date)
+{
+    setenv("TZ", zone, 1); tzset();
+    i64 day; ParseLocalTime(date, day);
+    int twice = 0, bad = 0;
+    for (i64 lm = day; lm < day + 1440; ++lm) {
+        i64 u = LocalMinToUnix(lm);
+        if (UnixToLocalMin(u) != lm) continue;
+        bool earlier = false; for (int sh : { 7200, 3600, 1800 }) if (UnixToLocalMin(u - sh) == lm) earlier = true;
+        if (earlier && bad++ < 5) printf("%s %s: %s is converted to its SECOND occurrence\n", zone, date, FormatLocalMin(lm).c_str());
+        // is the minute ambiguous at all? then the instant one shift later must show the same local minute
+        for (int sh : { 7200, 3600, 1800 }) if (UnixToLocalMin(u + sh) == lm) { ++twice; break; }
+    }
+    CHECK(bad == 0); CHECK(twice > 0);
+    // the chain "every 30 minutes" through the repeated hour never goes back and every slot of the first pass is met in real time
+    Json sp = Json::object(); sp["enabled"] = true; sp["mode"] = "every"; Json ev = Json::object(); ev["value"] = 30; ev["unit"] = "minutes"; sp["every"] = ev; sp["first_time"] = Str(date) + "T00:00";
+    i64 u = LocalMinToUnix(day) - 1, last = 0; int runs = 0;
+    for (int k = 0; k < 60; ++k) { i64 n; CHECK(ScheduleNext(sp, u, n) && n > u); if (last) CHECK(n - last <= 100 * 60); last = n; u = n; if (UnixToLocalMin(n) >= day + 1440) break; ++runs; }
+    CHECK(runs >= 40);
+}
+
 int main() {
     Json cases; Str e; CHECK(Json::parse(kScheduleVectors, strlen(kScheduleVectors), cases, e));
     int bad = 0;
@@ -77,5 +125,7 @@ int main() {
     CHECK(mism == 0);
     Str err; Json bad1 = Json::object(); bad1["enabled"] = true; bad1["mode"] = "weekly"; bad1["start_time"] = "25:00"; CHECK(!ScheduleValidate(bad1, err));
     for (const char* z : { "Europe/Berlin", "America/New_York", "Australia/Lord_Howe", "UTC", "Asia/Kolkata" }) DstProperty(z);
+    NonexistentMinute("Europe/Berlin", "2027-03-28"); NonexistentMinute("America/New_York", "2027-03-14"); NonexistentMinute("Australia/Lord_Howe", "2026-10-04"); NonexistentMinute("Europe/Berlin", "2026-03-29");
+    AmbiguousMinute("Europe/Berlin", "2026-10-25"); AmbiguousMinute("America/New_York", "2026-11-01"); AmbiguousMinute("Australia/Lord_Howe", "2027-04-04"); AmbiguousMinute("Europe/London", "2027-10-31");
     printf(fails ? "schedule FAILED %d\n" : "schedule ok\n", fails); return fails != 0;
 }
