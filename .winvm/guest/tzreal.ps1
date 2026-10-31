@@ -22,6 +22,11 @@ if ($Mode -eq 'prep') {
     & sc.exe config w32time start= disabled | Out-Null; & sc.exe stop w32time | Out-Null
     & reg.exe add 'HKLM\SYSTEM\CurrentControlSet\Services\W32Time\Parameters' /v Type /t REG_SZ /d NoSync /f | Out-Null
     foreach ($t in 'SynchronizeTime', 'ForceSynchronizeTime', 'SynchronizeTimeZone') { & schtasks.exe /change /tn "\Microsoft\Windows\Time Synchronization\$t" /disable 2>&1 | Out-Null }
+    # Раунд 9 (Windows 10 x64 ru на dockur, у ВМ есть интернет): через ~45 с после смены часов Windows САМА возвращала w32time «отключена -> Автоматически» (Service Control
+    # Manager 7040), служба тут же брала время с time.windows.com, и сценарий видел «часы тронул кто-то другой». Поэтому дополнительно закрыт исходящий UDP 123 (правило
+    # брандмауэра vm2b-block-ntp; снимается в restore): даже запущенная служба времени не получает источник.
+    & netsh.exe advfirewall firewall delete rule name=vm2b-block-ntp 2>&1 | Out-Null
+    & netsh.exe advfirewall firewall add rule name=vm2b-block-ntp dir=out action=block protocol=UDP remoteport=123 2>&1 | Out-Null
     Start-Sleep -Seconds 3; & taskkill.exe /f /fi "SERVICES eq w32time" 2>&1 | Out-Null
     $ws = Get-CimInstance Win32_Service -Filter "Name='w32time'"; Write-Output ("INFO w32time: " + $ws.State + " / " + $ws.StartMode)
     Check 'w32time stopped and disabled' ($ws.State -eq 'Stopped' -and $ws.StartMode -eq 'Disabled') "$($ws.State) / $($ws.StartMode)"
@@ -30,6 +35,7 @@ if ($Mode -eq 'prep') {
 elseif ($Mode -eq 'restore') {
     $a = (Get-Content $anchorFile).Split('|'); $elapsed = ([Diagnostics.Stopwatch]::GetTimestamp() - [int64]$a[2]) / [double]$a[3]
     & tzutil.exe /s $a[0] | Out-Null
+    & netsh.exe advfirewall firewall delete rule name=vm2b-block-ntp 2>&1 | Out-Null
     $target = ([DateTime]::new([int64]$a[1], 'Utc')).AddSeconds($elapsed)
     $okc = Set-UtcClock $target
     & sc.exe config w32time start= delayed-auto | Out-Null; & reg.exe add 'HKLM\SYSTEM\CurrentControlSet\Services\W32Time\Parameters' /v Type /t REG_SZ /d NTP /f | Out-Null
@@ -41,6 +47,7 @@ elseif ($Mode -eq 'restore') {
     Check 'clock within 2 minutes of the planned value' ([math]::Abs(([DateTime]::UtcNow - $target).TotalSeconds) -lt 120) ''
 }
 else {
+    & sc.exe config w32time start= disabled | Out-Null; & sc.exe stop w32time 2>&1 | Out-Null
     $w = Web-Ready; Check 'web site up' ($null -ne $w) ''; if (-not $w) { exit 1 }
     Api $w 'scheduler.set' @{ enabled = $false } | Out-Null; Clear-TzTasks $w; Api $w 'history.clear' @{} | Out-Null
     & tzutil.exe /s $Zone | Out-Null; Check "zone set: $Zone" ((& tzutil.exe /g).Trim() -eq $Zone) (& tzutil.exe /g)

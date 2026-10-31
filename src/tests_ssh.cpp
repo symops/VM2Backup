@@ -647,12 +647,17 @@ bool FaultList(Ctx& c_, const char* key)
 {
     FaultEnv f(c_, key); if (!f.ok) return true;
     Target* t = f.t; T_CHECK(ConnectNote(c_, t));
-    int n = ServerJson(c_, key).get("type").str() == "scp" ? 40 : 300;
+    // The cut must ALWAYS fall inside the exchange: the server has sent about 2 KB by the end of the key exchange + login, and the listing of 120 names of ~70
+    // characters is another ~8 KB, so a cut at 2500..5499 bytes is inside it on any host (with 40 names and 2500..11499 a round survived whenever the number
+    // was above the total, and 0 of 6 listings were cut about once in 30 runs, more often on the Windows VM).
+    int n = ServerJson(c_, key).get("type").str() == "scp" ? 120 : 300;
     for (int i = 0; i < n; ++i) { Str nm = Str::fmt("a-rather-long-volume-name-to-fill-the-listing-%05d.tar.part%05d", i, i); T_CHECK(t->put_bytes(nm, "x", 1)); }
     int cuts = 0;
     for (int round = 0; round < 6; ++round) {
-        f.ctl(Str::fmt("drop_s2c=%u%s", 2500 + c_.rnd(9000), c_.coin() ? " rst=1" : ""));
+        unsigned at = 2500 + c_.rnd(3000); bool rst = c_.coin();
+        f.ctl(Str::fmt("drop_s2c=%u%s", at, rst ? " rst=1" : ""));
         bool conn = t->reconnect(); Vec<Str> names; bool ok = conn && t->list(names);
+        c_.note("round %d: cut after %u server bytes%s -> connect %s, listing %s (%d names)", round, at, rst ? " (RST)" : "", conn ? "ok" : "failed", ok ? "complete" : "cut", (int)names.size());
         if (!ok) { ++cuts; T_CHECK(t->transient); T_CHECK(!t->err.empty()); }
         else T_CHECK((int)names.size() == n);
         f.ctl("clear=1"); T_CHECK(t->reconnect()); T_CHECK(t->list(names)); T_CHECK((int)names.size() == n);

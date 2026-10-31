@@ -6,6 +6,9 @@
 #include "config.h"
 #include "tests_svc.h"
 #include "schedule.h"
+#include "ssh.h"
+#include <winsock2.h>
+#include <ws2tcpip.h>
 
 namespace vm2b {
 namespace {
@@ -16,7 +19,34 @@ bool HaveAuthLog(Ctx& c)
     return true;
 }
 
-Str ReadLog(Ctx& c) { Bytes b; Str e; if (!ReadWholeFile(c.servers.get("x").get("authlog").str().c_str(), b, e)) return Str(); return Str((const char*)b.data(), b.size()); }
+// The log is read in one of two ways.  "x.authlog_tcp" (host:port, tools/testservers/logread.py) is a direct TCP read of the file as the host has it
+// RIGHT NOW: on the Windows VM the log lies on a shared folder of the host, and the SMB client of the guest answered from its cache (the counters
+// stayed 0 with real attempts in the log), so the VM harness always gives the TCP address.  Without it the file is read by its path (Wine, a local run).
+bool ReadLogTcp(const Str& addr, Str& out)
+{
+    int colon = addr.rfind(':'); if (colon <= 0) return false;
+    Str host = addr.substr(0, (size_t)colon), port = addr.substr((size_t)colon + 1);
+    WSADATA wd; WSAStartup(MAKEWORD(2, 2), &wd);
+    addrinfo hints = {}; hints.ai_family = AF_UNSPEC; hints.ai_socktype = SOCK_STREAM; addrinfo* res = nullptr;
+    if (getaddrinfo(host.c_str(), port.c_str(), &hints, &res) != 0 || !res) return false;
+    SOCKET s = socket(res->ai_family, res->ai_socktype, res->ai_protocol); bool ok = false;
+    if (s != INVALID_SOCKET) {
+        DWORD to = 10000; setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (const char*)&to, sizeof to);
+        if (connect(s, res->ai_addr, (int)res->ai_addrlen) == 0) {
+            char buf[16384]; out.clear(); ok = true;
+            for (;;) { int n = recv(s, buf, sizeof buf, 0); if (n < 0) { ok = false; break; } if (n == 0) break; out.append(buf, (size_t)n); }
+        }
+        closesocket(s);
+    }
+    freeaddrinfo(res); return ok;
+}
+
+Str ReadLog(Ctx& c)
+{
+    Str tcp = c.servers.get("x").get("authlog_tcp").str();
+    if (!tcp.empty()) { Str t; for (int i = 0; i < 3; ++i) { if (ReadLogTcp(tcp, t)) return t; Sleep(500); } c.note("the log could not be read from %s", tcp.c_str()); return Str(); }
+    Bytes b; Str e; if (!ReadWholeFile(c.servers.get("x").get("authlog").str().c_str(), b, e)) return Str(); return Str((const char*)b.data(), b.size());
+}
 
 int CountOf(const Str& text, const char* needle)
 {
@@ -134,6 +164,25 @@ VM2B_TEST("ssh", auth_guard_scp_key_wrong_passphrase_one_attempt)
     Json bad = ScpServerJson(c_, "Guard SCP pass"); bad["key_file"] = keys + "/u_ed25519_pw"; bad["key_passphrase"] = "wrong passphrase 999";
     Json good = ScpServerJson(c_, "Guard SCP pass"); good["key_file"] = keys + "/u_ed25519_pw"; good["key_passphrase"] = sv.get("passphrase").str();
     return Scenario(c_, "scpag3", bad, good, true);
+}
+
+// The log must show what sshd has just done, with no client-side cache in between (the SMB client of a Windows guest used to answer from its cache:
+// the guard tests counted 0 attempts with real ones in the log).  A refused login is made here and the counter has to grow within a few seconds.
+VM2B_TEST("ssh", authlog_shows_a_fresh_refused_login_at_once)
+{
+    if (!HaveAuthLog(c_)) return true;
+    const Json& s0 = c_.servers.get("scp_authlog");
+    for (int round = 0; round < 3; ++round) {
+        size_t off = ReadLog(c_).size();
+        SshConfig cfg; cfg.host = s0.get("host").str("127.0.0.1"); cfg.port = (int)s0.get("port").integer(); cfg.user = s0.get("user").str(); cfg.password = "Wr0ng-Authlog-Pw";
+        cfg.hostKey = s0.get("host_key").str(); cfg.ioTimeoutMs = 20000;
+        { SshSession s; T_CHECK(!s.connect(cfg)); T_CHECK(!s.transient); }
+        AuthCounts n = {0, 0, 0, 0}; double t0 = UnixNow();
+        while (UnixNow() - t0 < 6) { n = Counts(c_, off); if (n.failedPw >= 1) break; }
+        c_.note("round %d: the log grew by %d failed password(s) within %.1f s%s", round, n.failedPw, UnixNow() - t0, c_.servers.get("x").get("authlog_tcp").str().empty() ? " (read by path)" : " (read over TCP)");
+        T_CHECK(n.failedPw == 1);
+    }
+    return true;
 }
 
 } // namespace vm2b

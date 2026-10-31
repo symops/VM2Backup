@@ -18,9 +18,11 @@ from pyftpdlib.authorizers import DummyAuthorizer
 from pyftpdlib.handlers import FTPHandler, TLS_FTPHandler, DTPHandler, TLS_DTPHandler
 from pyftpdlib.servers import FTPServer
 from OpenSSL import SSL
+from pyftpdlib.log import logger as _plog
 
 FAULT = {'kind': None, 'n': 0}
 LAST_REUSE = {'v': None}
+STRICT = {'on': os.environ.get('VM2B_FTP_STRICT') == '1', 'slow_ms': 0}      # SITE FAULT strict: a TLS upload that ends without the client's close_notify is answered 451 (no rename); SITE FAULT clear switches it off
 OPTS = {}
 
 
@@ -69,6 +71,8 @@ class FaultMixin:
     def recv(self, n):
         d = super().recv(n)
         k = getattr(self, 'cmd', None)
+        if d and STRICT['slow_ms'] and k == 'STOR':
+            time.sleep(STRICT['slow_ms'] / 1000.0)      # SITE FAULT slowread N: a slow reader (the client's send buffer stays full until its last byte, so its close_notify cannot be written at once)
         if d and FAULT['kind'] in ('up', 'stall') and k == 'STOR':
             self._fc += len(d)
             if FAULT['kind'] == 'up' and self._fc >= FAULT['n']:
@@ -101,6 +105,29 @@ class PlainDTP(FaultMixin, DTPHandler):
 
 
 class TlsDTP(FaultMixin, TLS_DTPHandler):
+    _shut_n = 0
+
+    def _do_ssl_shutdown(self):
+        # pyftpdlib spins forever here after an unexpected EOF ('shutdown while in init' is swallowed and the channel is never closed), the single-threaded server then
+        # answers nobody and the client waits out its 60 s for the 226 (round 9).  After a few fruitless rounds the channel is simply closed.
+        self._shut_n += 1
+        if self._shut_n > 8:
+            self._ssl_established = False; self._ssl_closing = False
+            return self.close()
+        return super()._do_ssl_shutdown()
+
+    def handle_close(self):
+        if STRICT['on'] and getattr(self, 'receive', False) and not self._closed:
+            try:
+                clean = bool(self.socket.get_shutdown() & SSL.RECEIVED_SHUTDOWN)
+            except Exception:
+                clean = True
+            if not clean:
+                self._resp = ('451 TLS data connection closed without close_notify.', _plog.info)
+                self.close()
+                return
+        super().handle_close()
+
     def handle_ssl_established(self):
         try:
             LAST_REUSE['v'] = bool(self.socket.session_reused())
@@ -118,7 +145,11 @@ def faults(cls):
     def ftp_SITE_FAULT(self, line):
         p = line.split()
         if p[0] == 'clear':
-            FAULT['kind'] = None
+            FAULT['kind'] = None; STRICT['on'] = os.environ.get('VM2B_FTP_STRICT') == '1'; STRICT['slow_ms'] = 0
+        elif p[0] == 'strict':
+            STRICT['on'] = True
+        elif p[0] == 'slowread':
+            STRICT['slow_ms'] = int(p[1]) if len(p) > 1 else 15
         else:
             FAULT['kind'] = p[0]; FAULT['n'] = int(p[1]) if len(p) > 1 else 0
         self.respond('200 fault armed: %s' % line)

@@ -375,7 +375,21 @@ void NetConn::shutdown()
     if (!isOpen()) return;
     if (m_tls && m_ssl && !m_broken) {
         if (m_ver == "TLS 1.3") { u8 junk[512]; size_t got = 0; SSL_read_ex((SSL*)m_ssl, junk, sizeof(junk), &got); }   // takes in session tickets that came after the handshake (an upload never reads)
-        SSL_shutdown((SSL*)m_ssl); ERR_clear_error();                                      // sends close_notify; the peer's is not awaited
+        // Sends close_notify; the peer's is not awaited.  The socket is non-blocking: when the peer reads slowly and the kernel send buffer is full, SSL_shutdown
+        // answers WANT_WRITE and the alert stays inside OpenSSL, while the ::shutdown(SD_SEND) below puts the FIN after the already queued data - the server then saw
+        // the end of the upload without a close_notify ("Unexpected EOF"; pyftpdlib spun forever on it and never answered 226, so the client waited out 60 s: round 9,
+        // ftp_fault_injection_upload on a Windows VM, about 1 run in 20).  So the alert is pushed out for real: wait for writability and call again.
+        DWORD tshut = GetTickCount(); int sbudget = timeoutMs > 0 && timeoutMs < 10000 ? timeoutMs : 10000;
+        for (;;) {
+            ERR_clear_error(); int r = SSL_shutdown((SSL*)m_ssl); if (r >= 0) break;
+            int e = SSL_get_error((SSL*)m_ssl, r);
+            if (e != SSL_ERROR_WANT_WRITE) break;                                          // WANT_READ: our close_notify is out, the peer's is not awaited
+            if (abortFlag && *abortFlag) break;
+            int left = sbudget - (int)(GetTickCount() - tshut); if (left <= 0) break;
+            fd_set ws; FD_ZERO(&ws); FD_SET((SOCKET)m_sock, &ws); timeval tv; tv.tv_sec = left / 1000; tv.tv_usec = (left % 1000) * 1000;
+            if (select(0, nullptr, &ws, nullptr, &tv) <= 0) break;
+        }
+        ERR_clear_error();
     }
     if (m_sock != (size_t)INVALID_SOCKET) {
         ::shutdown((SOCKET)m_sock, SD_SEND);

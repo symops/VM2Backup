@@ -646,7 +646,10 @@ static Json FtpCfg(const Json& s, const char* type, const Str& sub, bool pin = t
     return j;
 }
 
-static Str Uniq(Ctx& c, const char* tag) { return Str::fmt("%s%llu", tag, (unsigned long long)(c.next() % 1000000)); }
+// A name unique within the server's lifetime.  Under `--minutes` the same test runs again with the SAME random sequence (the generator is re-seeded by test name),
+// so a name made from the generator alone repeated, found the finished files of the previous round on the server and failed the "never under the final name"
+// checks (round 9: soak of ftp_fault_injection_upload).  The tick count keeps rounds apart.
+static Str Uniq(Ctx& c, const char* tag) { return Str::fmt("%s%llu", tag, (unsigned long long)((c.next() + GetTickCount64() * 7919ull) % 1000000)); }
 
 static Target* MakeFtp(Ctx& c_, const Json& cfg)
 {
@@ -953,6 +956,32 @@ VM2B_TEST("ftp", ftp_fault_injection_upload)
             T_CHECK(!FileExists(ServerPath(*s, sub, name + ".part")));
             delete t;
         }
+    }
+    return true;
+}
+
+// Round 9: the client must end a TLS data connection with a close_notify even when the server reads slowly.  The socket is non-blocking: with a full kernel send
+// buffer SSL_shutdown answered WANT_WRITE, the alert stayed inside OpenSSL and the FIN overtook it; pyftpdlib took that for a broken upload and never
+// answered (60 s of "control connection: receive timed out").  The test server is put into "strict" mode (SITE FAULT strict): an upload that ends without
+// close_notify is answered 451 and not renamed, so the missing alert fails the test at once.  The server also reads slowly (SITE FAULT slowread 15: 15 ms per 32 KiB), so the client's send buffer is still full when it closes.
+VM2B_TEST("ftp", ftp_tls_upload_ends_with_close_notify_to_a_slow_reader)
+{
+    if (!AnyFtp(c_)) return true;
+    for (const char* key : kFtpKeys) {
+        if (!strcmp(key, "ftp")) continue;                                                       // plain FTP has no TLS to close
+        const Json* s = FtpSrv(c_, key); if (!s) continue;
+        T_CHECK(ArmFault(c_, *s, key, "strict")); T_CHECK(ArmFault(c_, *s, key, "slowread 15"));
+        Target* t = MakeFtp(c_, FtpCfg(*s, key, Uniq(c_, "cn"))); T_CHECK(t->connect());
+        for (int rep = 0; rep < 4; ++rep) {
+            Bytes data = RandomData(c_, (size_t)c_.range(6000000, 10000000));
+            Str name = Str::fmt("slow %d.tar", rep);
+            double t0 = UnixNow(); bool up = Upload(c_, t, name, data); double dt = UnixNow() - t0;
+            c_.note("%s: %zu bytes to a slow-reading server: %s in %.1f s", key, data.size(), up ? "accepted" : "REFUSED", dt);
+            T_CHECK(up); T_CHECK(dt < 40);
+            Bytes g; T_CHECK(Download(c_, t, name, g)); T_CHECK(SameBytes(g, data));
+        }
+        delete t;
+        T_CHECK(ArmFault(c_, *s, key, "clear"));
     }
     return true;
 }

@@ -20,6 +20,9 @@
 #   ntfsav    (раунд 8) EFS, сжатые и разреженные файлы NTFS, имя 255 символов, 5000 файлов, EICAR и Defender, файл исчез посреди копии (guest/ntfsav.ps1)
 #   eicar     (раунд 8) EICAR и «файл исчез по ходу» при ВКЛЮЧЁННОМ Defender (политика bootstrap.cmd на время снимается, потом возвращается; два перезапуска)
 #   ftprepeat (раунд 8) ftp_large_streamed 10 раз подряд на госте с DEBUG-журналом FTP-сервера (журналы по прогонам: results/srv-ftprepeat/run-N)
+#   faultrepeat (раунд 9) прежде нестабильные тесты по 10 раз на госте: ftp_fault_injection_upload (FTP-серверы с DEBUG-журналом) и scp_fault_drop_listing + auth_guard_scp_* (серверы ssh; журнал sshd гость читает по TCP, logread.py)
+#   ftpsoak   (раунд 9) один набор FTP-серверов, один тест крутится по кругу FTPSOAK минут (по умолчанию 10; FTPSOAK_TEST - какой тест, FTPSOAK_LOG, FTPSOAK_STRICT=1 - строгий сервер, FTPSOAK_TAG)
+#   tzru      (раунд 9) русские пояса (Russian / Kaliningrad / Ekaterinburg / Russia Time Zone 11 = Камчатка; без летнего времени): группа winreal целиком в каждом поясе (в т.ч. смена пояса без перезапуска службы), затем возврат пояса
 #   tz        (раунд 8, ПОСЛЕДНЯЯ перед sac) пояса с переходом на летнее время (tzutil), часы гостя Set-Date при отключённом w32time: родные тесты расписания + настоящая служба (guest/tzreal.ps1)
 #   sac       (w11, ALWAYS LAST: cannot be undone) Smart App Control: try to switch it to On, restart, record what happens to the unsigned Setup and the service
 #   smartscreen  the Setup with Mark of the Web started like a double click, screenshots of what the user sees
@@ -45,7 +48,7 @@ R=$(cd "$VM2B_RUNWINVM_DIR/.." && pwd); W=$R/.winvm; RES=$W/shared/results
 OS=${1:-}; shift || true
 [ "$OS" = domain ] && exec bash "$R/tools/run-domain.sh" "$@"      # настоящий домен AD: две ВМ Server 2022 (tools/run-domain.sh)
 case "$OS" in x86|w10|w11) ;; *) sed -n 2,30p "$0"; exit 2;; esac
-KEEP=0; CREATE=1; BUILD=1; PHASES=sysinfo,autotest,winreal,install,installer,panel,web,net,smb,smbsign,svcacct,aclreal,speedlimit,restartjob,unicode,verify,big,winbig,signing,signinst,leaks,ntfsav,eicar,ftprepeat,tz; [ "$OS" = w11 ] && PHASES=sysinfo,win11,autotest,winreal,install,installer,panel,web,net,smb,smbsign,svcacct,aclreal,speedlimit,restartjob,unicode,verify,big,winbig,defender,smartscreen,signinst,leaks,ntfsav,eicar,ftprepeat,tz,sac; SEED=$(( (RANDOM << 15 | RANDOM) % 1000000000 ))
+KEEP=0; CREATE=1; BUILD=1; PHASES=sysinfo,autotest,winreal,install,installer,panel,web,net,smb,smbsign,svcacct,aclreal,speedlimit,restartjob,unicode,verify,big,winbig,signing,signinst,leaks,ntfsav,eicar,ftprepeat,faultrepeat,ftpsoak,tzru,tz; [ "$OS" = w11 ] && PHASES=sysinfo,win11,autotest,winreal,install,installer,panel,web,net,smb,smbsign,svcacct,aclreal,speedlimit,restartjob,unicode,verify,big,winbig,defender,smartscreen,signinst,leaks,ntfsav,eicar,ftprepeat,faultrepeat,ftpsoak,tzru,tz,sac; SEED=$(( (RANDOM << 15 | RANDOM) % 1000000000 ))
 while [ $# -gt 0 ]; do case "$1" in
   --keep) KEEP=1; shift;; --no-create) CREATE=0; shift;; --no-build) BUILD=0; shift;; --phases) PHASES=$2; shift 2;; --seed) SEED=$2; shift 2;;
   *) echo "unknown argument $1"; exit 2;; esac; done
@@ -389,6 +392,55 @@ if want ftprepeat; then
     "$R/tools/winvm-servers.sh" stop-all > /dev/null
   done
   RESULT[ftprepeat]="$(( 10 - FAILN )) of 10 passed, $FAILN failed (logs: results/srv-ftprepeat/run-N)"; say "PHASE ftprepeat: ${RESULT[ftprepeat]}"
+fi
+
+if want faultrepeat; then
+  # раунд 9: «объявленные границы обвязки» проверяются повторами. FTP: ftp_fault_injection_upload 10 раз (на каждый прогон свои серверы с DEBUG-журналом).
+  # SSH: scp_fault_drop_listing и три auth_guard_scp_* по 5 раз на одном наборе серверов (журнал sshd читается по TCP, а не через SMB).
+  mkdir -p "$RES/srv-faultrepeat"; JS=$W/shared/srv; FAILF=0; FAILS=0
+  for i in $(seq 1 10); do
+    VM2B_FTP_LOGLEVEL=DEBUG VM2B_SEED=$(( SEED + 100 + i )) "$R/tools/winvm-servers.sh" start ftp > /dev/null 2>&1 || { say "faultrepeat ftp $i: servers did not start"; continue; }
+    gj 26-ftpf-$i 1800 "set TAG=ftpf$i" "set ARGS=--seed $(( SEED + 100 + i )) --only ftp_fault_injection_upload --servers $GS\\srv\\ftp\\servers.json" "set VM2B_WEB_DEFAULT=0" 'call C:\vm2b\guest\autotest.cmd' > /dev/null
+    L=$RES/autotest-ftpf$i.txt; mkdir -p "$RES/srv-faultrepeat/ftp-$i"; cp "$JS/ftp"/*.log "$RES/srv-faultrepeat/ftp-$i/" 2>/dev/null
+    if [ -f "$L" ] && tr -d '\r' < "$L" | grep -aq '^PASS'; then say "  faultrepeat ftp_fault_injection_upload $i: PASS $(tr -d '\r' < "$L" | grep -a '^PASS' | awk '{print $NF}' | head -1)"
+    else FAILF=$(( FAILF + 1 )); say "  faultrepeat ftp_fault_injection_upload $i: FAIL"; tr -d '\r' < "$L" 2>/dev/null | grep -aA6 '^FAIL' | sed 's/^/      /' | tee -a "$SUM"; fi
+    "$R/tools/winvm-servers.sh" stop-all > /dev/null
+  done
+  "$R/tools/winvm-servers.sh" start ssh > /dev/null 2>&1 || say "faultrepeat ssh: servers did not start"
+  for i in 1 2 3 4 5; do
+    gj 26-sshf-$i 3600 "set TAG=sshf$i" "set ARGS=--seed $(( SEED + 200 + i )) --only scp_fault_drop_listing,auth_guard_scp_password_one_attempt,auth_guard_scp_key_one_attempt,auth_guard_scp_key_wrong_passphrase_one_attempt --servers $GS\\srv\\ssh\\servers.json" "set VM2B_WEB_DEFAULT=0" 'call C:\vm2b\guest\autotest.cmd' > /dev/null
+    L=$RES/autotest-sshf$i.txt; n=$(tr -d '\r' < "$L" 2>/dev/null | grep -ac '^PASS'); f=$(tr -d '\r' < "$L" 2>/dev/null | grep -ac '^FAIL'); FAILS=$(( FAILS + f ))
+    say "  faultrepeat ssh $i: $n PASS, $f FAIL"; tr -d '\r' < "$L" 2>/dev/null | grep -aE '^FAIL|listings were cut|sshd logged|one pass:|broken again' | cut -c1-260 | sed 's/^/      /' | tee -a "$SUM"
+  done
+  mkdir -p "$RES/srv-faultrepeat/ssh"; cp "$JS/ssh"/log/*.log "$RES/srv-faultrepeat/ssh/" 2>/dev/null
+  "$R/tools/winvm-servers.sh" stop-all > /dev/null
+  RESULT[faultrepeat]="ftp_fault_injection_upload $(( 10 - FAILF )) of 10 passed; ssh (scp_fault_drop_listing + 3 x auth_guard_scp) 5 runs, $FAILS FAIL lines"; say "PHASE faultrepeat: ${RESULT[faultrepeat]}"
+fi
+
+if want ftpsoak; then
+  JS=$W/shared/srv; mkdir -p "$RES/srv-faultrepeat"
+  # длинный прогон: один набор серверов с DEBUG-журналом, тест крутится по кругу 10 минут (--minutes): сбой «control connection: receive timed out» встречается примерно раз на 30 запусков
+  VM2B_FTP_STRICT=${FTPSOAK_STRICT:-0} VM2B_FTP_LOGLEVEL=${FTPSOAK_LOG:-DEBUG} VM2B_SEED=$(( SEED + 150 )) "$R/tools/winvm-servers.sh" start ftp > /dev/null 2>&1 || say "faultrepeat ftp soak: servers did not start"
+  gj 26-ftpf-soak${FTPSOAK_TAG:-} 1800 "set TAG=ftpfsoak${FTPSOAK_TAG:-}" "set ARGS=--seed $(( SEED + 150 )) --only ${FTPSOAK_TEST:-ftp_fault_injection_upload} --minutes ${FTPSOAK:-10} --servers $GS\\srv\\ftp\\servers.json" "set VM2B_WEB_DEFAULT=0" 'call C:\vm2b\guest\autotest.cmd' > /dev/null
+  mkdir -p "$RES/srv-faultrepeat/ftp-soak${FTPSOAK_TAG:-}"; cp "$JS/ftp"/*.log "$RES/srv-faultrepeat/ftp-soak${FTPSOAK_TAG:-}/" 2>/dev/null
+  say "  faultrepeat ftp soak: $(tr -d '\r' < "$RES/autotest-ftpfsoak${FTPSOAK_TAG:-}.txt" 2>/dev/null | grep -aE ' passed, ' | tail -1)"; tr -d '\r' < "$RES/autotest-ftpfsoak${FTPSOAK_TAG:-}.txt" 2>/dev/null | grep -aA6 '^FAIL' | sed 's/^/      /' | head -40 | tee -a "$SUM"
+  "$R/tools/winvm-servers.sh" stop-all > /dev/null
+  RESULT[ftpsoak]="$(tr -d '\r' < "$RES/autotest-ftpfsoak${FTPSOAK_TAG:-}.txt" 2>/dev/null | grep -aE ' passed, ' | tail -1)"
+fi
+
+if want tzru; then
+  # раунд 9: русские пояса. Летнего времени в них нет (тесты переходов честно пропускаются), но расписание, преобразование UTC <-> местное время и смена пояса
+  # на ходу (winreal/schedule_follows_a_time_zone_change_without_a_restart) должны работать при названиях поясов и локали ru.
+  gj 25-tzru-orig 60 'tzutil /g > C:\vm2b\tz-orig.txt' 'type C:\vm2b\tz-orig.txt' > /dev/null
+  TZRU=0
+  for z in "Russian Standard Time" "Kaliningrad Standard Time" "Ekaterinburg Standard Time" "Russia Time Zone 11"; do
+    k=$(echo "$z" | tr -c 'A-Za-z\n' '_' | cut -c1-14)
+    gj "25-tzru-$k" 3600 "tzutil /s \"$z\"" "set TAG=tzru$k" "set ARGS=--seed $SEED --only winreal" "set VM2B_WEB_DEFAULT=0" 'call C:\vm2b\guest\autotest.cmd' > /dev/null
+    L=$RES/autotest-tzru$k.txt
+    [ -f "$L" ] && { tr -d '\r' < "$L" | grep -aE ' passed, ' | tail -1 | sed "s/^/  tzru [$z]: /" | tee -a "$SUM"; tr -d '\r' < "$L" | grep -aE '^FAIL|^SKIP' | cut -c1-300 | sed 's/^/    /' | tee -a "$SUM"; if tr -d '\r' < "$L" | grep -aq '^FAIL'; then TZRU=1; fi; } || { say "  tzru [$z]: NO OUTPUT"; TZRU=1; }
+  done
+  gj 25-tzru-restore 120 'set /p ORIG=<C:\vm2b\tz-orig.txt' 'tzutil /s "%ORIG%"' 'tzutil /g' > /dev/null
+  RESULT[tzru]="4 Russian zones, winreal in each: $( [ $TZRU = 0 ] && echo no failures || echo FAILURES )"; say "PHASE tzru: ${RESULT[tzru]}"
 fi
 
 if want tz; then

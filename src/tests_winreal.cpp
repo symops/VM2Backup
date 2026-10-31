@@ -510,7 +510,7 @@ VM2B_TEST("winreal", schedule_across_dst_transitions_matches_the_windows_clock)
     Vec<DstTransition> tr = FindTransitions(4);
     if (tr.empty()) { c_.skip("the time zone of this machine has no daylight saving transitions in 2027 (set one with tzutil /s)"); return true; }
     TIME_ZONE_INFORMATION tzi; GetTimeZoneInformation(&tzi);
-    c_.note("time zone: %ls; %d transition(s) found", tzi.StandardName, (int)tr.size());
+    c_.note("time zone: %s; %d transition(s) found", FromWide(tzi.StandardName).c_str(), (int)tr.size());      // not %ls: a Cyrillic zone name made the narrow printf drop the whole argument (round 9, ru guest)
     for (size_t k = 0; k < tr.size(); ++k) {
         i64 T = tr[k].unix; int dl = tr[k].deltaMin;
         c_.note("transition %d: %s local (first minute after it), clock %+d min", (int)k, FormatLocalMin(OracleLocalMin(T)).c_str(), dl);

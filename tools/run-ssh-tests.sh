@@ -174,6 +174,9 @@ xentry fewauth 22312 "MaxAuthTries 1"
 xentry maxstart 22313 "MaxStartups 2:100:2"
 xentry authlog 22315 "LogLevel VERBOSE"       # the log of this server is read by the lock-out guard tests (attempts of the client are counted)
 xentry rekey64k 22314 "Ciphers aes128-ctr" "KexAlgorithms diffie-hellman-group14-sha256" "MACs hmac-sha2-256" "RekeyLimit 64K 1"
+# журнал сервера authlog гость читает НЕ через общую папку SMB (кеш клиента SMB отдавал старый файл), а по TCP: logread.py отдаёт файл целиком
+python3 "$HERE/tools/testservers/logread.py" "$BIND" 22399 "$WORK/log/sshd-22315.log" >"$WORK/log/logread.log" 2>&1 &
+PIDS+=($!)
 # ---- paramiko servers (password / keyboard-interactive // fault injection / hostile / corrupting relay) ----
 PM_JSON=""
 if [ -f "$HERE/tools/testservers/pm_server.py" ]; then
@@ -184,7 +187,7 @@ if [ -f "$HERE/tools/testservers/pm_server.py" ]; then
 fi
 
 # wait for the ports
-for p in 22001 $(seq 22100 $((PORT-1))) "${XPORTS[@]}"; do
+for p in 22001 22399 $(seq 22100 $((PORT-1))) "${XPORTS[@]}"; do
     for i in $(seq 1 50); do (exec 3<>/dev/tcp/$BIND/$p) 2>/dev/null && break; sleep 0.1; done
 done
 
@@ -199,7 +202,7 @@ W() {      # a Linux path as the test program sees it (Wine: Z:<path>; the Windo
     echo "\"scp\":{\"type\":\"scp\",\"host\":\"$SH\",\"port\":$MAIN_PORT,\"user\":\"$UNAME\",\"password\":\"$UPASS\",\"host_key\":\"$FP_ED\"},"
     echo "\"scp_rekey\":{\"type\":\"scp\",\"host\":\"$SH\",\"port\":$REKEY_PORT,\"user\":\"$UNAME\",\"password\":\"$UPASS\",\"host_key\":\"$FP_ED\"},"
     for e in "${XENTRIES[@]}"; do echo "$e,"; done
-    echo "\"x\":{\"small_dir\":\"small\",\"authlog\":\"$(W $WORK/log/sshd-22315.log)\"},"
+    echo "\"x\":{\"small_dir\":\"small\",\"authlog\":\"$(W $WORK/log/sshd-22315.log)\",\"authlog_tcp\":\"$SH:22399\"},"
     [ -n "$PM_JSON" ] && echo "\"pm\":$PM_JSON,"
     printf '"ssh_matrix":['; first=1; for e in "${ENTRIES[@]}"; do [ $first = 1 ] || printf ','; first=0; printf '%s' "$e"; done; echo ']'
     echo "}"

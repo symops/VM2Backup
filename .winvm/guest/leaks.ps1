@@ -16,11 +16,16 @@ $w = Web-Ready; Check 'web site up' ($null -ne $w) ''
 if (-not $w) { exit 1 }
 Remove-Item -Recurse -Force $src, $store -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force "$src\vmL" | Out-Null
 $rnd = New-Object Random 7; $buf = New-Object byte[] 200000; $rnd.NextBytes($buf); [IO.File]::WriteAllBytes("$src\vmL\disk-flat.vmdk", $buf); Set-Content "$src\vmL\vm.vmx" 'displayName = "leak"'
+# Раунд 9: сначала задача, потом сервер: сервер, на который ссылается задача прошлого прогона, не удаляется («a server named "leak src" already exists» при сохранении, и tasks.save падал с «choose a server with virtual machines»)
+foreach ($x in @((Api $w 'tasks.list' @{}).Result)) { if ($x.name -eq 'leak-task') { Api $w 'tasks.delete' @{ id = $x.id } | Out-Null } }
 foreach ($x in @((Api $w 'servers.list' @{}).Result)) { if ($x.name -eq 'leak src') { Api $w 'servers.delete' @{ id = $x.id } | Out-Null } }
 $sv = Api $w 'servers.save' @{ server = @{ type = 'directory'; name = 'leak src'; path = $src } }
-foreach ($x in @((Api $w 'tasks.list' @{}).Result)) { if ($x.name -eq 'leak-task') { Api $w 'tasks.delete' @{ id = $x.id } | Out-Null } }
+# Раунд 9: однажды tasks.save ответил «choose a server with virtual machines as the source» (список ВМ источника ещё не видел только что записанный файл), и нагрузка шла вхолостую:
+# ждём, пока источник покажет ВМ, и при отказе сохранения не продолжаем.
+for ($i = 0; $i -lt 60; $i++) { $vl = Api $w 'servers.vms' @{ id = $sv.Result.id }; if ($vl.Status -eq 200 -and @($vl.Result.vms).Count -ge 1) { break }; Start-Sleep -Milliseconds 500 }
 $el = @{ source = @{ server = $sv.Result.id; vms = @('vmL') }; target = @{ server = 'local'; directory = "$store\{VM}" }; compress = @{ codec = 'xz'; level = 1 }; encrypt = @{ enabled = $false }; verify = $true; keep = 2; segment_mib = 16 }
-$tk = Api $w 'tasks.save' @{ task = @{ name = 'leak-task'; enabled = $true; elements = @($el) } }; Check 'tasks.save' ([bool]$tk.Result.id) $tk.Text
+$tk = Api $w 'tasks.save' @{ task = @{ name = 'leak-task'; enabled = $true; elements = @($el) } }; Check 'tasks.save' ([bool]$tk.Result.id) ($tk.Text + ' | servers.save: ' + $sv.Text + ' | source: ' + $sv.Result.id)
+if (-not $tk.Result.id) { Write-Output ("FAILED=" + $global:Failed); exit 1 }
 $taskId = $tk.Result.id
 $t0 = Get-Date
 function Sample($tag) {
@@ -28,7 +33,8 @@ function Sample($tag) {
     foreach ($p in @(Get-Process -Name VM2BackupService -ErrorAction SilentlyContinue) + @(Get-Process -Id $script:panelPid -ErrorAction SilentlyContinue)) {
         if (-not $p) { continue }
         $p.Refresh(); $gdi = 0; $usr = 0; try { $gdi = [Gui]::GetGuiResources($p.Handle, 0); $usr = [Gui]::GetGuiResources($p.Handle, 1) } catch {}
-        $line = '{0},{1},{2},{3},{4},{5:N1},{6:N1},{7},{8}' -f $min, $p.ProcessName, $p.Id, $p.HandleCount, $p.Threads.Count, ($p.PrivateMemorySize64 / 1MB), ($p.WorkingSet64 / 1MB), $gdi, $usr
+        # InvariantCulture: на русской Windows -f и N1 дают десятичную ЗАПЯТУЮ, строки CSV разваливались на лишние столбцы (раунд 9: «VM2BackupService measured :: no rows»)
+        $line = [string]::Format([Globalization.CultureInfo]::InvariantCulture, '{0},{1},{2},{3},{4},{5:F1},{6:F1},{7},{8}', $min, $p.ProcessName, $p.Id, $p.HandleCount, $p.Threads.Count, ($p.PrivateMemorySize64 / 1MB), ($p.WorkingSet64 / 1MB), $gdi, $usr)
         Add-Content $csv $line
     }
 }
@@ -65,6 +71,9 @@ Check 'the service restarted twice' ($restarts -ge 2) "restarts=$restarts"
 # ---- разбор таблицы
 Stop-Process -Id $script:panelPid -Force -ErrorAction SilentlyContinue
 Copy-Item $csv "$Share\results\leaks.csv" -Force -ErrorAction SilentlyContinue
+# защита от локали: каждая строка таблицы - ровно 9 столбцов (десятичная запятая в русской Windows ломала разбор: раунд 9)
+$badRows = @(Get-Content $csv | Select-Object -Skip 1 | Where-Object { ($_ -split ',').Count -ne 9 }).Count
+Check 'every row of the table has 9 columns (no locale decimal comma)' ($badRows -eq 0) "bad rows: $badRows"
 $rows = Import-Csv $csv
 function Seg($name) {    # последний отрезок жизни процесса (после последнего RESTART для службы), только замеры старше 4 минут от начала отрезка
     $all = @($rows); $start = 0; if ($name -eq 'VM2BackupService') { $idx = 0; for ($i = 0; $i -lt $all.Count; $i++) { if ($all[$i].proc -eq 'RESTART') { $idx = $i } }; $start = $idx }
