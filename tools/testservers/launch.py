@@ -86,6 +86,12 @@ for key, mode, extra in variants:
     if mode != 'plain':
         e['fingerprint'] = fp('server')
     servers[key] = e
+# --- (раунд 11) имитация NAT перед ftp / ftpes / ftps: ретранслятор с другим исходящим адресом; клиент ходит через nat_port, сервер видит чужой адрес
+for key in ('ftp', 'ftpes', 'ftps'):
+    nport = take()
+    start([os.path.join(HERE, 'natproxy.py'), '%s:%d' % (common.BIND, nport), '%s:%d' % (common.BIND, servers[key]['port']),
+           '127.0.0.9' if common.BIND.startswith('127.') else '-'], 'nat-%s.log' % key)
+    servers[key]['nat_port'] = nport
 # --- quirk servers (ftp_quirk.py): one process, one listener per profile; "expect" is what connect() must do
 QUIRKS = [   # name, mode, quirks, expect (ok | perm | transient | hostile)
     ('bare', 'plain', 'nofeat,nomlsd,nosize,nomdtm,nonlst,list=unix', 'ok'),
@@ -145,7 +151,7 @@ servers['ftpq'] = dict(host=common.HOST, user=user, password=pw, root=wine(qroot
 servers['closed_port'] = closed
 servers['ca_file'] = wine(os.path.join(certdir, 'ca.pem'))
 # wait until everything accepts connections
-ports = [tp[k] for k in tp] + [hp, hps] + [servers[k]['port'] for k, _, _ in variants] + [e['port'] for e in qinfo]
+ports = [tp[k] for k in tp] + [hp, hps] + [servers[k]['port'] for k, _, _ in variants] + [e['port'] for e in qinfo] + [servers[k]['nat_port'] for k in ('ftp', 'ftpes', 'ftps')]
 t0 = time.time()
 for p in ports:
     while True:

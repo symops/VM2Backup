@@ -21,6 +21,11 @@ from OpenSSL import SSL
 from pyftpdlib.log import logger as _plog
 
 FAULT = {'kind': None, 'n': 0}
+# Раунд 11: активный режим за NAT.  SITE FAULT foreign - сервер принимает в PORT / EPRT адрес, не совпадающий с адресом управляющего соединения
+# (pyftpdlib permit_foreign_addresses; за NAT гость называет свой внутренний адрес, а сервер видит адрес NAT).  Включается ТОЛЬКО по команде теста и
+# снимается SITE FAULT clear: без неё сервер, как и раньше, отвечает 501 «Rejected data connection to foreign address».
+# SITE FAULT portshift N - однократно: сервер подключается не к порту из PORT, а к порту + N (обратное соединение не доходит: 425).
+FOREIGN = {'on': False, 'shift': 0}
 LAST_REUSE = {'v': None}
 STRICT = {'on': os.environ.get('VM2B_FTP_STRICT') == '1', 'slow_ms': 0}      # SITE FAULT strict: a TLS upload that ends without the client's close_notify is answered 451 (no rename); SITE FAULT clear switches it off
 OPTS = {}
@@ -111,23 +116,44 @@ class TlsDTP(FaultMixin, TLS_DTPHandler):
         # pyftpdlib spins forever here after an unexpected EOF ('shutdown while in init' is swallowed and the channel is never closed), the single-threaded server then
         # answers nobody and the client waits out its 60 s for the 226 (round 9).  After a few fruitless rounds the channel is simply closed.
         self._shut_n += 1
+        if self._unclean_upload() and STRICT['on'] and not self._closed:
+            self._resp = ('451 TLS data connection closed without close_notify.', _plog.info)
         if self._shut_n > 8:
             self._ssl_established = False; self._ssl_closing = False
             return self.close()
         return super()._do_ssl_shutdown()
 
+    def close(self):
+        # Раунд 11: канал данных умер, а ответа на команду нет (клиент закрыл соединение посреди TLS-рукопожатия: pyftpdlib закрывает канал, ничего не отвечая на STOR / RETR / LIST;
+        # проверено синтетическим клиентом, ClientHello и закрытие).  Клиент тогда ждал бы 226 положенные 60 с и сообщал «receive timed out» - тот же признак, что в сбое раунда 9.
+        # Настоящий сервер отвечает 426; сервер отвечает так же и пишет случай в журнал INFO, чтобы такой канал был виден.
+        if not self._closed and not self._resp and getattr(self, 'cmd', None) is not None:
+            _plog.info('data channel closed with no reply to %s (TLS handshake not finished?): answering 426', getattr(self, 'cmd', '?'))
+            self._resp = ('426 Data connection closed before the transfer was done.', _plog.info)
+        super().close()
+
+    _noted = False
+
+    def _unclean_upload(self):
+        """Раунд 11: True, если это канал ЗАГРУЗКИ, который клиент закрыл БЕЗ TLS close_notify (отмечается один раз, в журнал INFO).
+        Раньше проверка стояла только в handle_close, но pyftpdlib при конце загрузки (ZeroReturnError / «Unexpected EOF» в recv) зовёт DTPHandler.handle_close
+        МИМО нашего переопределения, а потом сразу _do_ssl_shutdown: проверка молчала, и строгий режим не мог сработать.  Теперь её вызывают оба входа."""
+        if self._noted or not getattr(self, 'receive', False):
+            return False
+        self._noted = True
+        try:
+            clean = bool(self.socket.get_shutdown() & SSL.RECEIVED_SHUTDOWN)
+        except Exception:
+            clean = True
+        if not clean:
+            _plog.info('data connection of an upload closed WITHOUT the client close_notify (%s, strict=%s)', getattr(self, 'cmd', '?'), STRICT['on'])
+        return not clean
+
     def handle_close(self):
-        if getattr(self, 'receive', False) and not self._closed:
-            try:
-                clean = bool(self.socket.get_shutdown() & SSL.RECEIVED_SHUTDOWN)
-            except Exception:
-                clean = True
-            if not clean:       # раунд 10: каждый такой случай виден в журнале (INFO) и без DEBUG, строгий режим только отвечает 451
-                _plog.info('data connection of an upload closed WITHOUT the client close_notify (%s, strict=%s)', getattr(self, 'cmd', '?'), STRICT['on'])
-            if not clean and STRICT['on']:
-                self._resp = ('451 TLS data connection closed without close_notify.', _plog.info)
-                self.close()
-                return
+        if not self._closed and self._unclean_upload() and STRICT['on']:
+            self._resp = ('451 TLS data connection closed without close_notify.', _plog.info)
+            self.close()
+            return
         super().handle_close()
 
     def handle_ssl_established(self):
@@ -147,7 +173,11 @@ def faults(cls):
     def ftp_SITE_FAULT(self, line):
         p = line.split()
         if p[0] == 'clear':
-            FAULT['kind'] = None; STRICT['on'] = os.environ.get('VM2B_FTP_STRICT') == '1'; STRICT['slow_ms'] = 0
+            FAULT['kind'] = None; STRICT['on'] = os.environ.get('VM2B_FTP_STRICT') == '1'; STRICT['slow_ms'] = 0; FOREIGN['on'] = False; FOREIGN['shift'] = 0
+        elif p[0] == 'foreign':
+            FOREIGN['on'] = True
+        elif p[0] == 'portshift':
+            FOREIGN['shift'] = int(p[1]) if len(p) > 1 else 1
         elif p[0] == 'strict':
             STRICT['on'] = True
         elif p[0] == 'slowread':
@@ -155,6 +185,13 @@ def faults(cls):
         else:
             FAULT['kind'] = p[0]; FAULT['n'] = int(p[1]) if len(p) > 1 else 0
         self.respond('200 fault armed: %s' % line)
+
+    def _make_eport(self, ip, port):
+        if FOREIGN['on']:
+            self.permit_foreign_addresses = True
+        if FOREIGN['shift']:
+            port = (port + FOREIGN['shift']) % 65536; FOREIGN['shift'] = 0
+        return cls.__mro__[1]._make_eport(self, ip, port)
 
     def ftp_SITE_REUSE(self, line):
         self.respond('200 reused=%s' % ('unknown' if LAST_REUSE['v'] is None else int(LAST_REUSE['v'])))
@@ -208,6 +245,7 @@ def faults(cls):
 
     cls.ftp_SITE_FAULT = ftp_SITE_FAULT
     cls.ftp_SITE_REUSE = ftp_SITE_REUSE
+    cls._make_eport = _make_eport
     cls.ftp_STOR = ftp_STOR
     cls.ftp_RNTO = ftp_RNTO
     cls.on_file_received = on_file_received

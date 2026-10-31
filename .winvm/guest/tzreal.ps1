@@ -56,7 +56,13 @@ else {
     if ($tzi.IsInvalidTime($dt)) { throw "local time $Local does not exist in $Zone" }
     if ($tzi.IsAmbiguousTime($dt)) { $off = @($tzi.GetAmbiguousTimeOffsets($dt) | Sort-Object -Descending)[0]; $utcSet = [DateTime]::SpecifyKind($dt - $off, 'Utc'); Write-Output "INFO the local time $Local happens twice in ${Zone}: the FIRST pass is taken (offset $off)" }      # повторяющееся время: берём первый проход (летнее время)
     else { $utcSet = [TimeZoneInfo]::ConvertTimeToUtc($dt, $tzi) }
-    $okc = Set-UtcClock $utcSet; Check "system clock set (SetSystemTime to $($utcSet.ToString('s')) UTC)" $okc 
+    # Раунд 11: опорная точка «часы должны идти вровень с секундомером» берётся В МОМЕНТ SetSystemTime, а не при старте наблюдения. В раунде 10 (Windows 11, spring-eu) опорой служило
+    # установленное время, а секундомер запускался после настройки (сон, вход в веб-сайт, сервер, задачи): настройка заняла 122 с (из них 56 с остановки сразу после смены часов),
+    # и первая же проверка называла эти секунды «часы ушли на 115 с», хотя часы шли ровно (через 18 минут «now» отличался от секундомера на 1 с).
+    $okc = Set-UtcClock $utcSet; $swSet = [Diagnostics.Stopwatch]::StartNew(); Check "system clock set (SetSystemTime to $($utcSet.ToString('s')) UTC)" $okc
+    function Clock-Off { return ([DateTime]::UtcNow - $utcSet).TotalSeconds - $swSet.Elapsed.TotalSeconds }     # на сколько часы ушли от секундомера (секунды); 0 = идут вровень
+    $off0 = Clock-Off; Start-Sleep -Seconds 10; $off1 = Clock-Off
+    Check "${Label}: the clock keeps pace with the stopwatch right after it was set (10 s)" ([math]::Abs($off1 - $off0) -lt 1.5) ("{0:N2} s then {1:N2} s" -f $off0, $off1)
     Write-Output ("INFO {0}: zone {1}, local time set to {2}, now {3}, UTC {4}" -f $Label, $Zone, $Local, (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), [DateTime]::UtcNow.ToString('s'))
     Start-Sleep -Seconds 4; $w = Web-Ready
     $src = 'C:\vm2b\tzsrc'; $store = 'C:\vm2b\tzstore'; Remove-Item -Recurse -Force $src, $store -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force "$src\vmT" | Out-Null
@@ -69,9 +75,12 @@ else {
     Check 'two scheduled tasks saved' ([bool]$t1.Result.id -and [bool]$t2.Result.id) "$($t1.Text) $($t2.Text)"
     foreach ($id in @($t1.Result.id, $t2.Result.id)) { $n = Api $w 'tasks.next' @{ id = $id }; Write-Output ("INFO tasks.next ($id): " + $n.Text) }
     Api $w 'scheduler.set' @{ enabled = $true } | Out-Null
-    $epoch0 = [DateTimeOffset]::new($utcSet.ToUniversalTime()).ToUnixTimeSeconds() - 30; $seen = @{}; $runs = @(); $sw = [Diagnostics.Stopwatch]::StartNew(); $utc0 = $utcSet; $drift = 0
+    $epoch0 = [DateTimeOffset]::new($utcSet.ToUniversalTime()).ToUnixTimeSeconds() - 30; $seen = @{}; $runs = @(); $sw = [Diagnostics.Stopwatch]::StartNew(); $drift = 0; $maxDev = 0.0
+    Write-Output ("INFO setup took {0:N0} s (clock set -> start of the observation); the clock is {1:N1} s off the stopwatch" -f $swSet.Elapsed.TotalSeconds, (Clock-Off))
     while ($sw.Elapsed.TotalMinutes -lt $Minutes) {
-        $dev = [math]::Abs(([DateTime]::UtcNow - $utc0.AddSeconds($sw.Elapsed.TotalSeconds)).TotalSeconds); if ($dev -gt 90 -and -not $drift) { $drift = 1; Write-Output ("INFO the clock was moved by something else by {0:N0} s (UTC now {1}, expected {2}); w32time: {3}" -f $dev, [DateTime]::UtcNow.ToString('s'), $utc0.AddSeconds($sw.Elapsed.TotalSeconds).ToString('s'), (Get-Service w32time).Status) }
+        # отклонение считается от опоры в момент установки часов и проверяется на КАЖДОМ обороте (раньше - один раз); допуск 20 с (w32time / узел сдвигали бы часы на минуты)
+        $dev = [math]::Abs((Clock-Off) - $off0); if ($dev -gt $maxDev) { $maxDev = $dev }
+        if ($dev -gt 20 -and -not $drift) { $drift = 1; Write-Output ("INFO the clock was moved by something else by {0:N0} s (UTC now {1}, since it was set {2:N0} s); w32time: {3}" -f $dev, [DateTime]::UtcNow.ToString('s'), $swSet.Elapsed.TotalSeconds, (Get-Service w32time).Status) }
         $h = Api $w 'history.list' @{ limit = 100 }
         foreach ($e in @($h.Result)) { if ($e.name -like 'tz-*' -and [int64]$e.started -ge $epoch0 -and -not $seen.ContainsKey($e.id)) { $seen[$e.id] = 1
             $st = [DateTimeOffset]::FromUnixTimeSeconds([int64]$e.started); $loc = [TimeZoneInfo]::ConvertTime($st, [TimeZoneInfo]::Local)
@@ -80,7 +89,8 @@ else {
         Start-Sleep -Seconds 8
     }
     Write-Output ("INFO now {0} local, zone {1}, {2} runs in {3} min" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), (& tzutil.exe /g).Trim(), $runs.Count, $Minutes)
-    Check "${Label}: the clock was not moved by anything else during the observation" ($drift -eq 0) 'clock drift, see the INFO line above'
+    Check "${Label}: the clock was not moved by anything else during the observation" ($drift -eq 0) ("largest deviation {0:N1} s, see the INFO line above" -f $maxDev)
+    Write-Output ("INFO {0}: largest deviation of the clock from the stopwatch during the observation: {1:N2} s" -f $Label, $maxDev)
     Api $w 'scheduler.set' @{ enabled = $false } | Out-Null
     $d = @($runs | Where-Object name -eq 'tz-daily'); $e = @($runs | Where-Object name -eq 'tz-every30')
     Check "${Label}: the daily task ran exactly once ($($d.Count))" ($d.Count -eq 1) (($d | ForEach-Object { $_.local }) -join '; ')

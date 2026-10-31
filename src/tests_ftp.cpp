@@ -904,9 +904,12 @@ VM2B_TEST("ftp", ftp_passive_active_and_listing_variants)
         T_CHECK(t->list(got)); T_CHECK(got.empty() || (got.size() == 1 && got[0] == "subfolder" && k != "ftp_mlsd" && k != "ftp_list"));
         delete t;
     }
-    // active mode, plain and TLS
+    // active mode, plain and TLS.  Раунд 11: behind a NAT (the Windows VM harness: dockur) the client names its inner address in PORT and the server sees the address of the
+    // NAT, so pyftpdlib answered "501 Rejected data connection to foreign address".  The server is told (SITE FAULT foreign, only for this part, cleared at its end) to accept
+    // the foreign address; the product is not relaxed in any way, and the behaviour without it is pinned by ftp_active_mode_behind_a_nat.
     for (const char* key : kFtpKeys) {
         const Json* s = FtpSrv(c_, key); if (!s) continue;
+        T_CHECK(ArmFault(c_, *s, key, "foreign"));
         Json cfg = FtpCfg(*s, key, Uniq(c_, "act")); cfg["passive"] = false;
         Target* t = MakeFtp(c_, cfg); bool ok = t->connect(); T_CHECK(ok);
         if (ok) {
@@ -916,6 +919,88 @@ VM2B_TEST("ftp", ftp_passive_active_and_listing_variants)
             if (up) { Bytes g; T_CHECK(Download(c_, t, "act.bin", g)); T_CHECK(SameBytes(g, d)); Vec<Str> l; T_CHECK(t->list(l)); T_CHECK(l.size() == 1); }
         }
         delete t;
+        T_CHECK(ArmFault(c_, *s, key, "clear"));
+    }
+    return true;
+}
+
+// Раунд 11: active FTP behind a NAT, simulated on loopback (tools/testservers/natproxy.py relays the control connection from ANOTHER source address, so the server sees an
+// address different from the one the client announces in PORT: exactly the situation of the Windows VM behind dockur's NAT).  Pins four things:
+//  (1) without the server's permission the foreign address is refused and the product reports it as a permanent error naming the server's answer (nothing is stored);
+//  (2) with the permission (SITE FAULT foreign) the whole round trip works and is bit-exact, plain / explicit / implicit TLS;
+//  (3) a data connection that never arrives (the server connects to the wrong port) is a transient error, quickly, and the next upload on a new connection works;
+//  (4) a cut in the middle of an active upload is a transient failure and never leaves the final name.
+// The product stays strict: this test only changes the TEST server.
+VM2B_TEST("ftp", ftp_active_mode_behind_a_nat)
+{
+    bool any = false;
+    for (const char* key : kFtpKeys) { const Json* s = FtpSrv(c_, key); if (s && s->has("nat_port")) any = true; }
+    if (!any) { c_.skip("no NAT-simulating ports in servers.json (tools/run-ftp-tests.sh)"); return true; }
+    for (const char* key : kFtpKeys) {
+        const Json* s = FtpSrv(c_, key); if (!s || !s->has("nat_port")) continue;
+        Str sub = Uniq(c_, "nat");
+        Json cfg = FtpCfg(*s, key, sub); cfg["passive"] = false; cfg["port"] = (i64)s->get("nat_port").integer();
+        T_CHECK(ArmFault(c_, *s, key, "clear"));
+        // (1)
+        {
+            Target* t = MakeFtp(c_, cfg); T_CHECK(t->connect());
+            Sink* w = t->open_write("nat.bin");
+            bool refused = (w == nullptr);
+            if (w) { Bytes d = RandomData(c_, 50000); refused = !(w->write(d.data(), d.size()) && w->finish()); w->abort(); delete w; }
+            c_.note("%s: without permission: %s", key, t->err.c_str());
+            T_CHECK(refused);
+            T_CHECK(t->err.find("foreign address") >= 0);                  // the server's own words reach the user
+            T_CHECK(!t->transient);                                         // a 5xx is final: no endless retries
+            T_CHECK(!FileExists(ServerPath(*s, sub, "nat.bin")));
+            delete t;
+        }
+        T_CHECK(ArmFault(c_, *s, key, "foreign"));
+        // (2)
+        {
+            Target* t = MakeFtp(c_, cfg); T_CHECK(t->connect());
+            for (int i = 0; i < 3; ++i) {
+                Bytes d = RandomData(c_, (size_t)c_.range(0, 400000)); Str n = Str::fmt("nat %d.bin", i);
+                bool up = Upload(c_, t, n, d); if (!up) c_.note("%s active upload: %s", key, t->err.c_str());
+                T_CHECK(up);
+                if (up) { Bytes g; T_CHECK(Download(c_, t, n, g)); T_CHECK(SameBytes(g, d)); }
+            }
+            Vec<Str> l; T_CHECK(t->list(l)); T_CHECK(l.size() == 3);
+            delete t;
+        }
+        // (3)
+        {
+            Target* t = MakeFtp(c_, cfg); T_CHECK(t->connect());
+            T_CHECK(ArmFault(c_, *s, key, "portshift 1"));
+            double t0 = UnixNow(); Bytes d = RandomData(c_, 100000);
+            Sink* w = t->open_write("never.bin"); bool failed = (w == nullptr); bool tr = failed && t->transient;
+            if (w) { failed = !(w->write(d.data(), d.size()) && w->finish()); tr = w->transient; w->abort(); delete w; }
+            double dt = UnixNow() - t0;
+            c_.note("%s: data connection that never arrives -> %s in %.1f s (%s)", key, failed ? "failed" : "NO FAILURE", dt, t->err.c_str());
+            T_CHECK(failed); T_CHECK(tr); T_CHECK(dt < 25);
+            T_CHECK(!FileExists(ServerPath(*s, sub, "never.bin")));
+            T_CHECK(t->reconnect()); T_CHECK(Upload(c_, t, "after.bin", d));
+            delete t;
+        }
+        // (4)
+        {
+            Target* t = MakeFtp(c_, cfg); T_CHECK(t->connect());
+            size_t size = (size_t)c_.range(300000, 3000000), cut = (size_t)c_.range(1, (int)size - 1);
+            Bytes d = RandomData(c_, size);
+            T_CHECK(ArmFault(c_, *s, key, Str::fmt("up %zu", cut).c_str()));
+            Sink* w = t->open_write("cut.bin"); bool failed = (w == nullptr); bool tr = failed && t->transient;
+            if (w) {
+                size_t pos = 0; bool ok = true;
+                while (pos < size && ok) { size_t k = (size_t)c_.range(1, 200000); if (k > size - pos) k = size - pos; ok = w->write(d.data() + pos, k); pos += k; }
+                if (ok) ok = w->finish();
+                failed = !ok; tr = w->transient; if (!ok) w->abort(); delete w;
+            }
+            c_.note("%s: active upload cut at %zu of %zu -> %s", key, cut, size, failed ? "failed as expected" : "NO FAILURE");
+            T_CHECK(failed); T_CHECK(tr);
+            T_CHECK(!FileExists(ServerPath(*s, sub, "cut.bin")));
+            T_CHECK(t->reconnect()); T_CHECK(Upload(c_, t, "cut.bin", d));
+            delete t;
+        }
+        T_CHECK(ArmFault(c_, *s, key, "clear"));
     }
     return true;
 }
@@ -964,6 +1049,95 @@ VM2B_TEST("ftp", ftp_fault_injection_upload)
 // buffer SSL_shutdown answered WANT_WRITE, the alert stayed inside OpenSSL and the FIN overtook it; pyftpdlib took that for a broken upload and never
 // answered (60 s of "control connection: receive timed out").  The test server is put into "strict" mode (SITE FAULT strict): an upload that ends without
 // close_notify is answered 451 and not renamed, so the missing alert fails the test at once.  The server also reads slowly (SITE FAULT slowread 15: 15 ms per 32 KiB), so the client's send buffer is still full when it closes.
+// Раунд 11: тест самого тестового сервера.  Режим `SITE FAULT strict` (ответ 451 на загрузку без close_notify клиента) молчал с раунда 9: pyftpdlib при конце загрузки
+// зовёт DTPHandler.handle_close мимо переопределения сервера, проверка стояла только там.  Здесь ручной клиент (не продукт) делает загрузку по TLS дважды: вежливо
+// (close_notify) -> 226, и грубо (сокет закрыт без close_notify) -> 451.  Если сервер снова перестанет различать, падает этот тест, а не остаётся незамеченным.
+static bool RawTlsUpload(Ctx& c_, const Json& s, const char* type, bool polite, Str& finalReply)
+{
+    NetConn n; TlsOptions o; o.fingerprint = s.get("fingerprint").str(); o.verify = !o.fingerprint.empty(); o.timeoutMs = 15000;
+    Str host = s.get("host").str(); int port = (int)s.get("port").integer();
+    if (!n.connect(host, port, Str(type) == "ftps", o)) { c_.note("raw: connect: %s", n.err.c_str()); return false; }
+    Str l;
+    auto reply = [&]() -> bool { for (;;) { if (!NetLine(n, l)) return false; if ((l.size() >= 4 && l[3] == ' ') || l.size() == 3) return true; } };
+    if (!reply()) return false;
+    if (Str(type) == "ftpes") { NetCrlf(n, "AUTH TLS"); if (!reply()) return false; if (!n.starttls(host, o)) { c_.note("raw: tls: %s", n.err.c_str()); return false; } }
+    NetCrlf(n, ("USER " + s.get("user").str()).c_str()); if (!reply()) return false;
+    NetCrlf(n, ("PASS " + s.get("password").str()).c_str()); if (!reply() || !l.starts_with("230")) return false;
+    NetCrlf(n, "PBSZ 0"); if (!reply()) return false;
+    NetCrlf(n, "PROT P"); if (!reply()) return false;
+    NetCrlf(n, "SITE FAULT strict"); if (!reply() || !l.starts_with("200")) return false;
+    NetCrlf(n, "TYPE I"); if (!reply()) return false;
+    NetCrlf(n, "EPSV"); if (!reply() || !l.starts_with("229")) return false;
+    int dp = 0; { int a = l.find("|||"); if (a >= 0) dp = atoi(l.c_str() + a + 3); }
+    if (dp <= 0) return false;
+    NetConn d; if (!d.connect(host, dp, false, o)) { c_.note("raw: data connect: %s", d.err.c_str()); return false; }
+    Str name = Str("raw ") + Uniq(c_, "") + ".bin";
+    NetCrlf(n, ("STOR " + name).c_str()); if (!reply() || !(l.starts_with("150") || l.starts_with("125"))) { c_.note("raw: STOR: %s", l.c_str()); return false; }
+    if (!d.starttls(host, o)) { c_.note("raw: data tls: %s", d.err.c_str()); return false; }
+    Bytes data = RandomData(c_, 70000);
+    if (!d.send(data.data(), data.size())) return false;
+    if (polite) d.shutdown(); else d.close();
+    if (!reply()) { c_.note("raw: no final reply (%s)", n.err.c_str()); return false; }
+    finalReply = l;
+    NetCrlf(n, "SITE FAULT clear"); reply();
+    NetCrlf(n, "QUIT"); reply();
+    return true;
+}
+
+// Раунд 11: канал данных, умерший посреди TLS-рукопожатия (клиент прислал начало ClientHello и закрыл соединение), оставлял pyftpdlib без ответа на STOR: клиент ждал 226 положенные
+// 60 с и сообщал «receive timed out», как в сбое раунда 9.  Ручной клиент воспроизводит это; тестовый сервер теперь отвечает 426 (и пишет случай в журнал INFO).
+VM2B_TEST("ftp", ftp_test_server_answers_a_data_channel_that_dies_in_the_handshake)
+{
+    bool any = false;
+    for (const char* key : kFtpKeys) {
+        if (!strcmp(key, "ftp")) continue;
+        const Json* s = FtpSrv(c_, key); if (!s) continue;
+        any = true;
+        NetConn n; TlsOptions o; o.fingerprint = s->get("fingerprint").str(); o.verify = !o.fingerprint.empty(); o.timeoutMs = 12000;
+        Str host = s->get("host").str(); int port = (int)s->get("port").integer();
+        T_CHECK(n.connect(host, port, Str(key) == "ftps", o));
+        Str l;
+        auto reply = [&]() -> bool { for (;;) { if (!NetLine(n, l)) return false; if ((l.size() >= 4 && l[3] == ' ') || l.size() == 3) return true; } };
+        T_CHECK(reply());
+        if (Str(key) == "ftpes") { NetCrlf(n, "AUTH TLS"); T_CHECK(reply()); T_CHECK(n.starttls(host, o)); }
+        NetCrlf(n, ("USER " + s->get("user").str()).c_str()); T_CHECK(reply());
+        NetCrlf(n, ("PASS " + s->get("password").str()).c_str()); T_CHECK(reply() && l.starts_with("230"));
+        NetCrlf(n, "PBSZ 0"); T_CHECK(reply()); NetCrlf(n, "PROT P"); T_CHECK(reply());
+        NetCrlf(n, "EPSV"); T_CHECK(reply() && l.starts_with("229"));
+        int dp = 0; { int a = l.find("|||"); if (a >= 0) dp = atoi(l.c_str() + a + 3); }
+        T_CHECK(dp > 0);
+        NetConn d; T_CHECK(d.connect(host, dp, false, o));
+        NetCrlf(n, ("STOR dead " + Uniq(c_, "") + ".bin").c_str()); T_CHECK(reply() && (l.starts_with("125") || l.starts_with("150")));
+        const char hello[] = "\x16\x03\x01\x02\x00\x01\x00\x01\xfc\x03\x03";               // the start of a ClientHello record, nothing more
+        T_CHECK(d.send(hello, sizeof(hello) - 1));
+        d.close();
+        double t0 = UnixNow(); bool got = reply(); double dt = UnixNow() - t0;
+        c_.note("%s: the data channel died in the handshake -> '%s' after %.1f s", key, got ? l.c_str() : n.err.c_str(), dt);
+        T_CHECK(got); T_CHECK(l.starts_with("4")); T_CHECK(dt < 8);
+        NetCrlf(n, "QUIT"); reply();
+    }
+    if (!any) c_.skip("no FTPS / FTPES servers");
+    return true;
+}
+
+VM2B_TEST("ftp", ftp_test_server_strict_mode_tells_a_missing_close_notify)
+{
+    bool any = false;
+    for (const char* key : kFtpKeys) {
+        if (!strcmp(key, "ftp")) continue;
+        const Json* s = FtpSrv(c_, key); if (!s) continue;
+        any = true;
+        Str r1, r2;
+        T_CHECK(RawTlsUpload(c_, *s, key, true, r1));
+        T_CHECK(RawTlsUpload(c_, *s, key, false, r2));
+        c_.note("%s: with close_notify -> '%s'; without -> '%s'", key, r1.c_str(), r2.c_str());
+        T_CHECK(r1.starts_with("226"));
+        T_CHECK(r2.starts_with("451"));
+    }
+    if (!any) c_.skip("no FTPS / FTPES servers");
+    return true;
+}
+
 VM2B_TEST("ftp", ftp_tls_upload_ends_with_close_notify_to_a_slow_reader)
 {
     if (!AnyFtp(c_)) return true;

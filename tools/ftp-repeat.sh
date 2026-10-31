@@ -5,7 +5,7 @@
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 T=$1; N=$2; OUT=$3; S0=${4:-100}
 PY=$ROOT/.venv/bin/python; [ -x "$PY" ] || PY=python3
-mkdir -p "$OUT"; export WINEDEBUG=-all VM2B_FTP_LOGLEVEL=DEBUG
+mkdir -p "$OUT"; export WINEDEBUG=-all VM2B_FTP_LOGLEVEL=${VM2B_FTP_LOGLEVEL:-DEBUG}
 fail=0
 for i in $(seq 1 "$N"); do
   RUN=$OUT/run-$i; rm -rf "$RUN"; mkdir -p "$RUN"; : > "$RUN/pids"

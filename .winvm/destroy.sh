@@ -12,6 +12,7 @@ mkdir -p "$D"
 [ -d $W/shared/jobs/done ] && cp -a $W/shared/jobs/done "$D/jobs"
 docker logs vm2b-win > "$D/container.log" 2>&1
 docker exec vm2b-win sh -c 'cat /tmp/smbreal/log.smbd 2>/dev/null' > "$D/smbreal.log" 2>/dev/null
+ip route del 172.30.0.2/32 2>/dev/null     # маршрут к гостю dockur через контейнер (раунд 11, активный FTP; ставит tools/run-winvm.sh)
 docker stop -t 30 vm2b-win >/dev/null 2>&1
 docker rm -f vm2b-win >/dev/null 2>&1
 rm -rf "$W/storage-x86" "$W/storage-w10" "$W/storage-w11" "$W/x86/answer.iso" "$W/shared/results" "$W/shared/jobs" "$W/shared/pkg" "$W/shared/srv" "$W/shot" "$W/shared/shot.ppm" "$W/current-os"

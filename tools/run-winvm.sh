@@ -110,6 +110,13 @@ mkdir -p "$W/shared/pkg/guest"; cp "$W"/guest/* "$W/shared/pkg/guest/"      # al
 docker exec -d vm2b-win python3 /shared/smb-real.py 2>/dev/null
 gj 00-init 300 'if not exist C:\vm2b\guest mkdir C:\vm2b\guest' 'powershell -NoProfile -Command "Set-SmbClientConfiguration -DirectoryCacheLifetime 0 -FileNotFoundCacheLifetime 0 -FileInfoCacheLifetime 0 -Force"' 'xcopy "%SRC%\pkg\guest\*" C:\vm2b\guest\ /e /y /i /q' 'reg add "HKLM\SYSTEM\CurrentControlSet\Control\Network\NewNetworkWindowOff" /f' 'reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" /v UtilizeNtCaching /t REG_DWORD /d 0 /f' 'sc config wuauserv start= disabled' 'sc stop wuauserv' 'reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" /v NoAutoUpdate /t REG_DWORD /d 1 /f' 'echo SRC=%SRC%' 'echo arch: ' 'type "%SRC%\pkg\arch.txt"' > /dev/null
 say "executor initialised"
+# Раунд 11 (НЕ ПРОВЕРЕНО на ВМ): активный FTP.  Гость dockur (172.30.0.2) стоит за NAT контейнера; сервер на хосте отвечает на PORT подключением к 172.30.0.2, а туда у хоста
+# нет маршрута.  Маршрут через контейнер (он шлюз гостя, брандмауэр гостя выключен) снимается в destroy.sh; тест `ftp_passive_active_and_listing_variants` при этом просит сервер
+# принять «чужой» адрес (SITE FAULT foreign), продукт не ослаблен.  Если маршрута нет, активная часть падает честно («did not connect back»), а не пропускается.
+if [ -n "$GUESTIP" ]; then
+  CIP=$(docker inspect -f '{{.NetworkSettings.IPAddress}}' vm2b-win 2>/dev/null)
+  if [ -n "$CIP" ] && ip route replace "$GUESTIP/32" via "$CIP" 2>/dev/null; then say "route to the guest $GUESTIP via the container $CIP (active FTP)"; else say "no route to the guest (active FTP will fail with 'did not connect back')"; fi
+fi
 
 # ---------------------------------------------------------------- phases
 if want win11; then
