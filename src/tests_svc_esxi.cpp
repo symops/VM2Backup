@@ -521,6 +521,8 @@ VM2B_TEST("svcesxi", esxi_task_survives_host_power_loss_and_service_restart)
             Json row = JobRow(s, jid); if (row.is_null() || (row.get("status").str() != "Running" && row.get("status").str() != "Waiting")) break;
             Sleep(20);
         }
+        // раунд 10: гонка самого теста: хост мог умереть МЕЖДУ проверкой "dead" и чтением строки задания (задание уже Failed из-за обрыва) - тогда это тоже обрыв питания, а не "задание закончилось раньше"
+        if (!dead && ctl.state().get("dead").boolean()) dead = true;
         c_.note("%s round %d: power lost after %d events: %s", e.name.c_str(), round, n, dead ? "yes" : "no (job finished first)");
         if (dead) { Sleep(c_.range(0, 400)); T_CHECK(s.restart()); if (c_.failed) return false; }       // the service dies with the host (no clean end of the job on the host side)
         else { fin = s.waitJob(jid, 60000); T_CHECK(fin == "Success" || fin == "Warning" || fin == "Gone"); }

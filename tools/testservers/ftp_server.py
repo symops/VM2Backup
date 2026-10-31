@@ -117,12 +117,14 @@ class TlsDTP(FaultMixin, TLS_DTPHandler):
         return super()._do_ssl_shutdown()
 
     def handle_close(self):
-        if STRICT['on'] and getattr(self, 'receive', False) and not self._closed:
+        if getattr(self, 'receive', False) and not self._closed:
             try:
                 clean = bool(self.socket.get_shutdown() & SSL.RECEIVED_SHUTDOWN)
             except Exception:
                 clean = True
-            if not clean:
+            if not clean:       # раунд 10: каждый такой случай виден в журнале (INFO) и без DEBUG, строгий режим только отвечает 451
+                _plog.info('data connection of an upload closed WITHOUT the client close_notify (%s, strict=%s)', getattr(self, 'cmd', '?'), STRICT['on'])
+            if not clean and STRICT['on']:
                 self._resp = ('451 TLS data connection closed without close_notify.', _plog.info)
                 self.close()
                 return
