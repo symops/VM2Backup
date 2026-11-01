@@ -27,6 +27,7 @@ All	Tümü
 All interfaces	Tüm arayüzler
 All results	Tüm sonuçlar
 Allow a copy of a running VM (the copy is consistent only at the crash level)	Çalışan bir VM'nin kopyalanmasına izin ver (kopya yalnızca çökme düzeyinde tutarlıdır)
+Also back up the existing snapshots of the VM	VM'nin mevcut anlık görüntülerini de yedekle
 An administrator needs two-factor authentication when it is required in the security settings.	Güvenlik ayarlarında gerekli kılındığında yöneticinin iki aşamalı kimlik doğrulamaya ihtiyacı vardır.
 Apply	Uygula
 Archive	Arşiv
@@ -415,6 +416,7 @@ Web access	Web erişimi
 Wed	Çar
 Weekly	Haftalık
 Windows maps drives per user. The service sees only the drives mapped for users who are logged on and its own. The drive letter itself cannot be used by the service: its UNC path is stored, and the credentials must be entered.	Windows sürücüleri kullanıcı başına eşler. Hizmet yalnızca oturum açmış kullanıcılar için eşlenen sürücüleri ve kendi sürücülerini görür. Sürücü harfinin kendisi hizmet tarafından kullanılamaz: UNC yolu saklanır ve kimlik bilgileri girilmelidir.
+Without it, the memory files of the other snapshots, the side branches of the snapshot tree and the snapshot list are left out; the disks the current state depends on are always copied.	Bu seçenek olmadan diğer anlık görüntülerin bellek dosyaları, anlık görüntü ağacının yan dalları ve anlık görüntü listesi kopyalanmaz; geçerli durumun bağlı olduğu diskler her zaman kopyalanır.
 Write these one-time codes down now: they are shown only once.	Bu tek kullanımlık kodları şimdi not edin: yalnızca bir kez gösterilir.
 Yes	Evet
 Your session has ended. Sign in again.	Oturumunuz sona erdi. Yeniden oturum açın.

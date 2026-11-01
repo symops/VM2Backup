@@ -27,6 +27,7 @@ All	Todos
 All interfaces	Todas as interfaces
 All results	Todos os resultados
 Allow a copy of a running VM (the copy is consistent only at the crash level)	Permitir a cópia de uma VM em execução (a cópia é consistente apenas no nível de falha)
+Also back up the existing snapshots of the VM	Copiar também os snapshots existentes da VM
 An administrator needs two-factor authentication when it is required in the security settings.	Um administrador precisa de autenticação de dois fatores quando ela é exigida nas configurações de segurança.
 Apply	Aplicar
 Archive	Arquivo
@@ -415,6 +416,7 @@ Web access	Acesso web
 Wed	Qua
 Weekly	Semanal
 Windows maps drives per user. The service sees only the drives mapped for users who are logged on and its own. The drive letter itself cannot be used by the service: its UNC path is stored, and the credentials must be entered.	O Windows mapeia unidades por usuário. O serviço enxerga apenas as unidades mapeadas para os usuários conectados e as dele próprio. A letra da unidade em si não pode ser usada pelo serviço: o caminho UNC é armazenado e as credenciais precisam ser informadas.
+Without it, the memory files of the other snapshots, the side branches of the snapshot tree and the snapshot list are left out; the disks the current state depends on are always copied.	Sem esta opção, os arquivos de memória dos outros snapshots, os ramos laterais da árvore de snapshots e a lista de snapshots não são copiados; os discos dos quais o estado atual depende são sempre copiados.
 Write these one-time codes down now: they are shown only once.	Anote agora estes códigos de uso único: eles são exibidos apenas uma vez.
 Yes	Sim
 Your session has ended. Sign in again.	Sua sessão terminou. Entre novamente.

@@ -1,0 +1,10 @@
+HTTP 200
+<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/"
+ xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+ xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<soapenv:Body>
+<RetrievePropertiesExResponse xmlns="urn:vim25"><returnval><objects><obj type="Task">haTask-1-vim.VirtualMachine.createSnapshot-153</obj><propSet><name>info</name><val xsi:type="TaskInfo"><key>haTask-1-vim.VirtualMachine.createSnapshot-153</key><task type="Task">haTask-1-vim.VirtualMachine.createSnapshot-153</task><name>CreateSnapshot_Task</name><descriptionId>VirtualMachine.createSnapshot</descriptionId><entity type="VirtualMachine">1</entity><entityName>vm2b-off</entityName><state>running</state><cancelled>false</cancelled><cancelable>true</cancelable><reason xsi:type="TaskReasonUser"><userName>X</userName></reason><queueTime>2026-11-01T16:03:25.613943Z</queueTime><startTime>2026-11-01T16:03:25.616993Z</startTime><eventChainId>153</eventChainId></val></propSet></objects></returnval></RetrievePropertiesExResponse>
+</soapenv:Body>
+</soapenv:Envelope>

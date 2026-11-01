@@ -42,3 +42,4 @@ __pycache__/
 *.keylog
 keys.log
 cap.pcap*
+/.winvm/esxi/

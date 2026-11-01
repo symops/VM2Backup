@@ -27,6 +27,7 @@ All	Semua
 All interfaces	Semua antarmuka
 All results	Semua hasil
 Allow a copy of a running VM (the copy is consistent only at the crash level)	Izinkan penyalinan VM yang sedang berjalan (salinan hanya konsisten pada tingkat crash)
+Also back up the existing snapshots of the VM	Cadangkan juga snapshot VM yang sudah ada
 An administrator needs two-factor authentication when it is required in the security settings.	Administrator memerlukan autentikasi dua faktor jika diwajibkan di pengaturan keamanan.
 Apply	Terapkan
 Archive	Arsip
@@ -415,6 +416,7 @@ Web access	Akses web
 Wed	Rab
 Weekly	Mingguan
 Windows maps drives per user. The service sees only the drives mapped for users who are logged on and its own. The drive letter itself cannot be used by the service: its UNC path is stored, and the credentials must be entered.	Windows memetakan drive per pengguna. Layanan hanya melihat drive yang dipetakan untuk pengguna yang sedang masuk dan miliknya sendiri. Huruf drive itu sendiri tidak dapat dipakai layanan: jalur UNC-nya disimpan, dan kredensial harus dimasukkan.
+Without it, the memory files of the other snapshots, the side branches of the snapshot tree and the snapshot list are left out; the disks the current state depends on are always copied.	Tanpa opsi ini, file memori snapshot lain, cabang samping pohon snapshot, dan daftar snapshot tidak disalin; disk yang menjadi dasar kondisi saat ini selalu disalin.
 Write these one-time codes down now: they are shown only once.	Catat kode sekali pakai ini sekarang: kode ini hanya ditampilkan sekali.
 Yes	Ya
 Your session has ended. Sign in again.	Sesi Anda telah berakhir. Masuk lagi.

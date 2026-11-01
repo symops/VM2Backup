@@ -215,3 +215,8 @@ A browser cannot list the network or the drive letters of a user; the service ca
 ## Languages
 
 The page offers 17 languages (login page and header).  `src/web/lang/<code>.txt` holds `English<TAB>translation` per line (`tools/webui_strings.py --update` syncs the keys with `src/web/app.js`, `--check` verifies placeholders `{0}`..., `--missing <code>` lists the untranslated ones); `tools/gen_webui.py` embeds one small script per language (`/lang/<code>.js`), loaded when the language is chosen.  The choice is remembered in the browser (`localStorage`); the first visit follows the browser language; an untranslated text is shown in English.
+
+
+## Опция снимков ESXi / vCenter (блок Snapshot элемента задачи)
+
+`snapshot.quiesce`, `snapshot.memory` и `snapshot.history` (флажок «Also back up the existing snapshots of the VM», по умолчанию включён и для старых задач без ключа; см. docs/ESXI.md, «Снимки самой ВМ»).

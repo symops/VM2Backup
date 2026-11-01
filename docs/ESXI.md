@@ -25,7 +25,7 @@ message asking for it). Tuning keys: `timeout` (idle seconds of a network step),
    property collector. A quiesce failure (VMware Tools missing: `ToolsUnavailable`, `ApplicationQuiesceFault`, ...) retries once without
    quiescing and adds a warning. A refused write API (`RestrictedVersion`, "current license ... prohibits", `NoPermission`: free ESXi) is a
    permanent error that names the SSH transport / a licensed host. A hung task is cancelled after `task_timeout`.
-3. File list AFTER the snapshot, from `layoutEx`: the configuration files (`config` .vmx, `extendedConfig` .vmxf, `nvram`, `snapshotList`
+3. File list AFTER the snapshot (task option `snapshot.history`, default true: see "Snapshots of the VM itself" below), from `layoutEx`: the configuration files (`config` .vmx, `extendedConfig` .vmxf, `nvram`, `snapshotList`
    .vmsd, `namespaceData`), snapshot data/memory (.vmsn/.vmem), suspend state, and for every snapshot of the VM the disk chains it froze
    (`layoutEx.snapshot[].disk[].chain[]`: descriptors and base/flat/delta extents of earlier snapshots). **Excluded**: swap (.vswp,
    uwswap), logs, stats, cores, screenshots, digest files, lock files, and the delta/sesparse file and descriptor of the running point
@@ -63,7 +63,7 @@ removal. Faults on demand (`/__mock/faults`): free-license refusal (at the call 
 `remove_fail`, 503 on a file, connection drop after N bytes, no Range, no HEAD, no `RetrievePropertiesEx`, layout that lags behind the snapshot, slow
 server, session expiry after N calls. `/__mock/state` and `/__mock/log` give the live snapshots, the sequence of calls and the create/remove events.
 
-**Verified only against the mock** (nothing real was available): every XML shape, i.e. that real ESXi / vCenter answer exactly like the emulator
+**Verified only against the mock** (until the real ESXi 7.0.3 run, see "Проверка на настоящем ESXi 7" below; what that run confirmed is listed there; the rest of this paragraph still holds for ESXi 6.x / 8 / 9 and every vCenter): every XML shape, i.e. that real ESXi / vCenter answer exactly like the emulator
 (namespaces, `xsi:type` names, element order is not relied on; unknown elements are ignored), the fault type names the code recognises
 (`NotAuthenticated`, `InvalidLogin`, `RestrictedVersion`, `NoPermission`, `ToolsUnavailable`, `ApplicationQuiesceFault`, `ManagedObjectNotFound`,
 ...; the code also matches on the message text), that `layoutEx.snapshot[].disk[].chain[]` of a real host lists the frozen chain the way the emulator does,
@@ -130,3 +130,97 @@ the property paths used for the inventory (`Datacenter.vmFolder/datastore`, `Dat
 datastore folder listing `GET /folder/<dir>` exists, which the code uses to detect a taken folder name), that ESXi / vCenter accept the edited .vmx without a
 question, and VMs with several user snapshots (the mock registers a VM only with its disk chain, not with snapshot objects). Not implemented: overwriting an existing
 VM, restoring as a template, vApp / cluster-DRS placement choices beyond folder + pool + host, VM encryption policies.
+
+
+## Проверка на настоящем ESXi 7
+
+Первая проверка на НАСТОЯЩЕМ хосте (до этого был только эмулятор): VMware ESXi 7.0 Update 3n, сборка 21930508 (образ `VMware-VMvisor-Installer-7.0U3n-21930508.x86_64.iso`,
+образ только читается), вложенная ВМ под KVM/qemu на Linux-хосте, режим evaluation (60 дней; лицензия не вводилась: для снимков и `/folder` её не требуется,
+бесплатная лицензия Hypervisor блокирует запись через API, и источник сообщает об этом отдельным текстом). Дата: 01.11.2026.
+
+### Как поднят стенд (воспроизводимо, без кликов)
+
+* `tools/esxi7/vm.sh install <iso>`: qemu (`-machine q35 -cpu host,+vmx -smp 4 -m 8192`, диск ОС 60 ГБ qcow2 thin, второй диск 40 ГБ под VMFS, сетевая карта vmxnet3),
+  из образа во временной папке делается КОПИЯ с kickstart (`ks.cfg` в модуле `KS.TGZ`, параметры загрузки `ks=file:///ks.cfg`; `ks=cdrom:/KS.CFG` и `ks=http://` на этом образе
+  в qemu не сработали). Установка около 8 минут, ещё ~3 минуты до готовности `hostd`. В kickstart: `vmaccepteula`, `rootpw`, `install --firstdisk=local --overwritevmfs --novmfsondisk`,
+  в `%firstboot` включены SSH и ESXi Shell. Пароль root случайный, лежит только в `.winvm/esxi/secret` (права 600, в `.gitignore`), нигде не печатается; временная копия образа с ним удаляется.
+* `tools/esxi7/setup-guest.sh`: VMFS-6 датастор `datastore1` на втором диске и две ВМ без ОС (только vmx + vmdk): `vm2b-off` (выключена; диск 1 thin 512 МБ с ~100 МБ случайных данных кусками, диск 2 zeroedthick 64 МБ целиком случайный)
+  и `vm2b-on` (включена; thin 256 МБ). Эталонные sha256 всех `-flat.vmdk` снимаются на хосте (`sha256sum`) ДО копии.
+* `tools/esxi7/run-real.sh`: пишет `servers.json` с ключом `esxi_real` (адрес, пользователь, ПУТЬ к файлу пароля, отпечаток самоподписанного сертификата, эталонные суммы) и запускает группу `esxireal`
+  (`src/tests_esxi_real.cpp`, `src/tests_svc_esxi.cpp`). Без ключа группа пропускается; эмуляторы не затронуты. `tools/esxi7/ssh.sh`: SSH на стенд (`sshpass -f`, пароль не в командной строке).
+  `VM2B_ESXI_TRACE=<папка>` у любого процесса с источником ESXi записывает SOAP-обмен (пароль Login заменён) для снятия образцов: `tools/esxi7/record_fixtures.py` превращает его в `tests/fixtures/esxi7-real/`.
+
+### Сеть стенда (резерв для тестового стенда ESXi)
+
+Изолированная host-only сеть **10.213.77.0/24** (диапазон ЗАРЕЗЕРВИРОВАН под стенд ESXi, не использовать для другого): Linux-мост `vm2besxi0` с адресом хоста 10.213.77.1, tap `vm2besxi0t` для qemu
+(`vnet_hdr=off`: с включённым tap не передавал кадры гостя), ESXi 10.213.77.10 (статический, шлюза нет), VCSA (этап 2, не развёрнут) 10.213.77.11, .20-.99 свободны для служб продукта и тестовых серверов на хосте
+(слушать на 10.213.77.1, не на 0.0.0.0). Нет `ip_forward`, masquerade, маршрутов в другие сети, DHCP; правил iptables/nftables стенд не добавляет. Снос: `tools/esxi7/vm.sh net-down` (`ip link del vm2besxi0t; ip link del vm2besxi0`).
+Первая попытка была на qemu user-net (10.0.2.0/24); в ней TCP с гостя не проходил, пока на vmnic0 не выключены checksum/TSO offload (`esxcli network nic cso set -n vmnic0 -e 0`, закреплено в `/etc/rc.local.d/local.sh`; на мосту оставлено).
+
+### Что проверено на настоящем ESXi 7.0.3 (все тесты группы `esxireal`)
+
+* `esxireal_connect_and_list`: вход, `RetrieveServiceContent` (api 7.0.3.0), список ВМ (состояния stopped / running, размеры). Отпечаток самоподписанного сертификата закреплён.
+* `esxireal_wrong_credentials`: неверный пароль и неверный пользователь дают `login failed` (не временная ошибка, пароль в тексте не повторяется), чужой отпечаток даёт отказ с показом настоящего. Не более двух неверных попыток за прогон
+  (у ESXi свой счётчик блокировки root).
+* `esxireal_backup_verify_restore_matrix`: бэкап выключенной ВМ (снимок, 600 МБ двух дисков по Datastore HTTP, снимок удалён) в четырёх режимах: без пароля / xz 1, пароль + xz 5 + тома по ~100 МБ, xz 9 + тома по 2 МБ, пароль + без сжатия;
+  verify, неверный пароль архива отвергнут, восстановление в папку: **sha256 обоих flat-дисков совпал побитово во всех режимах**.
+* `esxireal_resume_after_abort`: пауза с сохранением томов в середине копии, затем продолжение (`resumes >= 1`), результат побитово равен исходному.
+* `esxireal_restore_to_host`: восстановление на сам ESXi (PUT в `/folder`, `RegisterVM_Task`), ВМ видна в списке и включается (проверено `power.on`), повтор с занятым именем отказан без перезаписи; **sha256 flat-дисков на хосте совпал с эталоном**.
+* `esxireal_service_flow_and_lockout_guard`: тот же путь через службу: `servers.save` / `servers.test`, неверный пароль помечает сервер (`auth_blocked`, плановые запуски его больше не трогают; ручной запуск делает одну попытку), исправление пароля снимает метку,
+  задача с шифрованием, verify, restore в папку (sha256 совпал), `esxi.restore_options`, `backups.restore_esxi`; пароли не найдены ни в ответах, ни в данных службы.
+
+### Расхождения «эмулятор и настоящий хост» и что сделано
+
+1. **SOAPAction определяет набор свойств.** Источник искал версию с «6.0» (первую принятую), и настоящий ESXi 7.0.3 отвечал HTTP 500 `InvalidProperty config.keyId` (свойство 6.5+): список ВМ не работал вообще.
+   Исправлено в `negotiate()` (`src/esxi.cpp`): после `RetrieveServiceContent` берётся самая новая известная версия не выше `apiVersion` сервера; `config.keyId` запрашивается только при версии запроса 6.5+.
+   Эмулятор (`esxi_mock.py`) теперь так же отвечает `InvalidProperty` на `config.keyId` при SOAPAction ниже 6.5 у любого профиля: регрессия в существующих тестах эмуляторов. Образец настоящего ответа: `tests/fixtures/esxi7-real/RetrievePropertiesEx-fault-InvalidProperty-keyId.resp.xml`.
+2. **Диск ВКЛЮЧЁННОЙ ВМ по HTTP не читается, даже после снимка.** `GET /folder/.../vm2b-on-flat.vmdk` отвечает пустым HTTP 500 (в `hostd.log`: «Error creating Reader: Failed to lock file»,
+   в `vmkernel.log`: «Failed to open file ... Busy», файл открыт процессом ВМ), а `.vmdk` (дескриптор) читается. `dd` и `cp` на хосте тоже получают «Device or resource busy»; читают такой диск только VDDK / NFC и `vmkfstools -i`.
+   Копия ВЫКЛЮЧЕННОЙ ВМ со снимком работает. Что сделано: ошибка теперь говорит причину (диск удерживается запущенной ВМ, выключить ВМ на время копии), снимок после неудачи не остаётся (проверено тестом).
+   **Не исправлено:** резервное копирование включённой ВМ по HTTP на ESXi 7.0.3 невозможно; нужен транспорт NFC (`VirtualMachineSnapshot.ExportSnapshot` / `HttpNfcLease`, поток stream-optimized VMDK с обратным преобразованием при восстановлении) или SSH (`vmkfstools`). Оба не реализованы.
+   Эмулятор по-прежнему отдаёт такие диски (его тесты с включёнными ВМ остаются, но не отражают этого поведения настоящего хоста).
+3. **Список папок восстановления** содержал корневую папку ВМ дважды (настоящий хост отдаёт `ha-folder-vm` среди найденных, эмулятор нет). Исправлено (`EsxiRestoreTargets`).
+4. Прочие формы ответов совпали с эмулятором без правок: пространство имён `urn:vim25`, `xsi:type`, `layoutEx` с цепочками (7.0: `-sesparse.vmdk`, дескриптор снимка `-000001.vmdk`), задачи через `PropertyCollector`, `RenameSnapshot` с меткой `[live ...]`,
+   `MakeDirectory` / `RegisterVM_Task`, Range и HEAD на `/folder`, TLS 1.2, самоподписанный сертификат с закреплением отпечатка, `Content-Range` в ответе 500. Запись образцов: `tests/fixtures/esxi7-real/` (тест `esxi_real_fixtures_parse` разбирает их тем же XML-кодом).
+
+### Наблюдения и ограничения
+
+* Восстановленный на хост thin-диск занимает на VMFS весь размер (512 МБ против 85 МБ у исходного): PUT пишет нули, `/folder` не умеет разреженные записи. Содержимое побитово то же.
+* Эталонное время гостевого ESXi в этом стенде 2001 год (часы qemu); на работу не влияет.
+* Не проверено на настоящем хосте: vCenter (этап 2 не выполнен, см. ниже), 8.0 / 9.0, шифрованные ВМ, RDM, vSAN, NFS-датасторы, файлы больше 4 ГиБ, quiesce при работающих VMware Tools, лицензия Hypervisor (free).
+* Этап 2 (VCSA 7.0.3): не развёрнут. Установщик VCSA разворачивает OVA на хост ESXi с 12 ГБ ОЗУ для ВМ tiny (внутри вложенного ESXi на 8 ГБ это невозможно, трёхуровневая вложенность на 31 ГБ не нужна и не поместится),
+  а запуск дисков OVA напрямую под qemu без служебных свойств OVF (`guestinfo.ovfEnv` из VMware Tools) оставляет устройство на первом этапе настройки. Нужно: ~16 ГБ свободной ОЗУ для отдельной ВМ VCSA и отдельный
+  ESXi-хост (или второй вложенный ESXi на 4–6 ГБ), либо физический хост ESXi; адрес 10.213.77.11 для VCSA зарезервирован.
+
+### Что нашла проверка на настоящем хосте (дополнение): порядок цепочки диска
+
+6. **Порядок звеньев `layoutEx.snapshot[].disk[].chain[]`.** Настоящий ESXi 7.0.3 перечисляет звенья от СТАРШЕГО (база) к новому, эмулятор (6.x) отдавал от нового к старому. Источник брал `chain[0]` как «диск текущей точки», и у ВМ с собственными снимками
+   восстановленный .vmx указывал на БАЗОВЫЙ диск (потеря всего, что лежит в дельтах), хотя файлы копировались полностью. Исправлено (`TopLink` в `src/esxi.cpp`: новое звено определяется по типу экстента, base = не `-delta` / `-sesparse`); эмулятор профилей 7.0+ теперь
+   тоже отдаёт цепочки от старого к новому. На настоящем хосте: .vmx восстановленной ВМ указывает на `vm2b-hist-000002.vmdk`, `vmkfstools -e` даёт «Disk chain is consistent», ВМ включается, sha256 базы совпал.
+
+## Снимки самой ВМ: опция `snapshot.history`
+
+Ключ элемента задачи `snapshot` (рядом с `quiesce` и `memory`): `history` (bool), **по умолчанию true, в том числе для старых сохранённых задач без ключа**: поведение не меняется, копируется всё, что описано выше
+(цепочки дисков каждого снимка ВМ, `.vmsn` / `.vmem`, `.vmsd`). Сайт: флажок «Also back up the existing snapshots of the VM» в блоке Snapshot (17 языков). `tasks.save` приводит значение к bool и отвергает не-логическое.
+
+`history = false` отключает: (1) `.vmsn` / `.vmem` (состояние и память) ВСЕХ чужих снимков; (2) дисковые файлы веток дерева снимков, не входящих в цепочку текущего состояния (боковые ветки); (3) записи снимков в `.vmsd` при восстановлении.
+**Остаётся и копируется всегда:** диски-предки текущего состояния (текущий диск есть дельта поверх цепочки родителей, без родителей он не читается). Поэтому вес копии ВМ с линейной историей без памяти почти не уменьшается; уменьшается у ВМ со снимками
+с памятью и с ветвлением. В мета-файле: `snapshot_history: false`, `snapshots_not_copied: N`. Восстановление такой копии: .vmx указывает на диск текущей точки (родители по дескрипторам), `.vmsd` пустой, предупреждение
+«the VM was backed up without its snapshots: its disks keep the parent chain, the snapshot tree is not restored» (в vSphere может понадобиться «Consolidate»). Для ВМ без снимков и для выключенных ВМ без снимков опция ничего не меняет.
+Не делается (возможное развитие): консолидация на лету (CloneVM / экспорт плоского диска без цепочки родителей) для получения самостоятельного диска; это отдельная дорогая функция.
+
+Проверено: эмулятор (`esxi_snapshot_history_option`: дерево s1 -> s2, s1 -> s3 со снимками с памятью; с историей 27 файлов, 4 `.vmsn`, 3 `.vmem`; без истории 17 файлов, один `.vmsn`, без `.vmem`; диски текущего состояния побитово те же;
+восстановление на хост: ВМ регистрируется, снимков 0, предупреждение есть). Настоящий ESXi 7.0.3 (`esxireal_snapshot_history`, ВМ `vm2b-hist` с деревом s1 -> s2 и s1 -> s3): с историей 14 файлов (4 `.vmsn`, три дельты 000001..000003),
+без истории 9 файлов (один `.vmsn`, две дельты: только предки текущей точки; ветка s2 не скопирована); verify, восстановление в папку и на хост, ВМ включается, цепочка согласована, sha256 базового диска совпал. С историей восстановленная ВМ
+имеет все 3 своих снимка и тоже включается.
+
+## Включённая ВМ: пауза, выключение, включение, продолжение, отмена (факты на настоящем ESXi 7.0.3)
+
+Сценарий `tools/esxi7/live-scenario.sh` (результат: `.winvm-results/esxi7-<дата>/live-scenario.txt`), ВМ `vm2b-on` без ОС. Тело диска включённой ВМ не читается (см. расхождение 2), поэтому проверены те части, что не зависят от чтения диска:
+1. Копия начата и поставлена на паузу с сохранением (`keepOnAbort`): три тома конфигурационных файлов готовы, возобновляемая копия 1, на хосте остаётся снимок `VM2Backup-<10 hex>` (`consolidationNeeded = false`).
+2. ВМ выключена `power.off` при существующем снимке: выключение проходит, снимок остаётся.
+3. ВМ включена снова: снимок остаётся (тот же).
+4. Следующий запуск продолжает по тому же токену `<ссылка снимка>|<имя>`: источник заново присоединяется к существующему снимку (новый не создаётся; `resumes = 1`, три готовых тома не копируются заново), затем упирается в блокировку диска (HTTP 500)
+   и при этой окончательной ошибке снимок удаляется (`end(false)`), дельта сворачивается, `consolidationNeeded = false`.
+5. Явная отмена (прерывание без `keepOnAbort`) удаляет снимок и журнал: возобновляемых копий 0, снимков на ВМ нет.
+Не проверено на настоящем хосте (нужно чтение диска включённой ВМ): продолжение внутри диска после выключения/включения ВМ, пока диск прочитать нельзя.

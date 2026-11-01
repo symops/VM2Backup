@@ -27,6 +27,7 @@ All	모두
 All interfaces	모든 인터페이스
 All results	모든 결과
 Allow a copy of a running VM (the copy is consistent only at the crash level)	실행 중인 VM의 복사 허용(복사본은 충돌 수준에서만 일관성이 있음)
+Also back up the existing snapshots of the VM	VM의 기존 스냅샷도 함께 백업
 An administrator needs two-factor authentication when it is required in the security settings.	보안 설정에서 요구하는 경우 관리자에게 2단계 인증이 필요합니다.
 Apply	적용
 Archive	보관
@@ -415,6 +416,7 @@ Web access	웹 액세스
 Wed	수
 Weekly	매주
 Windows maps drives per user. The service sees only the drives mapped for users who are logged on and its own. The drive letter itself cannot be used by the service: its UNC path is stored, and the credentials must be entered.	Windows는 사용자별로 드라이브를 매핑합니다. 서비스는 로그온한 사용자와 자신에게 매핑된 드라이브만 볼 수 있습니다. 서비스는 드라이브 문자 자체를 사용할 수 없으므로 UNC 경로가 저장되며 자격 증명을 입력해야 합니다.
+Without it, the memory files of the other snapshots, the side branches of the snapshot tree and the snapshot list are left out; the disks the current state depends on are always copied.	선택하지 않으면 다른 스냅샷의 메모리 파일, 스냅샷 트리의 곁가지, 스냅샷 목록은 복사되지 않으며, 현재 상태가 의존하는 디스크는 항상 복사됩니다.
 Write these one-time codes down now: they are shown only once.	이 일회용 코드를 지금 적어 두십시오. 한 번만 표시됩니다.
 Yes	예
 Your session has ended. Sign in again.	세션이 종료되었습니다. 다시 로그인하십시오.

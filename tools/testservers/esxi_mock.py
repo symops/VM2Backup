@@ -427,7 +427,7 @@ def layout_xml(vm, tag, items_only_files=False):
     for j, s in enumerate(vm.snaps):
         if lag and j == len(vm.snaps) - 1:
             continue
-        dk = ''.join('<disk><key>%d</key>%s</disk>' % (d.key, chain_xml(vm, list(reversed(s.chains[di] if getattr(vm, 'branched', False) else d.levels[:j + 1])))) for di, d in enumerate(vm.disks) if not getattr(d, 'indep', False))
+        dk = ''.join('<disk><key>%d</key>%s</disk>' % (d.key, chain_xml(vm, (lambda c: c if verkey(S.prof['api']) >= (7, 0) else list(reversed(c)))(list(s.chains[di] if getattr(vm, 'branched', False) else d.levels[:j + 1])))) for di, d in enumerate(vm.disks) if not getattr(d, 'indep', False))
         mem = '<memoryKey>%d</memoryKey>' % vm.files[s.vmem]['key'] if s.vmem else '<memoryKey>-1</memoryKey>'
         snaps += '<snapshot><key type="VirtualMachineSnapshot">%s</key><dataKey>%d</dataKey>%s%s</snapshot>' % (s.ref, vm.files[s.vmsn]['key'], mem, dk)
     return files + disks + snaps + '<timestamp>%s</timestamp>' % iso(time.time())
@@ -509,7 +509,9 @@ def vm_prop(vm, path):
         if inaccessible and path != 'snapshot':
             return None
     if path == 'config.keyId':
-        if verkey(S.prof['api']) < (6, 5):
+        # настоящий ESXi 7.0.3 отвечает InvalidProperty и тогда, когда СЕРВЕР новый, а версия в SOAPAction (urn:vim25/6.0) старая:
+        # набор свойств определяется версией запроса (docs/ESXI.md, «Проверка на настоящем ESXi 7»)
+        if verkey(S.prof['api']) < (6, 5) or (getattr(REQV, 'v', None) and verkey(REQV.v) < (6, 5)):
             raise Fault('InvalidProperty', 'The property config.keyId is not valid for VirtualMachine')
         return '<val xsi:type="CryptoKeyId"><keyId>0e1c3f9a-5b6d-4a44-9c1e-77f6e3a3d001</keyId><providerId><id>mock-kms</id></providerId></val>' if getattr(vm, 'encrypted', False) else None
     if path == 'config.template':
@@ -1232,10 +1234,15 @@ METHODS = {'CreateSnapshot_Task': m_create_snapshot, 'RemoveSnapshot_Task': m_re
            'RegisterVM_Task': m_register_vm, 'PowerOnVM_Task': m_power_on}
 
 
+REQV = threading.local()
+
+
 def soap(h, body):
     action = (h.headers.get('SOAPAction') or '').strip('"')
+    REQV.v = None
     if action.startswith('urn:vim25/'):
         v = action[len('urn:vim25/'):]
+        REQV.v = v
         if verkey(v) and verkey(v) < verkey(S.prof['minsoap']):
             record('fault', 'soap-version', v)
             raise Fault('InvalidRequest', 'The SOAP request version %s is not supported by this server (minimum %s).' % (v, S.prof['minsoap']), 500)
@@ -1737,7 +1744,7 @@ def control(cmd, a, q):
             return dict(ok=True)
         if cmd == 'snapshot':       # an instant snapshot (a user's own, or a leftover of a crashed backup)
             vm = next(v for v in S.vms.values() if v.name == a['vm'])
-            sn = make_snapshot(vm, a['name'], a.get('desc', ''), False, False)
+            sn = make_snapshot(vm, a['name'], a.get('desc', ''), bool(a.get('memory')), False)
             S.events.append(('create', vm.name, sn.name))
             return dict(ref=sn.ref)
         if cmd == 'revert':         # revert to a snapshot: the running delta is dropped and a new one starts on the snapshot's chain (the tree branches at the next snapshot)

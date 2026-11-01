@@ -165,3 +165,9 @@ harness calls `EsxiTeardown` (src/tests_esxi.cpp, registered with `RegTeardown`,
 server, i.e. deletes all VMs, sessions and injected faults. A test still deletes its own VMs where it can (`DeleteVm`), but nothing
 depends on it. A new group with external resources registers its own teardown the same way: `static RegTeardown r("group", fn);`.
 
+
+
+## Настоящий ESXi (tools/esxi7/)
+
+`vm.sh` (поднять / остановить / снести вложенный ESXi 7 и его изолированную сеть 10.213.77.0/24), `setup-guest.sh`, `run-real.sh`, `ssh.sh`, `record_fixtures.py`; подробности и результаты: docs/ESXI.md, «Проверка на настоящем ESXi 7».
+Группа `esxireal` без ключа `esxi_real` в servers.json пропускается и в обычный прогон не входит по результату (skip).

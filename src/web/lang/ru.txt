@@ -27,6 +27,7 @@ All	Все
 All interfaces	Все интерфейсы
 All results	Все результаты
 Allow a copy of a running VM (the copy is consistent only at the crash level)	Разрешить копирование работающей ВМ (копия согласована только на уровне аварийного отключения)
+Also back up the existing snapshots of the VM	Копировать также существующие снимки ВМ
 An administrator needs two-factor authentication when it is required in the security settings.	Администратору нужна двухфакторная проверка, если она требуется в настройках безопасности.
 Apply	Применить
 Archive	Архив
@@ -415,6 +416,7 @@ Web access	Веб-доступ
 Wed	Ср
 Weekly	Еженедельно
 Windows maps drives per user. The service sees only the drives mapped for users who are logged on and its own. The drive letter itself cannot be used by the service: its UNC path is stored, and the credentials must be entered.	Windows подключает диски для каждого пользователя отдельно. Служба видит только диски вошедших в систему пользователей и свои собственные. Саму букву диска служба использовать не может: сохраняется UNC-путь, а имя пользователя и пароль нужно ввести.
+Without it, the memory files of the other snapshots, the side branches of the snapshot tree and the snapshot list are left out; the disks the current state depends on are always copied.	Без этого память остальных снимков, боковые ветки дерева снимков и список снимков не копируются; диски, от которых зависит текущее состояние, копируются всегда.
 Write these one-time codes down now: they are shown only once.	Запишите эти одноразовые коды сейчас: они показываются только один раз.
 Yes	Да
 Your session has ended. Sign in again.	Сеанс завершён. Войдите снова.

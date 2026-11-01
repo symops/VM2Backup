@@ -27,6 +27,7 @@ All	Wszystkie
 All interfaces	Wszystkie interfejsy
 All results	Wszystkie wyniki
 Allow a copy of a running VM (the copy is consistent only at the crash level)	Zezwól na kopiowanie działającej maszyny (kopia jest spójna tylko na poziomie awaryjnym)
+Also back up the existing snapshots of the VM	Kopiuj także istniejące migawki maszyny wirtualnej
 An administrator needs two-factor authentication when it is required in the security settings.	Administrator potrzebuje uwierzytelniania dwuskładnikowego, gdy jest ono wymagane w ustawieniach zabezpieczeń.
 Apply	Zastosuj
 Archive	Archiwum
@@ -415,6 +416,7 @@ Web access	Dostęp przez WWW
 Wed	Śr
 Weekly	Co tydzień
 Windows maps drives per user. The service sees only the drives mapped for users who are logged on and its own. The drive letter itself cannot be used by the service: its UNC path is stored, and the credentials must be entered.	System Windows mapuje dyski dla każdego użytkownika osobno. Usługa widzi tylko dyski zmapowane dla zalogowanych użytkowników i własne. Sama litera dysku nie może być użyta przez usługę: zapisywana jest jej ścieżka UNC, a dane logowania trzeba wpisać.
+Without it, the memory files of the other snapshots, the side branches of the snapshot tree and the snapshot list are left out; the disks the current state depends on are always copied.	Bez tej opcji pliki pamięci pozostałych migawek, boczne gałęzie drzewa migawek i lista migawek nie są kopiowane; dyski, od których zależy bieżący stan, są kopiowane zawsze.
 Write these one-time codes down now: they are shown only once.	Zapisz te jednorazowe kody teraz: są pokazywane tylko raz.
 Yes	Tak
 Your session has ended. Sign in again.	Twoja sesja wygasła. Zaloguj się ponownie.

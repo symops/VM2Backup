@@ -27,6 +27,7 @@ All	Tous
 All interfaces	Toutes les interfaces
 All results	Tous les résultats
 Allow a copy of a running VM (the copy is consistent only at the crash level)	Autoriser la copie d'une VM en cours d'exécution (la copie n'est cohérente qu'au niveau d'un arrêt brutal)
+Also back up the existing snapshots of the VM	Sauvegarder aussi les instantanés existants de la VM
 An administrator needs two-factor authentication when it is required in the security settings.	Un administrateur doit utiliser l'authentification à deux facteurs lorsqu'elle est exigée dans les paramètres de sécurité.
 Apply	Appliquer
 Archive	Archive
@@ -415,6 +416,7 @@ Web access	Accès web
 Wed	Mer
 Weekly	Hebdomadaire
 Windows maps drives per user. The service sees only the drives mapped for users who are logged on and its own. The drive letter itself cannot be used by the service: its UNC path is stored, and the credentials must be entered.	Windows mappe les lecteurs par utilisateur. Le service ne voit que les lecteurs mappés pour les utilisateurs connectés et les siens. La lettre de lecteur elle-même ne peut pas être utilisée par le service : son chemin UNC est enregistré et les identifiants doivent être saisis.
+Without it, the memory files of the other snapshots, the side branches of the snapshot tree and the snapshot list are left out; the disks the current state depends on are always copied.	Sans cette option, les fichiers mémoire des autres instantanés, les branches latérales de l'arbre des instantanés et la liste des instantanés ne sont pas copiés ; les disques dont dépend l'état actuel sont toujours copiés.
 Write these one-time codes down now: they are shown only once.	Notez ces codes à usage unique maintenant : ils ne sont affichés qu'une seule fois.
 Yes	Oui
 Your session has ended. Sign in again.	Votre session est terminée. Reconnectez-vous.

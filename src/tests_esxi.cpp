@@ -350,7 +350,7 @@ VM2B_TEST("esxi", esxi_list_all_profiles)
         T_CHECK(ctl.counter("auth:Login") >= 1); T_CHECK(ctl.counter("auth:Logout") >= 1);
         // an old-protocol server (9.0 refuses the 6.0 version string) costs one refused request
         T_CHECK(ctl.counter("fault:soap-version") == (e.profile == "9.0" ? 1 : 0));
-        T_CHECK(ctl.counter("soap:RetrieveServiceContent") == 1);
+        { int rsc = ctl.counter("soap:RetrieveServiceContent"); T_CHECK(rsc >= 1 && rsc <= 3); }      // one, plus one to switch the SOAPAction to the newest version the server reaches (real ESXi 7.0.3 needs that)
         T_CHECK(Str(src->kind()) == "esxi");
         delete src;
         for (const Str& n2 : names) { Json o, a = Json::object(); a["name"] = n2; ctl.call("delete_vm", a, o); }
@@ -2661,4 +2661,116 @@ VM2B_TEST("esxi", esxi_two_restores_to_the_same_name_at_once)
     return true;
 }
 
+} // namespace vm2b
+
+// ============================================================================================================================
+// snapshot.history: копировать ли остальные снимки ВМ (по умолчанию да)
+// ============================================================================================================================
+namespace vm2b {
+static Json HistMeta(const Str& dest) { Bytes mb; Str me, pe; Json mj; if (ReadWholeFile(JoinPath(dest, "vm2backup-meta.json").c_str(), mb, me)) Json::parse((const char*)mb.data(), mb.size(), mj, pe); return mj; }
+static int HistCount(const Json& mj, const char* suffix) { int n = 0; const Json& fl = mj.get("files"); for (size_t i = 0; i < fl.size(); ++i) if (fl.at(i).get("path").str().ends_with(suffix)) ++n; return n; }
+
+VM2B_TEST("esxi", esxi_snapshot_history_option)
+{
+    Vec<Env> all, es; if (!Envs(c_, all)) return true; Normal(all, es);
+    EsTmp tmp(c_, "esxi-hist");
+    int pick = c_.range(0, (int)es.size() - 1);
+    for (int rep = 0; rep < 3; ++rep) {
+        const Env& e = es[(size_t)((pick + rep * 5) % (int)es.size())];
+        Ctl ctl(e); ctl.reset();
+        Fix f; T_CHECK(MakeFix(c_, ctl, e, f, "HI", 2, 300000, "poweredOn", true, 40000)); if (!f.m.ok) return false;
+        auto snap = [&](const char* nm) { Json o, a = Json::object(); a["vm"] = f.spec.name; a["name"] = nm; a["memory"] = true; ctl.call("snapshot", a, o); };
+        auto write = [&](int seed) { Json o, a = Json::object(); a["vm"] = f.spec.name; a["disk"] = 0; a["offset"] = 0; a["length"] = 5000; a["seed"] = seed; ctl.call("guestwrite", a, o); };
+        snap("hist-s1"); write(11); snap("hist-s2"); write(12);
+        { Json o, a = Json::object(); a["vm"] = f.spec.name; a["name"] = "hist-s1"; ctl.call("revert", a, o); }       // a side branch: s2 is not an ancestor of the current state
+        write(13); snap("hist-s3"); write(14);
+        int mockSnaps = ctl.snapCount(f.spec.name); T_CHECK(mockSnaps == 3);
+        int nTrue = 0, nFalse = 0;
+        for (int hist = 1; hist >= 0; --hist) {
+            Json cfg = e.cfg(); cfg["snapshot"]["history"] = hist != 0;
+            Str err; VmSource* src = NewEsxiSource(cfg, err);
+            Str store = tmp.sub(hist ? "store1" : "store0"), dest = tmp.sub(hist ? "r1" : "r0"); RemoveTree(store); RemoveTree(dest);
+            Target* t = LocalAt(store); Manifest man; Str warn; Pr pr; BackupOptions o; o.kdfIterations = 3000; o.retry = Fast(); o.allowLive = true;
+            bool ok = BackupVm(*src, f.spec.name, *t, o, &pr, man, warn, err);
+            if (!ok) c_.note("%s history=%d: %s", e.name.c_str(), hist, err.c_str());
+            T_CHECK(ok); if (!ok) { delete t; delete src; break; }
+            Str re; Manifest rm; T_CHECK(Restore(c_, *t, man, o, dest, re));
+            Json mj = HistMeta(dest);
+            T_CHECK(mj.get("snapshot_history").boolean(true) == (hist != 0));
+            int nf = (int)mj.get("files").size(); (hist ? nTrue : nFalse) = nf;
+            int vmem = HistCount(mj, ".vmem"), vmsn = HistCount(mj, ".vmsn");
+            c_.note("%s history=%d: %d files, %d .vmsn, %d .vmem, not copied: %d", e.name.c_str(), hist, nf, vmsn, vmem, (int)mj.get("snapshots_not_copied").integer());
+            if (hist) { T_CHECK(vmem >= 3); T_CHECK(vmsn >= 4); T_CHECK(mj.get("snapshots_not_copied").integer() == 0); }
+            else { T_CHECK(vmem == 0); T_CHECK(vmsn <= 1); T_CHECK(mj.get("snapshots_not_copied").integer() == 3); }
+            if (hist) {                                                  // the old behaviour, bit for bit: every file of the host's VM folder is in the copy
+                Vec<FI> before; Walk(f.m.dir, "", before); Vec<FI> after; Walk(JoinPath(dest, EsxiArchivePrefix(f.spec.name)), "", after);
+                for (const FI& b : before) { if (b.rel.ends_with(".vmx") || b.rel.ends_with(".vmsd") || Excluded(b.rel) || b.rel.find("-delta") >= 0 || b.rel.find("-sesparse") >= 0) continue; const FI* a = FindFi(after, MapRel(b.rel)); if (!a || a->sha != b.sha) { c_.note("history=true: %s differs / missing", b.rel.c_str()); T_CHECK(false); } }
+            } else {                                                     // the files the current state depends on are all there and identical
+                Vec<FI> before; Walk(f.m.dir, "", before); Vec<FI> after; Walk(JoinPath(dest, EsxiArchivePrefix(f.spec.name)), "", after);
+                int flats = 0; for (const FI& a : after) if (a.rel.find("-flat") >= 0) { ++flats; const FI* b = FindFi(before, a.rel); T_CHECK(b != nullptr && b->sha == a.sha); }
+                T_CHECK(flats >= 2);
+                // restore to the host: registers, the .vmsd lists no snapshot, the warning says so
+                EsxiRestoreOptions ro; ro.vmName = f.spec.name + " nohist"; Str newName = ro.vmName;
+                ReadOptions rd = RestoreRo(tmp); EsxiRestoreResult res; Str rerr; Pr pr2;
+                bool rok = RestoreToEsxi(*t, man.archive, cfg, ro, o.password, rd, &pr2, &res, rerr); if (!rok) c_.note("restore: %s", rerr.c_str());
+                T_CHECK(rok);
+                if (rok) { T_CHECK(Contains(res.warning, "without its snapshots")); Json v = ctl.vmState(newName); T_CHECK(!v.is_null()); T_CHECK(v.get("snapshots").size() == 0);
+                           Vec<FI> got; Walk(JoinPath(JoinPath(e.root, "datastore1"), newName), "", got);
+                           for (const FI& g : got) if (g.rel.ends_with(".vmsd")) { Bytes sb; Str se; ReadWholeFile(g.full.c_str(), sb, se); Str st((const char*)sb.data(), sb.size()); T_CHECK(st.find("snapshot0") < 0 && st.find("hist-s") < 0); }
+                           for (const FI& g : got) if (g.rel.ends_with(".vmx")) { Bytes xb; Str xe; ReadWholeFile(g.full.c_str(), xb, xe); Str xt((const char*)xb.data(), xb.size()); Str fnm = VmxValue(xt, "scsi0:0.fileName"); T_CHECK(fnm.find("-0000") >= 0); if (fnm.find("-0000") < 0) c_.note("the restored .vmx points at %s, not at the newest frozen delta", fnm.c_str()); }       // chain order: newest first (6.x) or oldest first (7.0+, as a real host)
+                           DeleteVm(ctl, newName); }
+            }
+            delete t; delete src; RemoveTree(store); RemoveTree(dest);
+        }
+        T_CHECK(nFalse > 0 && nFalse < nTrue);
+        T_CHECK(ctl.leaked() == 0);
+        DeleteVm(ctl, f.spec.name);
+    }
+    return true;
+}
+} // namespace vm2b
+
+// ============================================================================================================================
+// Образцы ответов НАСТОЯЩЕГО ESXi 7.0.3 (tests/fixtures/esxi7-real, снимает tools/esxi7/record_fixtures.py): разбор тем же XML-кодом, что и в источнике
+// ============================================================================================================================
+namespace vm2b {
+VM2B_TEST("esxi", esxi_real_fixtures_parse)
+{
+    wchar_t exe[MAX_PATH]; GetModuleFileNameW(nullptr, exe, MAX_PATH);
+    Str dir = FromWide(exe); int cut = dir.rfind('\\'); if (cut < 0) cut = dir.rfind('/');
+    if (cut > 0) dir = dir.substr(0, (size_t)cut);
+    Str fx;
+    static const char* const ups[] = { "\\..\\..\\tests\\fixtures\\esxi7-real", "\\..\\tests\\fixtures\\esxi7-real", "\\tests\\fixtures\\esxi7-real" };
+    for (const char* up : ups) { Str d = dir + up; if (GetFileAttributesW(FilePath(JoinPath(d, "RetrieveServiceContent.resp.xml"))) != INVALID_FILE_ATTRIBUTES) { fx = d; break; } }
+    if (fx.empty()) { c_.skip("tests/fixtures/esxi7-real не найдена рядом с программой"); return true; }
+    auto load = [&](const char* n, XmlNode& doc) {
+        Bytes b; Str e; if (!ReadWholeFile(JoinPath(fx, n).c_str(), b, e)) { c_.note("не прочитан %s", n); return false; }
+        size_t i = 0; while (i < b.size() && b[i] != '\n') ++i;              // первая строка "HTTP <код>"
+        Str xe; return XmlParse((const char*)b.data() + i, b.size() - i, doc, xe);
+    };
+    XmlNode d;
+    T_CHECK(load("RetrieveServiceContent.resp.xml", d));
+    { const XmlNode* r = d.child("Body") ? d.child("Body")->child("RetrieveServiceContentResponse") : nullptr; T_CHECK(r != nullptr);
+      const XmlNode* rv = r ? r->child("returnval") : nullptr; T_CHECK(rv != nullptr);
+      if (rv) { T_CHECK(rv->child("about") && rv->child("about")->childText("apiVersion").trim() == "7.0.3.0"); T_CHECK(rv->childText("rootFolder").trim() == "ha-folder-root"); T_CHECK(rv->childText("propertyCollector").trim() == "ha-property-collector"); } }
+    XmlNode f1;
+    T_CHECK(load("RetrievePropertiesEx-fault-InvalidProperty-keyId.resp.xml", f1));
+    { const XmlNode* ft = f1.child("Body") ? f1.child("Body")->child("Fault") : nullptr; T_CHECK(ft != nullptr);
+      if (ft) { const XmlNode* det = ft->child("detail"); T_CHECK(det && !det->kids.empty()); if (det && !det->kids.empty()) { T_CHECK(det->kids[0].xsiType() == "InvalidProperty"); T_CHECK(det->kids[0].childText("name").trim() == "config.keyId"); } T_CHECK(ft->childText("faultstring").trim().empty()); } }
+    XmlNode f2;
+    T_CHECK(load("Login-fault-InvalidLogin.resp.xml", f2));
+    { const XmlNode* ft = f2.child("Body") ? f2.child("Body")->child("Fault") : nullptr; T_CHECK(ft != nullptr);
+      if (ft && ft->child("detail") && !ft->child("detail")->kids.empty()) T_CHECK(ft->child("detail")->kids[0].xsiType() == "InvalidLogin"); }
+    XmlNode lx;
+    T_CHECK(load("RetrievePropertiesEx-layoutEx.resp.xml", lx));
+    { const XmlNode* rv = lx.child("Body") && lx.child("Body")->child("RetrievePropertiesExResponse") ? lx.child("Body")->child("RetrievePropertiesExResponse")->child("returnval") : nullptr;
+      const XmlNode* ob = rv ? rv->child("objects") : nullptr; T_CHECK(ob != nullptr);
+      int files = 0, chains = 0, snaps = 0;
+      if (ob) for (const XmlNode& ps : ob->kids) if (ps.name == "propSet" && ps.childText("name").trim() == "layoutEx") {
+          const XmlNode* v = ps.child("val"); T_CHECK(v && v->xsiType() == "VirtualMachineFileLayoutEx");
+          if (v) for (const XmlNode& k : v->kids) { if (k.name == "file") ++files; if (k.name == "disk") for (const XmlNode& c : k.kids) if (c.name == "chain") ++chains; if (k.name == "snapshot") ++snaps; }
+      }
+      T_CHECK(files >= 8); T_CHECK(chains >= 2); T_CHECK(snaps >= 3); }
+    return true;
+}
 } // namespace vm2b

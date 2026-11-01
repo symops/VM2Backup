@@ -8,6 +8,24 @@
 
 namespace vm2b {
 
+// Запись обмена SOAP для снятия образцов настоящих ответов сервера (docs/ESXI.md): только при заданной переменной окружения
+// VM2B_ESXI_TRACE=<папка>.  Пароль из Login и значения cookie в файл не попадают.
+static void TraceSoap(const char* method, const Str& req, int status, const Bytes& resp)
+{
+    static const char* dir = getenv("VM2B_ESXI_TRACE");
+    if (!dir || !*dir) return;
+    static volatile LONG seq = 0;
+    LONG n = InterlockedIncrement(&seq);
+    Str rq = req;
+    if (!strcmp(method, "Login")) { int a = rq.find("<password>"), b = rq.find("</password>"); if (a >= 0 && b > a) rq = rq.substr(0, (size_t)a + 10) + "***" + rq.substr((size_t)b); }
+    Str e; Str base = JoinPath(dir, Str::fmt("%04d-%s", (int)n, method));
+    WriteWholeFile((base + ".req.xml").c_str(), rq.data(), rq.size(), e);
+    Str hdr = Str::fmt("HTTP %d\n", status);
+    Str body = hdr + Str((const char*)resp.data(), resp.size());
+    WriteWholeFile((base + ".resp.xml").c_str(), body.data(), body.size(), e);
+}
+
+
 // ---- pure helpers -----------------------------------------------------------------------------------------------
 bool EsxiParseDsPath(const Str& s, Str& ds, Str& path)
 {
@@ -318,6 +336,7 @@ public:
         const Json& sn = cfg.get("snapshot");
         m_quiesce = sn.is_object() ? sn.get("quiesce").boolean(true) : true;
         m_memory = sn.is_object() ? sn.get("memory").boolean(false) : false;
+        m_history = sn.is_object() ? sn.get("history").boolean(true) : true;       // false: the VM's other snapshots (memory, side branches, the list) are not copied
         m_taskTimeout = (int)cfg.get("task_timeout").integer(600); m_removeTimeout = (int)cfg.get("remove_timeout").integer(3600);
         m_pollMs = (int)cfg.get("poll_ms").integer(150);
         m_ver = "6.0";
@@ -386,6 +405,7 @@ private:
             HttpResponse r; Bytes out;
             if (!m_soap->requestBytes("POST", "/sdk", h, env.data(), env.size(), r, out)) return failHttp(*m_soap);
             m_status = r.status; m_hasFault = false; m_faultType.clear(); m_faultMsg.clear();
+            TraceSoap(method, env, r.status, out);
             Str xerr; bool parsed = !out.empty() && XmlParse((const char*)out.data(), out.size(), m_doc, xerr);
             const XmlNode* body = parsed ? m_doc.child("Body") : nullptr;
             const XmlNode* fault = body ? body->child("Fault") : nullptr;
@@ -431,6 +451,17 @@ private:
                 if (ab) { m_fullName = ab->childText("fullName"); m_apiVersion = ab->childText("apiVersion").trim(); m_apiType = ab->childText("apiType").trim(); m_product = ab->childText("productLineId").trim(); }
                 if (m_rootFolder.empty() || m_pc.empty() || m_viewMgr.empty() || m_sessMgr.empty()) return fail("unexpected ServiceContent (no inventory managers)");
                 m_haveContent = true;
+                // The SOAPAction version also decides which properties the server knows (a real ESXi 7.0.3 answered "6.0" but then refused
+                // config.keyId, a 6.5 property, with InvalidProperty): speak the newest version we know that the server's apiVersion reaches.
+                {
+                    Str best = m_ver;
+                    for (const char* w : vers) if (EsxiCompareVersion(w, m_apiVersion) <= 0 && EsxiCompareVersion(w, best) > 0) best = w;
+                    if (best != m_ver) {
+                        Str old = m_ver; m_ver = best;
+                        const XmlNode* r2;
+                        if (!call("RetrieveServiceContent", Ref("_this", "ServiceInstance", "ServiceInstance"), r2, false)) { m_ver = old; err.clear(); m_hasFault = false; m_status = 0; }
+                    }
+                }
                 return true;
             }
             last = err;
@@ -583,7 +614,7 @@ private:
     }
 
     // The properties of VMs: `forList` = what the list needs, otherwise what a backup needs
-    bool hasKeyId() const { int a = atoi(m_apiVersion.c_str()), b = 0; int d = m_apiVersion.find('.'); if (d > 0) b = atoi(m_apiVersion.c_str() + d + 1); return a > 6 || (a == 6 && b >= 5); }   // VirtualMachineConfigInfo.keyId exists since 6.5
+    bool hasKeyId() const { int a = atoi(m_apiVersion.c_str()), b = 0; int d = m_apiVersion.find('.'); if (d > 0) b = atoi(m_apiVersion.c_str() + d + 1); return (a > 6 || (a == 6 && b >= 5)) && EsxiCompareVersion(m_ver, "6.5") >= 0; }   // VirtualMachineConfigInfo.keyId exists since 6.5
     Str VmPropSet(bool forList) const {
         static const char* common[] = { "name", "runtime.powerState", "runtime.connectionState", "config.template", "config.uuid", "config.instanceUuid", "config.guestFullName",
                                         "config.files.vmPathName" };
@@ -818,19 +849,35 @@ private:
     // ---- state ---------------------------------------------------------------------------------------------------
     Json m_cfg;
     Str m_host, m_user, m_password, m_dcCfg, m_ver; int m_port;
-    bool m_vcenter, m_quiesce, m_memory;
+    bool m_vcenter, m_quiesce, m_memory, m_history = true; int m_skippedSnaps = 0;
     int m_taskTimeout, m_removeTimeout, m_pollMs;
     HttpClient* m_soap; HttpClient* m_files;
     volatile long m_abort;
     bool m_haveContent, m_loggedIn;
     Str m_rootFolder, m_pc, m_viewMgr, m_sessMgr, m_fileMgr, m_fullName, m_apiVersion, m_apiType, m_product;
     XmlNode m_doc; int m_status; bool m_hasFault; Str m_faultType, m_faultMsg;
-    bool m_noEx;
+    bool m_noEx; bool m_vmOn = false;
     // what begin() prepared
     bool m_begun, m_reused; int m_skippedLive; DWORD m_hbTick; Str m_runToken;
     Str m_vmRef, m_vmName, m_dc, m_snapRef, m_snapName, m_prefix, m_meta, m_leaked; i64 m_metaTime;
     Vec<FileItem> m_list;
 };
+
+// Which link of a snapshot's disk chain is the NEWEST (the one the restored .vmx must point at; its descriptor names its parents)?  A real ESXi 7.0.3 lists the links
+// oldest first (base, then the deltas), the emulator newest first, the VMware documentation does not say: the base link is the one whose extent is not a delta / sesparse file.
+static size_t TopLink(const VmData& vm, const LxDisk& d)
+{
+    size_t n = d.chain.size();
+    if (n <= 1) return 0;
+    auto isDelta = [&](const Vec<i64>& link) {
+        for (i64 k : link) { const LxFile* f = vm.lx.file(k); if (f && f->type == "diskExtent" && (f->name.find("-delta.vmdk") >= 0 || f->name.find("-sesparse.vmdk") >= 0 || f->name.find("-ctk.vmdk") >= 0)) return true; }
+        return false;
+    };
+    bool firstDelta = isDelta(d.chain[0]), lastDelta = isDelta(d.chain[n - 1]);
+    if (!firstDelta && lastDelta) return n - 1;           // base first (real hosts)
+    if (firstDelta && !lastDelta) return 0;               // newest first
+    return n - 1;                                          // cannot tell: the order of the real host
+}
 
 bool Impl::buildFiles(const VmData& vm, const Str& snapRef, Vec<FileItem>& out, Str& warning, Json& ignored, Json& disksMeta, Json& snapFiles)
 {
@@ -841,20 +888,24 @@ bool Impl::buildFiles(const VmData& vm, const Str& snapRef, Vec<FileItem>& out, 
     for (const LxSnap& s : vm.lx.snaps) if (s.key == snapRef) snap = &s;
     if (!snap) return fail("the server's file layout does not list the new snapshot (cannot tell which files it froze)");
 
+    m_skippedSnaps = m_history || vm.lx.snaps.empty() ? 0 : (int)vm.lx.snaps.size() - 1;
     Vec<i64> keys; Vec<int> groups;
     auto add = [&](i64 k, int g) { for (size_t i = 0; i < keys.size(); ++i) if (keys[i] == k) return; keys.push_back(k); groups.push_back(g); };
     // configuration and snapshot description files
     for (const LxFile& f : vm.lx.files) {
         const Str& t = f.type;
         if (t == "config" || t == "extendedConfig" || t == "nvram" || t == "snapshotList" || t == "namespaceData") add(f.key, 0);
-        else if (t == "snapshotData" || t == "snapshotMemory" || t == "suspend" || t == "suspendMemory") add(f.key, 1);
+        else if (t == "snapshotData" || t == "snapshotMemory") { if (m_history || f.key == snap->dataKey || f.key == snap->memoryKey) add(f.key, 1); }      // other snapshots' state: only with history
+        else if (t == "suspend" || t == "suspendMemory") add(f.key, 1);
         else if (t == "diskDescriptor" || t == "diskExtent") {}                    // decided through the chains below
         else if (t == "swap" || t == "uwswap" || t == "log" || t == "stat" || t == "core" || t == "screenshot" || t == "digestDescriptor" || t == "digestExtent" ||
                  t == "diskReplicationState" || t == "ctkEnabledDigest") {}
         else { Json o = Json::object(); o["name"] = f.name; o["type"] = f.type; ignored.push(o); }
     }
     // disk chains of every snapshot: the files the snapshots froze (the running point's new delta is in none of them)
+    // (without history only the new snapshot's chains: its disks hold every ancestor of the current state, other branches of the tree are left out)
     for (const LxSnap& s : vm.lx.snaps) {
+        if (!m_history && &s != snap) continue;
         for (const LxDisk& d : s.disks) for (const Vec<i64>& link : d.chain) for (i64 k : link) add(k, 2);
         if (s.dataKey >= 0) add(s.dataKey, 1);
         if (s.memoryKey >= 0) add(s.memoryKey, 1);
@@ -936,7 +987,7 @@ bool Impl::buildFiles(const VmData& vm, const Str& snapRef, Vec<FileItem>& out, 
         }
         for (const LxDisk& sd : snap->disks) {
             if (sd.key != dd.key || sd.chain.empty()) continue;
-            for (i64 k : sd.chain[0]) {
+            for (i64 k : sd.chain[TopLink(vm, sd)]) {
                 const LxFile* lf = vm.lx.file(k);
                 if (lf && lf->type == "diskDescriptor") for (const FileItem& f : out) if (f.name == lf->name) o["snapshot_descriptor"] = f.arc;
             }
@@ -969,7 +1020,7 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
     }
     if (!v.haveConfig) return fail("the VM \"" + vm + "\" is not accessible (state: " + (v.conn.empty() ? Str("unknown") : v.conn) + ")");
     if (!v.conn.empty() && v.conn != "connected") return fail("the VM \"" + vm + "\" is not accessible (state: " + v.conn + ")");
-    bool poweredOn = v.power == "poweredOn";
+    bool poweredOn = v.power == "poweredOn"; m_vmOn = poweredOn;
 
     // 1. the snapshot: re-attach to the one of the interrupted run, or start over (leftovers of earlier runs are removed)
     Str keepRef, keepName; bool reuse = false;
@@ -1056,7 +1107,7 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
     { Str dsx, px; EsxiParseDsPath(after.vmPath, dsx, px); int sl = px.rfind('/');
       meta["datastore"] = dsx; meta["vm_dir"] = sl >= 0 ? px.substr(0, (size_t)sl) : Str(); meta["vmx_name"] = sl >= 0 ? px.substr((size_t)sl + 1) : px; }
     meta["snapshot_files"] = snapFiles;
-    meta["snapshot"] = m_snapName; meta["snapshot_quiesce"] = m_quiesce && poweredOn; meta["reused_snapshot"] = m_reused;
+    meta["snapshot_history"] = m_history; meta["snapshots_not_copied"] = m_skippedSnaps; meta["snapshot"] = m_snapName; meta["snapshot_quiesce"] = m_quiesce && poweredOn; meta["reused_snapshot"] = m_reused;
     Json fl = Json::array();
     for (const FileItem& f : m_list) { Json o = Json::object(); o["name"] = f.name; o["path"] = f.arc; if (f.origArc != f.arc) o["orig_path"] = f.origArc; o["size"] = f.size; o["type"] = f.type; fl.push(o); }
     meta["files"] = fl; meta["disks"] = disksMeta; meta["ignored_files"] = ignored;
@@ -1109,7 +1160,12 @@ bool Impl::pack(TarWriter& tar, Progress* pr, Str& warning)
             if (r.status == 416) { shrank = true; m_files->close(); }
             else if (r.status != 200 && r.status != 206) {
                 m_files->close();
-                return fail(Str::fmt("reading %s: HTTP %d %s", f.name.c_str(), r.status, OneLine(r.reason).c_str()), false);      // (500, 502, 503 and 504 were tried 3 times above)
+                Str hint;
+                // Настоящий ESXi 7.0.3: диск ЗАПУЩЕННОЙ ВМ, даже замороженная снимком база (-flat.vmdk), открыт процессом ВМ, и интерфейс /folder
+                // отвечает пустым HTTP 500 («Failed to lock file» в hostd.log). Скажем об этом прямо, а не просто «HTTP 500».
+                if (r.status == 500 && m_vmOn && IsBinaryType(f.type))
+                    hint = " (the running VM keeps this disk locked: ESXi does not give a disk of a powered-on VM over the datastore HTTP interface, even after a snapshot; power the VM off for the backup, see docs/ESXI.md)";
+                return fail(Str::fmt("reading %s: HTTP %d %s", f.name.c_str(), r.status, OneLine(r.reason).c_str()) + hint, false);      // (500, 502, 503 and 504 were tried 3 times above)
             } else {
                 if (IsBinaryType(f.type) && r.headers.value("Content-Type").lower().find("text/html") >= 0) {
                     m_files->close();                                           // an error page of a proxy / a login page, not the file
@@ -1354,7 +1410,10 @@ bool RestoreImpl::loadInventory(Inventory& inv, bool full)
             if (!root) continue;
             InvFolder f; f.id = ids[i]; f.path = path; inv.folders.push_back(f);
         }
-        if (!inv.vmFolder.empty()) { InvFolder f; f.id = inv.vmFolder; inv.folders.push_back(f); }
+        if (!inv.vmFolder.empty()) {      // настоящий ESXi уже отдаёт корневую папку ВМ (ha-folder-vm) среди найденных: второй раз её не добавляем
+            bool have = false; for (const InvFolder& g : inv.folders) if (g.id == inv.vmFolder) have = true;
+            if (!have) { InvFolder f; f.id = inv.vmFolder; inv.folders.push_back(f); }
+        }
     }
     {   // compute resources, pools, hosts
         static const char* pc[] = { "name", "resourcePool", "host" };
@@ -1647,7 +1706,13 @@ bool RestoreImpl::finish()
     Str vmx = EsxiRewriteVmx(m_vmxText, m_name, from, to);
     if (!putMem(m_mainDs, m_dir + "/" + vmxName, vmx)) return false;
     if (!m_vmsdText.empty()) {
-        Str vmsd = EsxiRewriteVmsd(m_vmsdText, m_meta.get("snapshot").str());
+        bool history = m_meta.get("snapshot_history").boolean(true);
+        // a copy made without the snapshots: the other snapshots' files are not in the archive, so the list must not name them
+        Str vmsd = history ? EsxiRewriteVmsd(m_vmsdText, m_meta.get("snapshot").str()) : Str(".encoding = \"UTF-8\"\n");
+        if (!history && m_res && m_meta.get("snapshots_not_copied").integer() > 0) {
+            if (!m_res->warning.empty()) m_res->warning += "; ";
+            m_res->warning += "the VM was backed up without its snapshots: its disks keep the parent chain, the snapshot tree is not restored (vSphere may offer \"Consolidate\")";
+        }
         int sl = vmxName.rfind('.'); Str vname = sl > 0 ? vmxName.substr(0, (size_t)sl) : vmxName;
         if (!putMem(m_mainDs, m_dir + "/" + vname + ".vmsd", vmsd)) return false;
     }

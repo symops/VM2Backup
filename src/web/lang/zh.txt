@@ -27,6 +27,7 @@ All	全部
 All interfaces	所有接口
 All results	所有结果
 Allow a copy of a running VM (the copy is consistent only at the crash level)	允许复制正在运行的虚拟机(副本仅为崩溃一致性)
+Also back up the existing snapshots of the VM	同时备份虚拟机现有的快照
 An administrator needs two-factor authentication when it is required in the security settings.	当安全设置要求时,管理员需要使用双因素认证。
 Apply	应用
 Archive	存档
@@ -415,6 +416,7 @@ Web access	Web 访问
 Wed	周三
 Weekly	每周
 Windows maps drives per user. The service sees only the drives mapped for users who are logged on and its own. The drive letter itself cannot be used by the service: its UNC path is stored, and the credentials must be entered.	Windows 按用户映射驱动器。服务只能看到已登录用户及其自身映射的驱动器。服务无法使用驱动器号本身: 将存储其 UNC 路径,并且必须输入凭据。
+Without it, the memory files of the other snapshots, the side branches of the snapshot tree and the snapshot list are left out; the disks the current state depends on are always copied.	不勾选时，不会复制其他快照的内存文件、快照树的旁支和快照列表；当前状态所依赖的磁盘始终会被复制。
 Write these one-time codes down now: they are shown only once.	请立即记下这些一次性代码: 它们只显示一次。
 Yes	是
 Your session has ended. Sign in again.	您的会话已结束。请重新登录。

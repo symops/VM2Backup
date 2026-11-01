@@ -660,9 +660,10 @@ function createApp(env) {
         var verify = chk('Verify the backup after it is made', el.verify !== false);
         var transport = h('div', { class: 'note' });
         var snap = el.snapshot || {};
-        var quiesce = chk('Quiesce the guest file system (needs VMware Tools in the VM)', snap.quiesce !== false), memory = chk('Include the memory of the virtual machine in the snapshot', !!snap.memory), snapDc = txt(el.source.datacenter || '');
+        var quiesce = chk('Quiesce the guest file system (needs VMware Tools in the VM)', snap.quiesce !== false), memory = chk('Include the memory of the virtual machine in the snapshot', !!snap.memory), history = chk('Also back up the existing snapshots of the VM', snap.history !== false), snapDc = txt(el.source.datacenter || '');
         var snapNote = h('div', { class: 'note' }), liveRow = h('div', { class: 'f' }, live);
-        var snapBox = h('div', null, h('fieldset', null, h('legend', { text: T('Snapshot') }), h('div', { class: 'f' }, quiesce), h('div', { class: 'f' }, memory),
+        var snapBox = h('div', null, h('fieldset', null, h('legend', { text: T('Snapshot') }), h('div', { class: 'f' }, quiesce), h('div', { class: 'f' }, memory), h('div', { class: 'f' }, history),
+            h('div', { class: 'note', text: T('Without it, the memory files of the other snapshots, the side branches of the snapshot tree and the snapshot list are left out; the disks the current state depends on are always copied.') }),
             h('div', { class: 'note', text: T('A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.') })), field('Datacenter', snapDc, 'vCenter only; empty = the one of the server'));
         function srvOf(id) { for (var i = 0; i < S.servers.length; i++) if (S.servers[i].id === id) return S.servers[i]; return null; }
         function fillServers() {
@@ -674,7 +675,7 @@ function createApp(env) {
         }
         function updateSource() {
             var sv = srvOf(srcSel.value), ty = sv ? sv.type : '', vm = ty === 'esxi' || ty === 'vcenter';
-            quiesce.input.disabled = !vm; memory.input.disabled = !vm; snapDc.disabled = ty !== 'vcenter'; liveRow.style.display = vm ? 'none' : '';
+            quiesce.input.disabled = !vm; memory.input.disabled = !vm; history.input.disabled = !vm; snapDc.disabled = ty !== 'vcenter'; liveRow.style.display = vm ? 'none' : '';
             snapNote.textContent = vm ? '' : T('The snapshot settings apply to ESXi and vCenter sources only.');
         }
         function updateTarget() {
@@ -715,7 +716,7 @@ function createApp(env) {
             out.verify = verify.input.checked; out.allow_live = live.input.checked; out.resume = resume.input.checked; out.on_error_next = nextTask.input.checked;
             out.segment_mib = parseInt(seg.value, 10); out.speed_mbit = parseFloat(speed.value) || 0;
             var sv = srvOf(srcSel.value), ty = sv ? sv.type : '';
-            if (ty === 'esxi' || ty === 'vcenter') { out.snapshot = { quiesce: quiesce.input.checked, memory: memory.input.checked }; out.allow_live = true; } else delete out.snapshot;
+            if (ty === 'esxi' || ty === 'vcenter') { out.snapshot = { quiesce: quiesce.input.checked, memory: memory.input.checked, history: history.input.checked }; out.allow_live = true; } else delete out.snapshot;
             if (ty === 'vcenter' && snapDc.value.trim()) out.source.datacenter = snapDc.value.trim(); else delete out.source.datacenter;
             if (enc.input.checked) out.encrypt.password = pw.value;
             return out;

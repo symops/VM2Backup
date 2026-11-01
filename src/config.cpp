@@ -394,6 +394,12 @@ bool Config::ValidateElement(Json& el, const Config& cfg, Str& err)
     if (el.get("segment_mib").integer(0) < 0 || el.get("segment_mib").integer(0) > (1 << 30)) { err = "bad volume size"; return false; }
     if (el.get("speed_mbit").num(0) < 0) { err = "the speed limit cannot be negative"; return false; }
     if (!(el.get("speed_mbit").num(0) <= 1e7)) { err = "the speed limit is too large"; return false; }
+    if (el.has("snapshot") && !el.get("snapshot").is_object()) { err = "the snapshot options must be an object"; return false; }
+    if (el.get("snapshot").is_object()) {                              // snapshot.history: also copy the VM's other (existing) snapshots; default true, an old task without the key keeps copying them
+        Json sn = el.get("snapshot"); const Json& h = sn.get("history");
+        if (sn.has("history") && !h.is_bool() && !h.is_number()) { err = "snapshot.history must be true or false"; return false; }
+        sn["history"] = sn.has("history") ? h.boolean(true) : true; el["snapshot"] = sn;
+    }
     if (!el.has("verify")) el["verify"] = true;
     if (!el.has("on_error_next")) el["on_error_next"] = true;
     return true;

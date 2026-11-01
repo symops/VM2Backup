@@ -1054,3 +1054,85 @@ VM2B_TEST("svcweb", web_network_commands_admin_only)
 }
 
 } // namespace vm2b
+namespace vm2b {
+
+// ============================================================================================================================
+// НАСТОЯЩИЙ ESXi через службу (группа esxireal, ключ "esxi_real" в servers.json; см. tests_esxi_real.cpp и tools/esxi7/run-real.sh)
+// ============================================================================================================================
+VM2B_TEST("esxireal", esxireal_service_flow_and_lockout_guard)
+{
+    if (c_.servers.is_null() || !c_.servers.has("esxi_real")) { c_.skip("нет ключа \"esxi_real\" (tools/esxi7/run-real.sh)"); return true; }
+    const Json& j = c_.servers.get("esxi_real");
+    Bytes pb; Str pe; if (!ReadWholeFile(j.get("password_file").str().c_str(), pb, pe)) { c_.note("не прочитан файл пароля: %s", pe.c_str()); return false; }
+    size_t pn = pb.size(); while (pn > 0 && (pb[pn - 1] == '\n' || pb[pn - 1] == '\r')) --pn;
+    Str password((const char*)pb.data(), pn);
+    Str vmName = j.get("vms").at(0).get("name").str();
+    OpenLogOnce();
+    Svc s(c_, "svcreal"); if (!s.up) return false;
+    s.record = true;
+    auto rec = [&](const char* name, const Str& pw) {
+        Json c = Obj(); c["type"] = "esxi"; c["name"] = name; c["host"] = j.get("host").str(); c["port"] = j.get("port").integer(); c["user"] = j.get("user").str(); c["password"] = pw;
+        if (!j.get("fingerprint").str().empty()) { c["verify"] = true; c["fingerprint"] = j.get("fingerprint"); } else c["verify"] = false;
+        c["tls_min"] = "1.2"; c["transport"] = "api"; c["timeout"] = 120; c["task_timeout"] = 300; c["remove_timeout"] = 600; return c;
+    };
+    // 1. неверный пароль: «Проверка соединения» отказывает один раз, сервер помечается, запуск задачи его НЕ трогает (защита от блокировки учётной записи ESXi)
+    Json bad = rec("real-bad", "wrong-" + password); Json sa = Obj(); sa["server"] = bad; Json saved = s.ok("servers.save", sa);
+    Str badId = saved.get("id").str(); T_CHECK(!badId.empty());
+    { Json ta = Obj(); ta["id"] = badId; T_CHECK(!s.call("servers.test", ta)); T_CHECK(s.lastErr.find("login failed") >= 0); c_.note("неверный пароль: %s", s.lastErr.c_str()); }
+    auto blocked = [&](const Str& id) { Json l = s.ok("servers.list", Obj()); for (size_t i = 0; i < l.size(); ++i) if (l.at(i).get("id").str() == id) return l.at(i).has("auth_blocked"); return false; };
+    T_CHECK(blocked(badId));            // отказ учётных данных запомнен: плановые запуски не будут повторять попытки (иначе ESXi заблокирует учётную запись root)
+    Str store = s.tmp.sub("store");
+    Json el = Svc::Element(badId, vmName.c_str(), JoinPath(store, "{VM}"), "xz", 1, nullptr);
+    el["allow_live"] = true;
+    s.saveTask("real-bad-task", el);
+    Json ra = Obj(); ra["id"] = Str("real-bad-task"); Json run = s.ok("tasks.run", ra); Str jid = run.get("job").str();       // ручной запуск делает ровно одну попытку
+    s.waitJob(jid, 60000); Json hr; T_CHECK(HistoryOf(s, jid, hr));
+    c_.note("ручной запуск с неверным паролем: %s / %s", hr.get("status").str().c_str(), FirstResultMessage(hr).c_str());
+    T_CHECK(hr.get("status").str() == "Failed"); T_CHECK(FirstResultMessage(hr).find("login failed") >= 0); T_CHECK(blocked(badId));
+    // 2. запись исправлена правильным паролем: тест соединения проходит, метка снимается
+    Json good = rec("real-good", password); good["id"] = badId; Json sb = Obj(); sb["server"] = good; s.ok("servers.save", sb);
+    { Json ta = Obj(); ta["id"] = badId; Json r = s.ok("servers.test", ta); T_CHECK(r.get("message").str().find("virtual machine") >= 0); c_.note("после исправления: %s", r.get("message").str().c_str()); }
+    T_CHECK(!blocked(badId));
+    // 3. резервная копия через службу (с шифрованием), проверка, восстановление в папку и на сам ESXi
+    Str archPw = Str::fmt("arch-pw-%u", c_.rnd(1000000));
+    Json el2 = Svc::Element(badId, vmName.c_str(), JoinPath(store, "{VM}"), "xz", 1, archPw.c_str());
+    el2["allow_live"] = true; el2["segment_mib"] = 64;
+    s.saveTask("real-task", el2);
+    Json rb = Obj(); rb["id"] = Str("real-task"); Json run2 = s.ok("tasks.run", rb); Str j2 = run2.get("job").str();
+    Str fin = s.waitJob(j2, 900000); T_CHECK(fin == "Success" || fin == "Gone");
+    Json r2; T_CHECK(HistoryOf(s, j2, r2, 60000)); T_CHECK(r2.get("status").str() == "Success");
+    if (r2.get("status").str() != "Success") { c_.note("задача: %s", FirstResultMessage(r2).c_str()); return false; }
+    Str archive = r2.get("results").at(0).get("archive").str(); T_CHECK(!archive.empty());
+    c_.note("копия через службу: %lld байт, архив %s", (long long)r2.get("results").at(0).get("raw").integer(), archive.c_str());
+    Json qa = Obj(); qa["server"] = "local"; Json bl = s.ok("backups.list", qa); Str bdir;
+    for (size_t i = 0; i < bl.get("backups").size(); ++i) if (bl.get("backups").at(i).get("archive").str() == archive) bdir = bl.get("backups").at(i).get("directory").str();
+    T_CHECK(!bdir.empty());
+    { Json v = Obj(); v["server"] = "local"; v["directory"] = bdir; v["archive"] = archive; v["password"] = archPw; Str vj; T_CHECK(StartOp(s, "backups.verify", v, vj)); Str vs = s.waitJob(vj, 600000); T_CHECK(vs == "Success" || vs == "Gone");
+      Json vr; T_CHECK(HistoryOf(s, vj, vr)); T_CHECK(vr.get("status").str() == "Success"); }
+    { Json w = Obj(); w["server"] = "local"; w["directory"] = bdir; w["archive"] = archive; w["password"] = archPw; w["dest"] = s.tmp.sub("restored"); Str wj; T_CHECK(StartOp(s, "backups.restore", w, wj));
+      Str ws = s.waitJob(wj, 600000); T_CHECK(ws == "Success" || ws == "Gone"); Json wr; T_CHECK(HistoryOf(s, wj, wr)); T_CHECK(wr.get("status").str() == "Success"); }
+    {   // побитово: эталонные суммы дисков, снятые на хосте до копии
+        const Json& vm0 = j.get("vms").at(0); const Json& fl = vm0.get("flat"); bool allOk = fl.size() > 0;
+        for (size_t i = 0; i < fl.size(); ++i) {
+            Sha256Stream hs; Bytes buf; buf.resize(1 << 20); Str path = JoinPath(JoinPath(s.tmp.sub("restored"), EsxiArchivePrefix(vmName)), fl.key_at(i));
+            HANDLE h = CreateFileW(FilePath(path), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+            if (h == INVALID_HANDLE_VALUE) { allOk = false; c_.note("нет файла %s", path.c_str()); continue; }
+            for (;;) { DWORD got = 0; if (!ReadFile(h, buf.data(), (DWORD)buf.size(), &got, nullptr) || got == 0) break; hs.update(buf.data(), got); }
+            CloseHandle(h); u8 d[32]; hs.final(d);
+            bool same = HexEncode(d, 32) == fl.value_at(i).str(); if (!same) allOk = false; c_.note("%s: %s", fl.key_at(i).c_str(), same ? "sha256 совпал" : "sha256 НЕ совпал");
+        }
+        T_CHECK(allOk);
+    }
+    { Json oa = Obj(); oa["server"] = badId; Json opts = s.ok("esxi.restore_options", oa); c_.note("варианты восстановления: %s", opts.dump().c_str());
+      T_CHECK(opts.get("kind").str() == "esxi"); T_CHECK(opts.get("datastores").size() >= 1);
+      Str newName = j.get("restore_prefix").str("vm2b-rt") + "-svc";
+      Json op = GuiOptions(newName, opts.get("datacenter").str(), "", "", "", "", false);
+      Str rj; T_CHECK(StartOp(s, "backups.restore_esxi", RestoreArgs(bdir, archive, archPw, badId, op), rj)); Str rs = s.waitJob(rj, 900000); T_CHECK(rs == "Success" || rs == "Gone");
+      Json rr; T_CHECK(HistoryOf(s, rj, rr)); T_CHECK(rr.get("status").str() == "Success"); if (rr.get("status").str() != "Success") c_.note("restore_esxi: %s", FirstResultMessage(rr).c_str());
+      T_CHECK(rr.get("results").at(0).get("restored_vm").str() == newName); c_.note("RESTORED %s -> %s (%s)", vmName.c_str(), newName.c_str(), rr.get("results").at(0).get("vmx").str().c_str()); }
+    Vec<Str> secrets; secrets.push_back(password); secrets.push_back(archPw);
+    for (const Str& sec : secrets) T_CHECK(s.transcript.find(sec.c_str()) < 0);
+    Str hit = FindSecretInTree(s.opt.dataDir, secrets); if (!hit.empty()) c_.note("секрет найден в %s", hit.c_str()); T_CHECK(hit.empty());
+    return true;
+}
+} // namespace vm2b

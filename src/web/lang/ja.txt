@@ -27,6 +27,7 @@ All	すべて
 All interfaces	すべてのインターフェース
 All results	すべての結果
 Allow a copy of a running VM (the copy is consistent only at the crash level)	実行中の VM のコピーを許可する (コピーはクラッシュレベルでのみ整合性があります)
+Also back up the existing snapshots of the VM	仮想マシンの既存のスナップショットもバックアップする
 An administrator needs two-factor authentication when it is required in the security settings.	セキュリティ設定で必須にした場合、管理者には二要素認証が必要です。
 Apply	適用
 Archive	アーカイブ
@@ -415,6 +416,7 @@ Web access	Web アクセス
 Wed	水
 Weekly	毎週
 Windows maps drives per user. The service sees only the drives mapped for users who are logged on and its own. The drive letter itself cannot be used by the service: its UNC path is stored, and the credentials must be entered.	Windows はドライブをユーザーごとにマップします。サービスから見えるのは、ログオン中のユーザーと自身にマップされたドライブのみです。サービスはドライブ文字自体を使えないため、UNC パスが保存され、資格情報の入力が必要です。
+Without it, the memory files of the other snapshots, the side branches of the snapshot tree and the snapshot list are left out; the disks the current state depends on are always copied.	オフにすると、他のスナップショットのメモリファイル、スナップショットツリーの分岐、およびスナップショット一覧はコピーされません。現在の状態が依存するディスクは常にコピーされます。
 Write these one-time codes down now: they are shown only once.	この 1 回限りのコードを今すぐ書き留めてください。表示されるのは一度だけです。
 Yes	はい
 Your session has ended. Sign in again.	セッションが終了しました。再度サインインしてください。

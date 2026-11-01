@@ -27,6 +27,7 @@ All	Tất cả
 All interfaces	Tất cả giao diện
 All results	Tất cả kết quả
 Allow a copy of a running VM (the copy is consistent only at the crash level)	Cho phép sao chép VM đang chạy (bản sao chỉ nhất quán ở mức crash)
+Also back up the existing snapshots of the VM	Sao lưu cả các bản chụp (snapshot) hiện có của máy ảo
 An administrator needs two-factor authentication when it is required in the security settings.	Quản trị viên cần xác thực hai yếu tố khi cài đặt bảo mật yêu cầu.
 Apply	Áp dụng
 Archive	Lưu trữ
@@ -415,6 +416,7 @@ Web access	Truy cập web
 Wed	T4
 Weekly	Hằng tuần
 Windows maps drives per user. The service sees only the drives mapped for users who are logged on and its own. The drive letter itself cannot be used by the service: its UNC path is stored, and the credentials must be entered.	Windows ánh xạ ổ đĩa theo từng người dùng. Dịch vụ chỉ thấy các ổ đĩa được ánh xạ cho những người dùng đang đăng nhập và của chính nó. Dịch vụ không thể dùng ký tự ổ đĩa: đường dẫn UNC của nó được lưu, và phải nhập thông tin xác thực.
+Without it, the memory files of the other snapshots, the side branches of the snapshot tree and the snapshot list are left out; the disks the current state depends on are always copied.	Nếu không chọn, các tệp bộ nhớ của những bản chụp khác, các nhánh phụ của cây bản chụp và danh sách bản chụp sẽ không được sao chép; các đĩa mà trạng thái hiện tại phụ thuộc vào luôn được sao chép.
 Write these one-time codes down now: they are shown only once.	Hãy ghi lại các mã dùng một lần này ngay: chúng chỉ hiển thị một lần.
 Yes	Có
 Your session has ended. Sign in again.	Phiên của bạn đã kết thúc. Hãy đăng nhập lại.
