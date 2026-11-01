@@ -61,7 +61,7 @@ int wmain(int argc, wchar_t** argv)
     }
     int pass = 0, fail = 0, skipped = 0;
     double t0 = (double)GetTickCount64() / 1000.0;
-    int round = 0;
+    int round = 0; const char* sof = getenv("VM2B_STOP_ON_FAIL"); bool stopOnFail = sof && *sof == '1';
     do {
         for (const TestInfo& t : Registry()) {
             if (!only.empty() && !Listed(only.c_str(), t.name, t.group)) continue;
@@ -77,6 +77,7 @@ int wmain(int argc, wchar_t** argv)
             fflush(stdout);
         }
         ++round;
+        if (fail && stopOnFail) break;      // раунд 12: VM2B_STOP_ON_FAIL=1 - цикл --minutes останавливается на первом падении (снимок трафика и журналы сервера ещё свежие)
     } while (minutes > 0 && (double)GetTickCount64() / 1000.0 - t0 < minutes * 60);
     printf("%d passed, %d failed, %d skipped (%d round%s, seed %llu)\n", pass, fail, skipped, round, round == 1 ? "" : "s", (unsigned long long)seed);
     return fail;

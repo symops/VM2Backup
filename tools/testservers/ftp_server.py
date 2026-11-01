@@ -308,7 +308,19 @@ def main():
         H.tls_control_required = False
     H.banner = 'VM2B test FTP ready.'
     import logging
-    logging.basicConfig(level=getattr(logging, os.environ.get('VM2B_FTP_LOGLEVEL', 'WARNING').upper(), logging.WARNING))
+    # Раунд 12: метки времени с миллисекундами (журнал сервера сопоставляется со снимком трафика); VM2B_FTP_LOGTS=0 возвращает прежний вид.
+    fmt = '%(asctime)s.%(msecs)03d %(message)s' if os.environ.get('VM2B_FTP_LOGTS', '1') == '1' else None
+    logging.basicConfig(level=getattr(logging, os.environ.get('VM2B_FTP_LOGLEVEL', 'WARNING').upper(), logging.WARNING), format=fmt, datefmt='%H:%M:%S')
+    # Раунд 12: VM2B_FTP_KEYLOG=<файл> - секреты TLS сервера в формате NSS (как SSLKEYLOGFILE): снимок трафика с TLS 1.3 расшифровывается в Wireshark / tshark
+    # (`-o tls.keylog_file:...`) и видно, кто закрыл канал и был ли close_notify.  Ключевой файл НЕ коммитится; пишется только когда переменная задана.
+    kl = os.environ.get('VM2B_FTP_KEYLOG')
+    if kl and a.mode != 'plain':
+        ctxc = H.get_ssl_context()
+        lock = threading.Lock()
+        def _keylog(conn, line, _f=kl):
+            with lock, open(_f, 'ab') as f:
+                f.write(line + b'\n')
+        ctxc.set_keylog_callback(_keylog)
     srv = FTPServer((common.BIND, a.port), H)
     srv.max_cons = 0; srv.max_cons_per_ip = 0
     print('ready', flush=True)

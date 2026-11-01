@@ -431,6 +431,13 @@ if want ftpsoak; then
   gj 26-ftpf-soak${FTPSOAK_TAG:-} 1800 "set TAG=ftpfsoak${FTPSOAK_TAG:-}" "set ARGS=--seed $(( SEED + 150 )) --only ${FTPSOAK_TEST:-ftp_fault_injection_upload} --minutes ${FTPSOAK:-10} --servers $GS\\srv\\ftp\\servers.json" "set VM2B_WEB_DEFAULT=0" 'call C:\vm2b\guest\autotest.cmd' > /dev/null
   mkdir -p "$RES/srv-faultrepeat/ftp-soak${FTPSOAK_TAG:-}"; cp "$JS/ftp"/*.log "$RES/srv-faultrepeat/ftp-soak${FTPSOAK_TAG:-}/" 2>/dev/null
   say "  faultrepeat ftp soak: $(tr -d '\r' < "$RES/autotest-ftpfsoak${FTPSOAK_TAG:-}.txt" 2>/dev/null | grep -aE ' passed, ' | tail -1)"; tr -d '\r' < "$RES/autotest-ftpfsoak${FTPSOAK_TAG:-}.txt" 2>/dev/null | grep -aA6 '^FAIL' | sed 's/^/      /' | head -40 | tee -a "$SUM"
+  # раунд 12: детектор «канал загрузки закрыт БЕЗ close_notify клиента» (журнал сервера, уровень INFO / DEBUG).  Для ftp_fault_injection_upload в норме 0: сбой раунда 9 на Windows 10
+  # был именно этим (старый клиент, close_notify оставался внутри OpenSSL при полном буфере отправки: 23 канала на 449 запусков), прежний клиент даёт ~5 %, нынешний 0 на 1583 запусках.
+  # Для других тестов такие случаи бывают законными (осознанный abort продукта), поэтому проверка включена только для теста по умолчанию.
+  UNC=$(cat "$JS/ftp/ftpes.log" "$JS/ftp/ftps.log" 2>/dev/null | grep -ac 'closed WITHOUT')
+  if [ "${FTPSOAK_TEST:-ftp_fault_injection_upload}" = ftp_fault_injection_upload ]; then
+    if [ "$UNC" -gt 0 ]; then say "  FAIL faultrepeat ftp soak: $UNC TLS upload data channels closed WITHOUT close_notify (the client lost its close_notify, see docs/WINDOWS-TESTS.md round 12)"; else say "  faultrepeat ftp soak: 0 data channels closed without close_notify"; fi
+  else say "  faultrepeat ftp soak: $UNC data channels closed without close_notify (informational for this test)"; fi
   "$R/tools/winvm-servers.sh" stop-all > /dev/null
   RESULT[ftpsoak]="$(tr -d '\r' < "$RES/autotest-ftpfsoak${FTPSOAK_TAG:-}.txt" 2>/dev/null | grep -aE ' passed, ' | tail -1)"
 fi
