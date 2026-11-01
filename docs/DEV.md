@@ -169,5 +169,5 @@ depends on it. A new group with external resources registers its own teardown th
 
 ## Настоящий ESXi (tools/esxi7/)
 
-`vm.sh` (поднять / остановить / снести вложенный ESXi 7 и его изолированную сеть 10.213.77.0/24), `setup-guest.sh`, `run-real.sh`, `ssh.sh`, `record_fixtures.py`; подробности и результаты: docs/ESXI.md, «Проверка на настоящем ESXi 7».
+`vm.sh` (поднять / остановить / снести вложенный ESXi 7 и его изолированную сеть 10.213.77.0/24; адрес 10.213.77.10 задаёт kickstart), `setup-guest.sh` (датастор, ВМ vm2b-off / vm2b-on / vm2b-hist, эталонные sha256 в `.winvm/esxi/hashes.json`), `run-real.sh` (перед прогоном vm2b-on включена и без снимков, после прогона проверка остатков `VM2Backup-*` и sha256 восстановленных на хост дисков; `LIVE_HIST=1` включает vm2b-hist, `NOPREP=1` не трогает состояние, `VM2B_EXE=` другой exe), `live-scenario.sh` (включена → пауза → выключили → включили → продолжение → отмена), `ssh.sh`, `record_fixtures.py`; подробности и результаты: docs/ESXI.md, «Проверка на настоящем ESXi 7».
 Группа `esxireal` без ключа `esxi_real` в servers.json пропускается и в обычный прогон не входит по результату (skip).

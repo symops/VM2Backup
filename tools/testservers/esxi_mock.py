@@ -623,9 +623,10 @@ def service_content():
     esx = S.kind == 'esxi'
     return ('<returnval><rootFolder type="Folder">%s</rootFolder><propertyCollector type="PropertyCollector">%s</propertyCollector>%s'
             '<setting type="OptionManager">%s</setting><userDirectory type="UserDirectory">ha-user-directory</userDirectory>'
-            '<sessionManager type="SessionManager">%s</sessionManager><fileManager type="FileManager">ha-nfc-file-manager</fileManager>'
+            '<sessionManager type="SessionManager">%s</sessionManager><fileManager type="FileManager">ha-nfc-file-manager</fileManager><virtualDiskManager type="VirtualDiskManager">%s</virtualDiskManager>'
             '<viewManager type="ViewManager">ViewManager</viewManager><customFieldsManager type="CustomFieldsManager">ha-customfields-manager</customFieldsManager></returnval>'
-            % (root_ref(), 'ha-property-collector' if esx else 'propertyCollector', about_xml(), 'HostAgentSettings' if esx else 'VpxSettings', 'ha-sessionmgr' if esx else 'SessionManager'))
+            % (root_ref(), 'ha-property-collector' if esx else 'propertyCollector', about_xml(), 'HostAgentSettings' if esx else 'VpxSettings', 'ha-sessionmgr' if esx else 'SessionManager',
+               'ha-vdiskmanager' if esx else 'VirtualDiskManager'))
 
 
 def session_alive(sid, touch=True):
@@ -959,6 +960,64 @@ def m_delete_ds_file(req, h):
     return '<DeleteDatastoreFile_TaskResponse xmlns="urn:vim25"><returnval type="Task">%s</returnval></DeleteDatastoreFile_TaskResponse>' % x(t['id'])
 
 
+def live_locked(path):
+    """Настоящий ESXi 7.0.3: диск ВКЛЮЧЁННОЙ ВМ (в том числе замороженный снимком базовый -flat.vmdk и дельты) открыт процессом ВМ, GET /folder даёт пустой HTTP 500
+    («Failed to lock file» в hostd.log). Файлы -ctk.vmdk и дескрипторы читаются. Отключается ошибкой `no_live_lock` (старое поведение эмулятора)."""
+    if fault_get('no_live_lock'):
+        return False
+    p = os.path.normpath(path)
+    for vm in S.vms.values():
+        if vm.power != 'poweredOn':
+            continue
+        for name, f in vm.files.items():
+            if f['type'] == 'diskExtent' and not name.endswith('-ctk.vmdk') and os.path.normpath(vm_path(vm, name)) == p:
+                return True
+    return False
+
+
+def m_copy_virtual_disk(req, h):
+    """VirtualDiskManager.CopyVirtualDisk_Task: как `vmkfstools -i <звено> -d thin <клон>`: клон = состояние диска на этом звене цепочки, одним плоским файлом без родителей.
+    Читать можно и замороженные диски включённой ВМ (хост делает это своим средством, не через /folder)."""
+    src, dst = ctext(req, 'sourceName'), ctext(req, 'destName')
+    record('fm', 'CopyVirtualDisk', src + ' -> ' + dst)
+    sds, spath, _ = ds_file_path(src)
+    dds, dpath, _ = ds_file_path(dst)
+    hit = None
+    for vm in S.vms.values():
+        for disk in vm.disks:
+            for i, lv in enumerate(disk.levels):
+                if os.path.normpath(vm_path(vm, lv.desc)) == os.path.normpath(spath):
+                    hit = (vm, disk, i)
+    if hit is None:
+        raise Fault('FileNotFound', 'File %s was not found' % src)
+    ent = _Ent('ha-vdiskmanager', src)
+
+    def run():
+        cf = fault_get('clone_fail')
+        if cf and fault_take_inner('clone_fail'):
+            raise Fault(cf.get('type', 'FileFault'), cf.get('msg', 'injected clone failure'))
+        vm, disk, i = hit
+        if os.path.exists(dpath):
+            raise Fault('FileAlreadyExists', 'Cannot complete the operation because the file %s already exists' % dst)
+        if getattr(disk, 'rdm', None):
+            raise Fault('FileFault', 'Cannot copy a raw device mapping')
+        flat = dpath[:-5] + '-flat.vmdk'
+        import shutil
+        shutil.copyfile(vm_path(vm, disk.levels[0].ext), flat)
+        with open(flat, 'r+b') as f:
+            for lv in disk.levels[1:i + 1]:
+                for off, data in lv.writes:
+                    f.seek(off); f.write(data)
+        txt = ('# Disk DescriptorFile\nversion=1\nencoding="UTF-8"\nCID=fffffffe\nparentCID=ffffffff\ncreateType="vmfs"\n\n# Extent description\n'
+               'RW %d VMFS "%s"\n\n# The Disk Data Base \n#DDB\n\nddb.adapterType = "lsilogic"\nddb.deletable = "true"\nddb.geometry.cylinders = "%d"\n'
+               'ddb.geometry.heads = "64"\nddb.geometry.sectors = "32"\nddb.longContentID = "%032x"\nddb.thinProvisioned = "1"\nddb.uuid = "%s"\nddb.virtualHWVersion = "14"\n'
+               % (disk.cap // 512, os.path.basename(flat), max(1, disk.cap // (512 * 64 * 32)), random.getrandbits(128), ' '.join('%02X' % random.getrandbits(8) for _ in range(8)) + '-' + ' '.join('%02X' % random.getrandbits(8) for _ in range(8))))
+        with open(dpath, 'w') as f:
+            f.write(txt)
+    t = new_task('CopyVirtualDisk_Task', ent, run)
+    return '<CopyVirtualDisk_TaskResponse xmlns="urn:vim25"><returnval type="Task">%s</returnval></CopyVirtualDisk_TaskResponse>' % x(t['id'])
+
+
 def parse_vmx(text):
     d = {}
     order = []
@@ -1231,7 +1290,7 @@ def m_refresh(req, h):
 METHODS = {'CreateSnapshot_Task': m_create_snapshot, 'RemoveSnapshot_Task': m_remove_snapshot, 'RetrievePropertiesEx': m_retrieve_ex,
            'ContinueRetrievePropertiesEx': m_continue_ex, 'RetrieveProperties': m_retrieve, 'CreateContainerView': m_create_view, 'DestroyView': m_destroy_view,
            'CancelTask': m_cancel, 'RenameSnapshot': m_rename_snapshot, 'RefreshStorageInfo': m_refresh, 'MakeDirectory': m_make_directory, 'DeleteDatastoreFile_Task': m_delete_ds_file,
-           'RegisterVM_Task': m_register_vm, 'PowerOnVM_Task': m_power_on}
+           'RegisterVM_Task': m_register_vm, 'PowerOnVM_Task': m_power_on, 'CopyVirtualDisk_Task': m_copy_virtual_disk}
 
 
 REQV = threading.local()
@@ -1480,6 +1539,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.send_bytes(200, b'<html><head><title>502 Bad Gateway</title></head><body><h1>Bad Gateway</h1>' + b'x' * 100 + b'</body></html>', 'text/html')
             if odd.get('mode') == 'trunc':
                 size = min(size, odd.get('bytes', 100))
+        if self.command == 'GET' and live_locked(path):
+            record('fault', 'live_lock', rel)
+            return self.send_bytes(500, b'', 'text/plain')           # настоящий ESXi: пустой ответ
         if self.command == 'GET' and (rel.endswith('-rdmp.vmdk') or rel.endswith('-rdm.vmdk')):
             return self.send_bytes(500, b'Internal Server Error: the raw device cannot be read', 'text/plain')
         start, end, status = 0, size - 1, 200

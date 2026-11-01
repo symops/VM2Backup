@@ -313,7 +313,11 @@ static bool SnapshotIsLive(const Str& desc)
     return alive;
 }
 
-struct FileItem { Str name, ds, path, arc, origArc, type; u64 size; i64 mtime; int group; FileItem() : size(0), mtime(0), group(0) {} };
+struct FileItem { Str name, ds, path, arc, origArc, type; u64 size; i64 mtime; int group; Bytes inl; bool hasInl; FileItem() : size(0), mtime(0), group(0), hasInl(false) {} };
+// Диск включённой ВМ: замороженное снимком звено (и его родители) удерживает процесс ВМ, /folder отдаёт для него HTTP 500 («Failed to lock file»), поэтому
+// копия берётся из КЛОНА (VirtualDiskManager.CopyVirtualDisk_Task, тонкий диск без цепочки родителей), который лежит во временной папке «VM2Backup-<10 hex>»
+// рядом с ВМ и читается обычным /folder (с Range, то есть продолжение внутри диска работает).
+struct CloneInfo { i64 diskKey; Str srcDesc, baseDesc, ds, descPath, flatPath, descArc, flatArc, adapter; Bytes desc; CloneInfo() : diskKey(-1) {} };
 
 struct VmData {
     Str id, name, power, conn, uuid, instUuid, guest, vmPath, dc;
@@ -324,6 +328,7 @@ struct VmData {
 
 // ---- the source -------------------------------------------------------------------------------------------------
 class RestoreImpl;
+static size_t TopLink(const VmData& vm, const LxDisk& d);
 
 class Impl : public EsxiSource {
     friend class RestoreImpl;
@@ -337,6 +342,9 @@ public:
         m_quiesce = sn.is_object() ? sn.get("quiesce").boolean(true) : true;
         m_memory = sn.is_object() ? sn.get("memory").boolean(false) : false;
         m_history = sn.is_object() ? sn.get("history").boolean(true) : true;       // false: the VM's other snapshots (memory, side branches, the list) are not copied
+        m_historyCfg = m_history;
+        m_liveClone = cfg.get("live_disk").str("clone") != "direct";               // "clone" (default): a running VM's disks are cloned on the host first; "direct": read in place (only for hosts that allow it)
+        m_cloneTimeout = (int)cfg.get("clone_timeout").integer(21600);
         m_taskTimeout = (int)cfg.get("task_timeout").integer(600); m_removeTimeout = (int)cfg.get("remove_timeout").integer(3600);
         m_pollMs = (int)cfg.get("poll_ms").integer(150);
         m_ver = "6.0";
@@ -446,7 +454,7 @@ private:
                 const XmlNode* rv = r->child("returnval");
                 if (!rv) return fail("RetrieveServiceContent returned nothing");
                 m_rootFolder = rv->childText("rootFolder").trim(); m_pc = rv->childText("propertyCollector").trim();
-                m_viewMgr = rv->childText("viewManager").trim(); m_sessMgr = rv->childText("sessionManager").trim(); m_fileMgr = rv->childText("fileManager").trim();
+                m_viewMgr = rv->childText("viewManager").trim(); m_sessMgr = rv->childText("sessionManager").trim(); m_fileMgr = rv->childText("fileManager").trim(); m_vdm = rv->childText("virtualDiskManager").trim();
                 const XmlNode* ab = rv->child("about");
                 if (ab) { m_fullName = ab->childText("fullName"); m_apiVersion = ab->childText("apiVersion").trim(); m_apiType = ab->childText("apiType").trim(); m_product = ab->childText("productLineId").trim(); }
                 if (m_rootFolder.empty() || m_pc.empty() || m_viewMgr.empty() || m_sessMgr.empty()) return fail("unexpected ServiceContent (no inventory managers)");
@@ -654,6 +662,7 @@ private:
         }
         if (hit.empty()) return fail("VM not found: " + name);
         if (hit.size() > 1 || ids.size() > 1) return fail("several VMs are named \"" + name + "\" (in different folders or datacenters): rename one of them, or set the datacenter of the server");
+        m_dcRef = hit[0].id;
         return readVm(ids[0], hit[0].name, out);
     }
 
@@ -674,6 +683,7 @@ private:
         static const char* p[] = { "info" };
         DWORD t0 = GetTickCount(); int delay = m_pollMs < 20 ? 20 : m_pollMs; bool cancelled = false;
         for (;;) {
+            if (m_cloning && !m_snapRef.empty() && GetTickCount() - m_hbTick > 120000) markSnapshot(true);       // a long clone: the snapshot's "live" mark stays fresh
             Vec<ObjData> objs;
             long a = m_abort; if (!honourAbort) m_abort = 0;
             bool ok = retrieve(PropSet("Task", p, 1), ObjSelect("Task", task), objs);
@@ -749,7 +759,7 @@ private:
     }
     static Str LicenseMessage(const Str& what) {
         return what + " was refused by the server: the license of this ESXi host does not allow the write API (free ESXi) or the user lacks the snapshot privilege. "
-                      "Use a licensed host (or vCenter), or the SSH transport of the server settings";
+                      "Use a licensed host (or vCenter)";
     }
 
     // Removes a snapshot and waits. A snapshot that is already gone counts as removed.
@@ -784,11 +794,11 @@ private:
 
     // Removes every snapshot of this VM whose name starts with VM2Backup- (except `keepRef`), e.g. leftovers of a crashed run.
     bool removeLeftovers(const VmData& vm, const Str& keepRef, int& removed) {
-        removed = 0; m_skippedLive = 0; bool all = true; Str firstErr; bool tr = false;
+        removed = 0; m_skippedLive = 0; m_keptNames.clear(); bool all = true; Str firstErr; bool tr = false;
         for (const SnapInfo& s : vm.snaps) {
             if (!IsOurSnapshotName(s.name) || s.ref == keepRef) continue;
-            if (SnapshotIsLive(s.desc)) { ++m_skippedLive; continue; }
-            if (removeSnapshot(s.ref)) ++removed; else { all = false; if (firstErr.empty()) { firstErr = err; tr = transient; } }
+            if (SnapshotIsLive(s.desc)) { ++m_skippedLive; m_keptNames.push_back(s.name); continue; }
+            if (removeSnapshot(s.ref)) { ++removed; deleteCloneDirsFor(vm, s.name); } else { m_keptNames.push_back(s.name); all = false; if (firstErr.empty()) { firstErr = err; tr = transient; } }
         }
         if (!all) { err = firstErr; transient = tr; }
         return all;
@@ -818,6 +828,191 @@ private:
         err = e; transient = t;
         m_abort = a;
     }
+
+    // ---- clones of the disks of a running VM ----------------------------------------------------------------------------
+    static Str CloneDescriptorText(const Str& raw, const Str& flatBase, const Str& adapter) {
+        Str out; size_t i = 0;
+        while (i < raw.size()) {
+            int e = raw.find('\n', i); Str line = e < 0 ? raw.substr(i) : raw.substr(i, (size_t)e - i);
+            i = e < 0 ? raw.size() : (size_t)e + 1;
+            if (line.ends_with("\r")) line = line.substr(0, line.size() - 1);
+            if (line.starts_with("CID=")) line = "CID=fffffffe";                    // fixed: the same bytes after a resume
+            else if (line.starts_with("parentCID=")) line = "parentCID=ffffffff";
+            else if (line.starts_with("ddb.uuid") || line.starts_with("ddb.longContentID")) continue;
+            else if (!adapter.empty() && line.starts_with("ddb.adapterType")) line = "ddb.adapterType = \"" + adapter + "\"";
+            else if ((line.starts_with("RW ") || line.starts_with("RDONLY ")) && line.find(" VMFS ") > 0) {
+                int q = line.find('"'); if (q > 0) line = line.substr(0, (size_t)q) + "\"" + flatBase + "\"";
+            }
+            out += line + "\n";
+        }
+        return out;
+    }
+    bool ddbValue(const Str& text, const char* key, Str& val) {
+        int p = text.find(key); if (p < 0) return false;
+        int q = text.find('"', (size_t)p); if (q < 0) return false;
+        int r = text.find('"', (size_t)q + 1); if (r < 0) return false;
+        val = text.substr((size_t)q + 1, (size_t)(r - q - 1)); return true;
+    }
+    bool readSmall(const Str& ds, const Str& path, Bytes& out) {
+        HttpHeaders h; HttpResponse r;
+        if (!FolderRequest(*m_files, "GET", EsxiFolderUrl(ds, path, m_dc), h, r, m_host, m_port)) return failHttp(*m_files);
+        if (r.status == 401 || r.status == 403) { m_files->close(); m_loggedIn = false; if (!ensureSession()) return false; return readSmall(ds, path, out); }
+        if (r.status != 200) { m_files->close(); return fail(Str::fmt("reading [%s] %s: HTTP %d", ds.c_str(), path.c_str(), r.status), r.status >= 500); }
+        out.clear(); Bytes b; b.resize(65536);
+        for (;;) { i64 k = r.body->read(b.data(), b.size()); if (k < 0) { m_files->close(); return fail("reading [" + ds + "] " + path + ": " + r.body->err, r.body->transient); } if (k == 0) break; for (i64 j = 0; j < k; ++j) out.push_back(b[(size_t)j]); if (out.size() > (1u << 20)) break; }
+        return true;
+    }
+    bool headFile(const Str& ds, const Str& path, i64& size) {
+        HttpHeaders h; HttpResponse r; size = -1;
+        if (!FolderRequest(*m_files, "HEAD", EsxiFolderUrl(ds, path, m_dc), h, r, m_host, m_port)) return failHttp(*m_files);
+        if (r.status == 200) size = r.contentLength >= 0 ? r.contentLength : 0;
+        return true;
+    }
+    bool deleteDsFolder(const Str& ds, const Str& dir) {
+        TaskResult tr;
+        Str in = Ref("_this", "FileManager", m_fileMgr.empty() ? Str("ha-nfc-file-manager") : m_fileMgr) + Tag("name", "[" + ds + "] " + dir) + (m_dcRef.empty() ? Str() : Ref("datacenter", "Datacenter", m_dcRef));
+        if (!runTask("DeleteDatastoreFile_Task", in, 600, tr, false)) return false;
+        return true;                                                                // "not found" is fine: nothing to delete
+    }
+    // deletes the clone folders of this run (best effort, never changes err)
+    void deleteCloneDirs() {
+        if (m_cloneDirs.empty() || !m_soap) { m_cloneDirs.clear(); return; }
+        long a = m_abort; m_abort = 0; Str e = err; bool t = transient;
+        if (ensureSession()) for (const Str& k : m_cloneDirs) { int bar = k.find('|'); if (bar > 0) deleteDsFolder(k.substr(0, (size_t)bar), k.substr((size_t)bar + 1)); }
+        err = e; transient = t; m_hasFault = false; m_abort = a;
+        m_cloneDirs.clear(); m_clones.clear();
+    }
+    // the clone folders a snapshot of the name `name` may have left (a crashed run): in the VM's folder and at the root of every other datastore the VM's disks use
+    void deleteCloneDirsFor(const VmData& vm, const Str& name) {
+        Str vmDs, vmPath; EsxiParseDsPath(vm.vmPath, vmDs, vmPath);
+        Str vmDir; { int c = vmPath.rfind('/'); if (c >= 0) vmDir = vmPath.substr(0, (size_t)c); }
+        Vec<Str> seen;
+        long a = m_abort; m_abort = 0; Str e = err; bool t = transient;
+        for (const LxFile& f : vm.lx.files) {
+            Str ds, p; if (!EsxiParseDsPath(f.name, ds, p)) continue;
+            Str dir = (ds == vmDs && !vmDir.empty()) ? vmDir + "/" + name : name;
+            Str key = ds + "|" + dir; bool dup = false; for (const Str& k : seen) if (k == key) dup = true;
+            if (dup) continue;
+            seen.push_back(key); deleteDsFolder(ds, dir);
+        }
+        err = e; transient = t; m_hasFault = false; m_abort = a;
+    }
+
+    // Folders "VM2Backup-<10 hex>" in the VM's folder that belong to no snapshot of the VM any more (the snapshot was removed by hand or by a crashed cleanup): deleted.
+    // Folders of snapshots that still exist (also those of a run that is working: `protect`) stay. Best effort.
+    int removeOrphanCloneDirs(const VmData& vm, const Vec<Str>& protect) {
+        Str vmDs, vmPath; EsxiParseDsPath(vm.vmPath, vmDs, vmPath);
+        int sl = vmPath.rfind('/'); if (sl <= 0) return 0;
+        Str vmDir = vmPath.substr(0, (size_t)sl);
+        Str e = err; bool t = transient; int n = 0;
+        Bytes page;
+        if (readSmall(vmDs, vmDir + "/", page)) {
+            Str html((const char*)page.data(), page.size());
+            size_t pos = 0;
+            for (;;) {
+                int a = html.find("<a ", pos); if (a < 0) break;
+                int gt = html.find('>', (size_t)a); if (gt < 0) break;
+                int en = html.find("</a>", (size_t)gt); if (en < 0) break;
+                Str name = html.substr((size_t)gt + 1, (size_t)(en - gt - 1)).trim(); pos = (size_t)en + 4;
+                if (name.ends_with("/")) name = name.substr(0, name.size() - 1);
+                if (!IsOurSnapshotName(name)) continue;
+                bool keep = false; for (const Str& k : protect) if (k == name) keep = true;
+                if (keep) continue;
+                if (deleteDsFolder(vmDs, vmDir + "/" + name)) ++n;
+            }
+        }
+        err = e; transient = t; m_hasFault = false;
+        return n;
+    }
+
+    // Clones every disk the snapshot froze into a thin, parent-free disk in a temporary folder; the archive then holds the clone under the name of the
+    // disk's top link. Resume: the clones of the interrupted run are used again when its "ready" marker is there (the bytes are the same for the same frozen state).
+    bool makeClones(const VmData& vm, const LxSnap& snap, Str& warning) {
+        m_clones.clear(); m_cloneDirs.clear();
+        if (m_vdm.empty()) return fail("the server does not offer the virtual disk manager: the disks of a running VM cannot be copied (set \"live_disk\": \"direct\" to read them in place)");
+        Str vmDs, vmPath; EsxiParseDsPath(vm.vmPath, vmDs, vmPath);
+        Str vmDir; { int c = vmPath.rfind('/'); if (c >= 0) vmDir = vmPath.substr(0, (size_t)c); }
+        int idx = 0; Vec<Str> markerDs, markerDir;
+        for (const LxDisk& sd : snap.disks) {
+            if (sd.chain.empty()) continue;
+            size_t top = TopLink(vm, sd);
+            const LxFile* desc = nullptr; bool rdm = false;
+            for (const Vec<i64>& link : sd.chain) for (i64 k : link) { const LxFile* lf = vm.lx.file(k); if (lf && (lf->name.find("-rdmp.vmdk") >= 0 || lf->name.find("-rdm.vmdk") >= 0)) rdm = true; }
+            for (i64 k : sd.chain[top]) { const LxFile* lf = vm.lx.file(k); if (lf && lf->type == "diskDescriptor") desc = lf; }
+            if (rdm) continue;                                                      // a raw device mapping is left out by buildFiles (with its warning)
+            if (!desc) return fail(Str::fmt("the file layout lists no descriptor for the disk with key %lld", (long long)sd.key));
+            CloneInfo c; c.diskKey = sd.key; c.srcDesc = desc->name;
+            {   // the archive names the clone after the BASE link of the disk (the restored disk keeps the file name the disk had when it was created)
+                size_t bi = sd.chain.size() > 1 ? sd.chain.size() - 1 - top : 0; const LxFile* bd = nullptr;
+                for (i64 k : sd.chain[bi]) { const LxFile* lf = vm.lx.file(k); if (lf && lf->type == "diskDescriptor") bd = lf; }
+                c.baseDesc = bd ? bd->name : desc->name;
+            }
+            Str dsSrc, pathSrc; if (!EsxiParseDsPath(desc->name, dsSrc, pathSrc)) return fail("cannot read the datastore path of " + desc->name);
+            Str dir = (dsSrc == vmDs && !vmDir.empty()) ? vmDir + "/" + m_snapName : m_snapName;
+            c.ds = dsSrc; c.descPath = dir + Str::fmt("/d%d.vmdk", idx); c.flatPath = dir + Str::fmt("/d%d-flat.vmdk", idx); ++idx;
+            Str key = dsSrc + "|" + dir; bool have = false; for (const Str& k : m_cloneDirs) if (k == key) have = true;
+            if (!have) { m_cloneDirs.push_back(key); }
+            m_clones.push_back(c);
+        }
+        if (m_clones.empty()) return true;
+        // an interrupted run left finished clones?
+        bool ready = false;
+        if (m_reused) {
+            i64 sz = -1; ready = true;
+            for (const CloneInfo& c : m_clones) { if (!headFile(c.ds, c.flatPath, sz)) return false; if (sz < 0) ready = false; if (!headFile(c.ds, c.descPath, sz)) return false; if (sz < 0) ready = false; }
+            for (const Str& k : m_cloneDirs) { int bar = k.find('|'); i64 mz = -1; if (!headFile(k.substr(0, (size_t)bar), k.substr((size_t)bar + 1) + "/ready", mz)) return false; if (mz < 0) ready = false; }
+            if (!ready) deleteCloneDirs0();
+        }
+        if (!ready) {
+            m_cloning = true;
+            for (const Str& k : m_cloneDirs) {                                      // the folders
+                int bar = k.find('|'); Str ds = k.substr(0, (size_t)bar), dir = k.substr((size_t)bar + 1);
+                const XmlNode* r;
+                Str in = Ref("_this", "FileManager", m_fileMgr.empty() ? Str("ha-nfc-file-manager") : m_fileMgr) + Tag("name", "[" + ds + "] " + dir) + (m_dcRef.empty() ? Str() : Ref("datacenter", "Datacenter", m_dcRef)) + "<createParentDirectories>true</createParentDirectories>";
+                if (!call("MakeDirectory", in, r)) {
+                    if (m_hasFault && (m_faultType == "FileAlreadyExists" || m_faultMsg.find("already exists") >= 0)) continue;
+                    m_cloning = false; return m_hasFault ? fail("cannot create the temporary folder [" + ds + "] " + dir + " for the disk clones: " + err) : false;
+                }
+            }
+            for (const CloneInfo& c : m_clones) {
+                if (aborted()) { m_cloning = false; return fail(kAbortedMessage); }
+                Str in = Ref("_this", "VirtualDiskManager", m_vdm) + Tag("sourceName", c.srcDesc) + (m_dcRef.empty() ? Str() : Ref("sourceDatacenter", "Datacenter", m_dcRef)) +
+                         Tag("destName", "[" + c.ds + "] " + c.descPath) + (m_dcRef.empty() ? Str() : Ref("destDatacenter", "Datacenter", m_dcRef)) +
+                         "<destSpec xsi:type=\"VirtualDiskSpec\"><diskType>thin</diskType><adapterType>lsiLogic</adapterType></destSpec><force>false</force>";
+                TaskResult tr;
+                if (!runTask("CopyVirtualDisk_Task", in, m_cloneTimeout, tr)) { Str e = err; bool t = transient; m_cloning = false; return fail(e, t); }
+                if (!tr.ok) {
+                    m_cloning = false;
+                    if (IsLicenseProblem(tr.faultType, tr.faultMsg)) return fail(LicenseMessage("cloning the disk of the running VM"));
+                    if (tr.faultMsg.find("pace") >= 0 || tr.faultType == "NoDiskSpace" || tr.faultType == "NoSpace") return fail("cloning the disk " + c.srcDesc + " failed, the datastore has no room for the temporary clone (a thin copy of the disk's data is needed): " + tr.faultMsg);
+                    return fail("cloning the disk " + c.srcDesc + " failed: " + tr.faultMsg);
+                }
+            }
+            m_cloning = false;
+            // the marker: written after all clones are complete
+            for (const Str& k : m_cloneDirs) {
+                int bar = k.find('|'); Str ds = k.substr(0, (size_t)bar), dir = k.substr((size_t)bar + 1);
+                HttpHeaders h; h.add("Content-Type", "application/octet-stream"); HttpResponse r; Bytes out; Str body = "VM2Backup clones are complete\n";
+                if (!m_files->requestBytes("PUT", EsxiFolderUrl(ds, dir + "/ready", m_dc), h, body.data(), body.size(), r, out)) return failHttp(*m_files);
+                if (r.status != 200 && r.status != 201 && r.status != 204) return fail(Str::fmt("cannot write into the temporary folder [%s] %s: HTTP %d", ds.c_str(), dir.c_str(), r.status));
+            }
+        }
+        for (CloneInfo& c : m_clones) {                                             // the descriptor texts (the clone's own, made reproducible later in buildFiles)
+            if (!readSmall(c.ds, c.descPath, c.desc)) return false;
+            Bytes orig; Str ods, op; EsxiParseDsPath(c.srcDesc, ods, op);
+            if (readSmall(ods, op, orig)) { Str a, t((const char*)orig.data(), orig.size()); if (ddbValue(t, "ddb.adapterType", a)) c.adapter = a; }
+            else { err.clear(); }
+        }
+        (void)warning; (void)markerDs; (void)markerDir;
+        return true;
+    }
+    void deleteCloneDirs0() {                                                       // a half-finished set of an interrupted run: start over
+        long a = m_abort; m_abort = 0;
+        for (const Str& k : m_cloneDirs) { int bar = k.find('|'); if (bar > 0) deleteDsFolder(k.substr(0, (size_t)bar), k.substr((size_t)bar + 1)); }
+        m_abort = a; m_hasFault = false; err.clear();
+    }
+    const CloneInfo* cloneByKey(i64 k) const { for (const CloneInfo& c : m_clones) if (c.diskKey == k) return &c; return nullptr; }
+    const CloneInfo* cloneByBase(const Str& name) const { for (const CloneInfo& c : m_clones) if (c.baseDesc == name) return &c; return nullptr; }
 
     // ---- the file list -------------------------------------------------------------------------------------------
     bool statFile(FileItem& f, bool& relogged) {
@@ -849,7 +1044,8 @@ private:
     // ---- state ---------------------------------------------------------------------------------------------------
     Json m_cfg;
     Str m_host, m_user, m_password, m_dcCfg, m_ver; int m_port;
-    bool m_vcenter, m_quiesce, m_memory, m_history = true; int m_skippedSnaps = 0;
+    bool m_vcenter, m_quiesce, m_memory, m_history = true, m_historyCfg = true; int m_skippedSnaps = 0;
+    bool m_cloning = false, m_liveClone = true; int m_cloneTimeout = 21600; Str m_vdm, m_dcRef; Vec<CloneInfo> m_clones; Vec<Str> m_keptNames; Vec<Str> m_cloneDirs;   // m_cloneDirs: "ds|path" of the clone folders of this run
     int m_taskTimeout, m_removeTimeout, m_pollMs;
     HttpClient* m_soap; HttpClient* m_files;
     volatile long m_abort;
@@ -906,7 +1102,14 @@ bool Impl::buildFiles(const VmData& vm, const Str& snapRef, Vec<FileItem>& out, 
     // (without history only the new snapshot's chains: its disks hold every ancestor of the current state, other branches of the tree are left out)
     for (const LxSnap& s : vm.lx.snaps) {
         if (!m_history && &s != snap) continue;
-        for (const LxDisk& d : s.disks) for (const Vec<i64>& link : d.chain) for (i64 k : link) add(k, 2);
+        for (const LxDisk& d : s.disks) {
+            if (&s == snap && cloneByKey(d.key) && !d.chain.empty()) {              // a running VM: the disk comes from its clone, the descriptor stands for the whole chain
+                const CloneInfo* ci = cloneByKey(d.key);
+                for (const Vec<i64>& link : d.chain) for (i64 k : link) { const LxFile* lf = vm.lx.file(k); if (lf && lf->type == "diskDescriptor" && lf->name == ci->baseDesc) add(k, 2); }
+                continue;
+            }
+            for (const Vec<i64>& link : d.chain) for (i64 k : link) add(k, 2);
+        }
         if (s.dataKey >= 0) add(s.dataKey, 1);
         if (s.memoryKey >= 0) add(s.memoryKey, 1);
     }
@@ -956,6 +1159,17 @@ bool Impl::buildFiles(const VmData& vm, const Str& snapRef, Vec<FileItem>& out, 
         if (dup) continue;
         f.origArc = f.arc; f.arc = SafeArcPath(f.arc);
         for (int n = 2;; ++n) { bool clash = false; for (const FileItem& o : out) if (o.arc == f.arc) clash = true; if (!clash) break; f.arc = SafeArcPath(f.origArc) + Str::fmt("~%d", n); }
+        const CloneInfo* cl = lf->type == "diskDescriptor" ? cloneByBase(lf->name) : nullptr;
+        if (cl) {
+            FileItem g; g.type = "diskExtent"; g.group = 2; g.size = 0; g.ds = cl->ds; g.path = cl->flatPath;
+            auto stem = [](const Str& a) { return a.ends_with(".vmdk") ? a.substr(0, a.size() - 5) : a; };
+            g.name = stem(lf->name) + "-flat.vmdk"; g.arc = stem(f.arc) + "-flat.vmdk"; g.origArc = stem(f.origArc) + "-flat.vmdk";
+            int sl = g.arc.rfind('/'); Str flatBase = sl >= 0 ? g.arc.substr((size_t)sl + 1) : g.arc;
+            Str txt = CloneDescriptorText(Str((const char*)cl->desc.data(), cl->desc.size()), flatBase, cl->adapter);
+            f.ds = cl->ds; f.path = cl->descPath; f.hasInl = true; f.inl.clear(); for (size_t q = 0; q < txt.size(); ++q) f.inl.push_back((u8)txt[q]); f.size = txt.size();
+            out.push_back(f); out.push_back(g);
+            continue;
+        }
         out.push_back(f);
     }
     // deterministic order: configuration, snapshot data, disks; by name inside a group
@@ -973,7 +1187,7 @@ bool Impl::buildFiles(const VmData& vm, const Str& snapRef, Vec<FileItem>& out, 
     // the disks as the VM had them when the snapshot was taken (for a later restore)
     for (const DiskDev& dd : vm.disks) {
         Json o = Json::object(); o["key"] = (i64)dd.key; o["label"] = dd.label; o["capacity_bytes"] = (u64)dd.capacity; o["thin"] = dd.thin; o["mode"] = dd.mode;
-        o["running_point"] = dd.backing;
+        o["running_point"] = dd.backing; if (cloneByKey(dd.key)) o["cloned"] = true;
         bool covered = false;
         for (const LxDisk& sd : snap->disks) if (sd.key == dd.key) covered = true;
         if (!covered) {                                                      // an independent disk (copied live): its own descriptor stands for it, so that a restore points the .vmx at the copy
@@ -987,6 +1201,8 @@ bool Impl::buildFiles(const VmData& vm, const Str& snapRef, Vec<FileItem>& out, 
         }
         for (const LxDisk& sd : snap->disks) {
             if (sd.key != dd.key || sd.chain.empty()) continue;
+            const CloneInfo* ci = cloneByKey(dd.key);
+            if (ci) { for (const FileItem& f : out) if (f.name == ci->baseDesc) o["snapshot_descriptor"] = f.arc; continue; }
             for (i64 k : sd.chain[TopLink(vm, sd)]) {
                 const LxFile* lf = vm.lx.file(k);
                 if (lf && lf->type == "diskDescriptor") for (const FileItem& f : out) if (f.name == lf->name) o["snapshot_descriptor"] = f.arc;
@@ -1002,7 +1218,7 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
     (void)allowLive;                                                       // a snapshot makes a running VM consistent: there is nothing to refuse
     m_begun = false; m_reused = false; m_list.clear(); m_snapRef.clear(); m_snapName.clear(); m_meta.clear(); token.clear(); warning.clear();
     { unsigned char tb[4]; RandomBytes(tb, 4); LiveRegister(m_runToken, false); m_runToken = HexEncode(tb, 4); LiveRegister(m_runToken, true); }
-    m_leaked.clear();
+    m_leaked.clear(); m_history = m_historyCfg; m_clones.clear(); m_cloneDirs.clear(); m_cloning = false;
     if (vm.empty()) return fail("no VM name");
     if (!ensureSession()) return false;
     if (m_vcenter && !m_apiType.empty() && m_apiType != "VirtualCenter") warning = "the server is not a vCenter (it is a standalone host): the server type is set wrongly, the copy works the same";
@@ -1021,6 +1237,13 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
     if (!v.haveConfig) return fail("the VM \"" + vm + "\" is not accessible (state: " + (v.conn.empty() ? Str("unknown") : v.conn) + ")");
     if (!v.conn.empty() && v.conn != "connected") return fail("the VM \"" + vm + "\" is not accessible (state: " + v.conn + ")");
     bool poweredOn = v.power == "poweredOn"; m_vmOn = poweredOn;
+    bool cloneMode = poweredOn && m_liveClone;
+    if (cloneMode) {
+        // the chain of a running VM is consolidated into one clone per disk: the VM's earlier snapshots (their disks, .vmsn, .vmem, the tree) cannot be kept consistently
+        int own = 0; for (const SnapInfo& s : v.snaps) if (!IsOurSnapshotName(s.name)) ++own;
+        if (own && m_history) { if (!warning.empty()) warning += "; "; warning += Str::fmt("the VM is running: its disks are copied as one consolidated clone each, the %d earlier snapshot(s) of the VM are not copied", own); }
+        m_history = false;
+    }
 
     // 1. the snapshot: re-attach to the one of the interrupted run, or start over (leftovers of earlier runs are removed)
     Str keepRef, keepName; bool reuse = false;
@@ -1037,9 +1260,11 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
         if (n) { if (!warning.empty()) warning += "; "; warning += Str::fmt("removed %d old VM2Backup snapshot(s) left by an earlier run", n); }
     }
 
+    { Vec<Str> protect = m_keptNames; if (!keepName.empty()) protect.push_back(keepName); int o = removeOrphanCloneDirs(v, protect); (void)o; }
     if (m_skippedLive) { if (!warning.empty()) warning += "; "; warning += Str::fmt("%d VM2Backup snapshot(s) of another run that is working on this VM were left alone", m_skippedLive); }
     if (reuse) {
         m_snapRef = keepRef; m_snapName = keepName; m_reused = true; markSnapshot(true);
+        if (!cloneMode) deleteCloneDirsFor(v, m_snapName);                  // the VM was switched off meanwhile: the clones of the interrupted run are not needed
     } else {
         unsigned char rb[5]; RandomBytes(rb, 5);
         Str newName = "VM2Backup-" + HexEncode(rb, 5), newRef;
@@ -1069,7 +1294,7 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
     }
 
     // From here on a failure removes a snapshot this run made (a re-attached one only when the failure is final).
-    auto abandon = [&](bool final_) { if (!m_reused || final_) { Str e = err; bool t = transient; cleanupByName(m_snapName, m_snapRef); err = e; transient = t; } m_snapRef.clear(); m_snapName.clear(); };
+    auto abandon = [&](bool final_) { if (!m_reused || final_) { Str e = err; bool t = transient; deleteCloneDirs(); cleanupByName(m_snapName, m_snapRef); err = e; transient = t; } m_snapRef.clear(); m_snapName.clear(); };
 
     // 2. what the snapshot froze (read after the snapshot: the layout lists its files)
     VmData after; bool found = false;
@@ -1079,6 +1304,10 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
         if (!found) Sleep(250);
     }
     if (!found) { fail("the server did not report the snapshot's files"); abandon(true); return false; }
+    if (cloneMode) {
+        const LxSnap* sn = nullptr; for (const LxSnap& s : after.lx.snaps) if (s.key == m_snapRef) sn = &s;
+        if (!sn || !makeClones(after, *sn, warning)) { if (!sn) fail("the server did not report the snapshot's files"); abandon(!transient); return false; }
+    }
     Str w2; Json ignored = Json::array(), disksMeta = Json::array(), snapFiles = Json::array(); bool built = false;
     for (int pass = 0; pass < 5 && !built; ++pass) {                       // a layout that names a disk file it has no entry for yet: the host is still writing it up, ask again
         if (pass) { Sleep(400); if (!readVm(m_vmRef, m_dc, after, true)) { abandon(!transient); return false; } }
@@ -1095,6 +1324,7 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
     for (FileItem& f : m_list) {
         bool relogged = false;
         f.mtime = (i64)now;
+        if (f.hasInl) continue;
         if (!statFile(f, relogged)) { abandon(!transient); return false; }
     }
 
@@ -1107,7 +1337,7 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
     { Str dsx, px; EsxiParseDsPath(after.vmPath, dsx, px); int sl = px.rfind('/');
       meta["datastore"] = dsx; meta["vm_dir"] = sl >= 0 ? px.substr(0, (size_t)sl) : Str(); meta["vmx_name"] = sl >= 0 ? px.substr((size_t)sl + 1) : px; }
     meta["snapshot_files"] = snapFiles;
-    meta["snapshot_history"] = m_history; meta["snapshots_not_copied"] = m_skippedSnaps; meta["snapshot"] = m_snapName; meta["snapshot_quiesce"] = m_quiesce && poweredOn; meta["reused_snapshot"] = m_reused;
+    meta["live_clone"] = cloneMode && !m_clones.empty(); meta["snapshot_history"] = m_history; meta["snapshots_not_copied"] = m_skippedSnaps; meta["snapshot"] = m_snapName; meta["snapshot_quiesce"] = m_quiesce && poweredOn; meta["reused_snapshot"] = m_reused;
     Json fl = Json::array();
     for (const FileItem& f : m_list) { Json o = Json::object(); o["name"] = f.name; o["path"] = f.arc; if (f.origArc != f.arc) o["orig_path"] = f.origArc; o["size"] = f.size; o["type"] = f.type; fl.push(o); }
     meta["files"] = fl; meta["disks"] = disksMeta; meta["ignored_files"] = ignored;
@@ -1139,6 +1369,12 @@ bool Impl::pack(TarWriter& tar, Progress* pr, Str& warning)
         u64 skip = tar.skippable();
         if (skip) { if (!tar.skip_data(skip)) return fail(tar.error()); }
         u64 left = f.size - skip;
+        if (f.hasInl) {                                                         // a made-up descriptor (disk clone of a running VM)
+            if (left && !tar.write(f.inl.data() + skip, (size_t)left)) return fail(tar.error());
+            if (left && pr) pr->onBytes(left);
+            if (!tar.end_file()) return fail(tar.error());
+            continue;
+        }
         u64 delivered = 0; bool shrank = false;
         if (left) {
             HttpResponse r; bool have = false;
@@ -1164,7 +1400,7 @@ bool Impl::pack(TarWriter& tar, Progress* pr, Str& warning)
                 // Настоящий ESXi 7.0.3: диск ЗАПУЩЕННОЙ ВМ, даже замороженная снимком база (-flat.vmdk), открыт процессом ВМ, и интерфейс /folder
                 // отвечает пустым HTTP 500 («Failed to lock file» в hostd.log). Скажем об этом прямо, а не просто «HTTP 500».
                 if (r.status == 500 && m_vmOn && IsBinaryType(f.type))
-                    hint = " (the running VM keeps this disk locked: ESXi does not give a disk of a powered-on VM over the datastore HTTP interface, even after a snapshot; power the VM off for the backup, see docs/ESXI.md)";
+                    hint = " (the running VM keeps this disk locked: ESXi does not give a disk of a powered-on VM over the datastore HTTP interface, even after a snapshot; the server setting \"live_disk\": \"direct\" reads it in place, remove it so that the disk is cloned on the host first, see docs/ESXI.md)";
                 return fail(Str::fmt("reading %s: HTTP %d %s", f.name.c_str(), r.status, OneLine(r.reason).c_str()) + hint, false);      // (500, 502, 503 and 504 were tried 3 times above)
             } else {
                 if (IsBinaryType(f.type) && r.headers.value("Content-Type").lower().find("text/html") >= 0) {
@@ -1231,6 +1467,7 @@ void Impl::end(bool keepForResume)
     if (!m_snapRef.empty() && m_soap) markSnapshot(false);                     // done or paused: no longer "live" (a later run may remove it at once)
     if (!keepForResume && !m_snapRef.empty() && m_soap) {
         InterlockedExchange(&m_abort, 0);                                      // a removal is never skipped because of an abort
+        deleteCloneDirs();                                                     // the clones first: a crash between the two leaves the snapshot, whose removal the next run finishes together with the folder
         bool ok = false;
         for (int attempt = 0; attempt < 3 && !ok; ++attempt) {
             if (attempt) Sleep(1000);
@@ -1778,7 +2015,7 @@ VmSource* NewEsxiSource(const Json& server, Str& err)
     if (server.get("host").str().empty()) { err = Str("the host of the ") + (type == "esxi" ? "ESXi host" : "vCenter") + " is not set"; return nullptr; }
     if (server.get("user").str().empty()) { err = "the user name of the server is not set"; return nullptr; }
     Str tr = server.get("transport").str("api");
-    if (tr == "ssh") { err = "the SSH transport for ESXi is not available yet: use the API transport"; return nullptr; }
+    if (tr == "ssh") { err = "the SSH transport for ESXi is not implemented and not needed: the API transport clones the disks of running VMs on the host itself (see docs/ESXI.md)"; return nullptr; }
     if (tr != "api" && !tr.empty()) { err = "unknown transport: " + tr; return nullptr; }
     Str tm = server.get("tls_min").str("1.2");
     if (tm != "1.0" && tm != "1.1" && tm != "1.2" && tm != "1.3") { err = "bad tls_min: " + tm; return nullptr; }
@@ -1916,7 +2153,7 @@ RestoreWriter* NewEsxiRestoreWriter(const Json& server, const EsxiRestoreOptions
     Str type = server.get("type").str();
     if (type != "esxi" && type != "vcenter") { err = "not an ESXi / vCenter server: " + type; return nullptr; }
     Str tr = server.get("transport").str("api");
-    if (tr == "ssh") { err = "the SSH transport for ESXi is not available yet: use the API transport"; return nullptr; }
+    if (tr == "ssh") { err = "the SSH transport for ESXi is not implemented and not needed: the API transport clones the disks of running VMs on the host itself (see docs/ESXI.md)"; return nullptr; }
     if (server.get("host").str().empty() || server.get("user").str().empty()) { err = "the host or the user of the server is not set"; return nullptr; }
     return new RestoreImpl(server, o, result);
 }

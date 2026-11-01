@@ -43,7 +43,7 @@ install)
 vmaccepteula
 rootpw $PW
 install --firstdisk=local --overwritevmfs --novmfsondisk
-network --bootproto=dhcp --device=vmnic0
+network --bootproto=static --ip=10.213.77.10 --netmask=255.255.255.0 --device=vmnic0 --addvmportgroup=1
 reboot
 
 %firstboot --interpreter=busybox
@@ -52,6 +52,8 @@ vim-cmd hostsvc/start_ssh
 vim-cmd hostsvc/enable_esx_shell
 vim-cmd hostsvc/start_esx_shell
 esxcli system settings advanced set -o /UserVars/SuppressShellWarning -i 1
+esxcli network nic cso set -n vmnic0 -e 0
+echo "esxcli network nic cso set -n vmnic0 -e 0" >> /etc/rc.local.d/local.sh
 KS
   (cd "$W/ks" && tar czf "$W/iso/KS.TGZ" ks.cfg)
   for f in "$W/iso/BOOT.CFG" "$W/iso/EFI/BOOT/BOOT.CFG"; do

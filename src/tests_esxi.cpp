@@ -154,11 +154,34 @@ static Str NormVmx(const Str& path)
     }
     return out;
 }
+// folders "VM2Backup-<10 hex>" (the clones of a running VM's disks) below a VM folder
+static int CloneFolders(const Str& vmDir)
+{
+    int n = 0; WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(FilePath(JoinPath(vmDir, "VM2Backup-*")), &fd);
+    if (h == INVALID_HANDLE_VALUE) return 0;
+    do { if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ++n; } while (FindNextFileW(h, &fd));
+    FindClose(h);
+    return n;
+}
 static const FI* FindFi(const Vec<FI>& v, const Str& rel) { for (const FI& f : v) if (f.rel == rel) return &f; return nullptr; }
 static bool Excluded(const Str& rel) { return rel.ends_with(".vswp") || rel.ends_with(".log") || rel.find(".lck") >= 0; }
 
 // What a backup of a VM must contain: everything the datastore folder held before (except swap and logs), identical; the only additions are the
 // snapshot's own description files (.vmsn / .vmem, and .vmsd which lists it); never a delta / sesparse file or the descriptor of the new level.
+// Диск ВКЛЮЧЁННОЙ ВМ приходит клоном хоста (CopyVirtualDisk): дескриптор в копии новый (CID=fffffffe, без родителя и без ddb.uuid), но описывает тот же размер и тот же -flat.
+static Str RwLine(const Str& t) { int p = t.find("\nRW "); if (p < 0) return Str(); int e = t.find('\n', (size_t)p + 1); return t.substr((size_t)p + 4, e < 0 ? (size_t)-1 : (size_t)(e - p - 4)); }
+static bool CloneDescriptorOf(const Str& afterFile, const Str& beforeFile)
+{
+    Bytes ab, bb; Str e; if (!ReadWholeFile(afterFile.c_str(), ab, e) || !ReadWholeFile(beforeFile.c_str(), bb, e)) return false;
+    Str at((const char*)ab.data(), ab.size()), bt((const char*)bb.data(), bb.size());
+    if (at.find("CID=fffffffe") < 0 || at.find("parentCID=ffffffff") < 0 || at.find("ddb.uuid") >= 0 || at.find("parentFileNameHint") >= 0) return false;
+    Str ar = RwLine(at), br = RwLine(bt);
+    // "524288 VMFS "x-flat.vmdk"": the sector count and the extent type are the same, the file name is the base's flat file
+    int sa = ar.find(' '), sb = br.find(' ');
+    return sa > 0 && sb > 0 && ar.substr(0, (size_t)sa) == br.substr(0, (size_t)sb) && at.find("-flat.vmdk\"") >= 0;
+}
+
 static bool CheckTree(Ctx& c, const Vec<FI>& before, const Vec<FI>& after)
 {
     bool ok = true;
@@ -168,6 +191,7 @@ static bool CheckTree(Ctx& c, const Vec<FI>& before, const Vec<FI>& after)
         if (!a) { c.note("missing in the restore: %s", b.rel.c_str()); ok = false; continue; }
         if (b.rel.ends_with(".vmsd")) continue;
         if (b.rel.ends_with(".vmx")) { if (NormVmx(a->full) != NormVmx(b.full)) { c.note("differs: %s (normalized)", b.rel.c_str()); ok = false; } continue; }
+        if (b.rel.ends_with(".vmdk") && !b.rel.ends_with("-flat.vmdk") && (a->size != b.size || a->sha != b.sha) && CloneDescriptorOf(a->full, b.full)) continue;
         if (a->size != b.size || a->sha != b.sha) { c.note("differs: %s (%llu vs %llu bytes)", b.rel.c_str(), (unsigned long long)b.size, (unsigned long long)a->size); ok = false; }
     }
     for (const FI& a : after) {
@@ -298,7 +322,7 @@ VM2B_TEST("esxi", esxi_config_errors)
     Json c = Json::object(); c["type"] = "esxi"; c["host"] = "h"; c["user"] = "u"; c["password"] = "p";
     s = NewEsxiSource(c, err); T_CHECK(s != nullptr); delete s;
     Json c2 = c; c2["type"] = "vcenter"; s = NewEsxiSource(c2, err); T_CHECK(s != nullptr); delete s;
-    Json c3 = c; c3["transport"] = "ssh"; s = NewEsxiSource(c3, err); T_CHECK(s == nullptr); T_CHECK(err.find("not available yet") >= 0);
+    Json c3 = c; c3["transport"] = "ssh"; s = NewEsxiSource(c3, err); T_CHECK(s == nullptr); T_CHECK(err.find("not needed") >= 0);
     Json c4 = c; c4["transport"] = "api"; s = NewEsxiSource(c4, err); T_CHECK(s != nullptr); delete s;
     Json c5 = c; c5["transport"] = "carrier-pigeon"; s = NewEsxiSource(c5, err); T_CHECK(s == nullptr);
     Json c6 = c; c6["host"] = ""; s = NewEsxiSource(c6, err); T_CHECK(s == nullptr); T_CHECK(!err.empty());
@@ -502,6 +526,105 @@ VM2B_TEST("esxi", esxi_resume_after_dropped_connection)
     return true;
 }
 
+
+// Диск ВКЛЮЧЁННОЙ ВМ (настоящий ESXi 7.0.3: пустой HTTP 500 «Failed to lock file» на GET /folder даже у замороженной базы после снимка): копия берётся из клона,
+// который хост делает сам (VirtualDiskManager.CopyVirtualDisk_Task), клон лежит во временной папке «VM2Backup-<10 hex>» рядом с ВМ и после копии удаляется.
+// На старом коде (чтение диска «на месте») этот тест падает: эмулятор отвечает 500 и копия не получается.
+VM2B_TEST("esxi", esxi_running_vm_disks_are_cloned)
+{
+    Vec<Env> all, es; if (!Envs(c_, all)) return true; Normal(all, es);
+    EsTmp tmp(c_, "esxi-lc");
+    int n = 0;
+    for (const Env& e : es) {
+        if (c_.coin(35)) continue;
+        ++n;
+        Ctl ctl(e); ctl.reset();
+        int nd = c_.range(1, 3);
+        Fix f; T_CHECK(MakeFix(c_, ctl, e, f, "LC", nd, 2000000, "poweredOn", false, 1500000)); if (!f.m.ok) return false;
+        { Json o2, a = Json::object(); a["vm"] = f.spec.name; a["disk"] = 0; a["offset"] = 0; a["length"] = 10; ctl.call("guestwrite", a, o2); f.before.clear(); Walk(f.m.dir, "", f.before); }
+        BackupOptions o = RandomOpts(c_, false); o.verify = true;
+        // 1. the default: clones. The guest keeps writing while the copy runs (the frozen state must not change).
+        {
+            Str err; VmSource* src = NewEsxiSource(e.cfg(), err); Target* t = LocalAt(tmp.sub("s1"));
+            HookData hd = { &ctl, f.spec.name, 1, 0 }; Pr pr; pr.hook = HookFn; pr.user = &hd; Manifest man; Str warn;
+            bool ok = BackupVm(*src, f.spec.name, *t, o, &pr, man, warn, err);
+            if (!ok) c_.note("%s: %s", e.name.c_str(), err.c_str());
+            T_CHECK(ok); T_CHECK(hd.fired == 1);
+            T_CHECK(ctl.counter("fm:CopyVirtualDisk") == nd);                      // one clone per disk
+            T_CHECK(ctl.counter("fault:live_lock") == 0);                          // no locked file was read
+            if (ok) {
+                Str dest = tmp.sub("r1"), re;
+                if (Restore(c_, *t, man, o, dest, re)) {
+                    Vec<FI> after; Walk(JoinPath(dest, f.spec.name), "", after); T_CHECK(CheckTree(c_, f.before, after));
+                    Bytes mb; Str me; T_CHECK(ReadWholeFile(JoinPath(dest, "vm2backup-meta.json").c_str(), mb, me)); Json mj; Str pe; T_CHECK(Json::parse((const char*)mb.data(), mb.size(), mj, pe));
+                    T_CHECK(mj.get("live_clone").boolean()); T_CHECK(mj.get("disks").at(0).get("cloned").boolean());
+                    for (const FI& a : after) T_CHECK(!a.rel.starts_with("VM2Backup-"));          // the clone's folder is not in the archive
+                }
+            }
+            T_CHECK(ctl.leaked() == 0); T_CHECK(CloneFolders(f.m.dir) == 0);        // the snapshot and the clones are gone
+            delete t; delete src; RemoveTree(tmp.sub("s1")); RemoveTree(tmp.sub("r1"));
+        }
+        // 2. "live_disk": "direct" reads in place: the host refuses (as the real one) with a clear reason, nothing is left
+        {
+            Json cfg = e.cfg(); cfg["live_disk"] = "direct";
+            Str err; VmSource* src = NewEsxiSource(cfg, err); Target* t = LocalAt(tmp.sub("s2")); Pr pr; Manifest man; Str warn;
+            bool ok = BackupVm(*src, f.spec.name, *t, o, &pr, man, warn, err);
+            T_CHECK(!ok); T_CHECK(Contains(err, "locked")); T_CHECK(ctl.counter("fault:live_lock") >= 1); T_CHECK(ctl.leaked() == 0);
+            delete t; delete src; RemoveTree(tmp.sub("s2"));
+        }
+        // 3. the clone fails (no room, a fault of the host): a clear message, no snapshot, no folder
+        {
+            Json fl = Json::object(); Json cf = Json::object(); cf["type"] = "NoDiskSpace"; cf["msg"] = "There is not enough space on the file system for the selected operation"; cf["count"] = 1; fl["clone_fail"] = cf; ctl.faults(fl);
+            Str err; VmSource* src = NewEsxiSource(e.cfg(), err); Target* t = LocalAt(tmp.sub("s3")); Pr pr; Manifest man; Str warn;
+            bool ok = BackupVm(*src, f.spec.name, *t, o, &pr, man, warn, err);
+            T_CHECK(!ok); T_CHECK(Contains(err, "no room")); T_CHECK(Contains(err, "not enough space")); T_CHECK(ctl.leaked() == 0); T_CHECK(CloneFolders(f.m.dir) == 0);
+            Json fn = Json::object(); fn["clone_fail"] = Json(); Json o3; ctl.call("faults", fn, o3);
+            delete t; delete src; RemoveTree(tmp.sub("s3"));
+        }
+        // 4. a run that is stopped as a pause keeps snapshot and clones; a NEW store (no continuation) removes both as leftovers of the earlier run
+        {
+            Str err; VmSource* src = NewEsxiSource(e.cfg(), err); Target* t = LocalAt(tmp.sub("s4"));
+            Pr pr; pr.abortAt = true; pr.keep = true; pr.limit = 600000; Manifest man; Str warn;
+            BackupOptions o4 = o; o4.segmentBytes = (u64)512 * 100;
+            bool ok = BackupVm(*src, f.spec.name, *t, o4, &pr, man, warn, err);
+            T_CHECK(!ok); T_CHECK(ctl.leaked() == 1); T_CHECK(CloneFolders(f.m.dir) == 1);
+            delete t; delete src;
+            // a folder of a snapshot that does not exist any more (removed by hand) and a folder of the user's that only looks similar
+            { Str e1; MakeDirs(JoinPath(f.m.dir, "VM2Backup-0123456789"), e1); MakeDirs(JoinPath(f.m.dir, "VM2Backup-before-upgrade"), e1); }
+            T_CHECK(CloneFolders(f.m.dir) == 3);
+            Target* t2 = LocalAt(tmp.sub("s4b")); src = NewEsxiSource(e.cfg(), err); Pr pr2; Str w2;
+            ok = BackupVm(*src, f.spec.name, *t2, o, &pr2, man, w2, err);
+            T_CHECK(ok); T_CHECK(Contains(w2, "removed 1 old VM2Backup snapshot"));
+            T_CHECK(ctl.leaked() == 0); T_CHECK(CloneFolders(f.m.dir) == 1);        // the folder of the dead run went with its snapshot, the orphan one too, the new run's is gone; the user's "VM2Backup-before-upgrade" stays
+            T_CHECK(DirExists(JoinPath(f.m.dir, "VM2Backup-before-upgrade")));
+            { Str e1; RemoveTree(JoinPath(f.m.dir, "VM2Backup-before-upgrade")); (void)e1; }
+            delete t2; delete src; RemoveTree(tmp.sub("s4")); RemoveTree(tmp.sub("s4b"));
+        }
+        // 5. the VM has a snapshot of its own: the chain is consolidated into one clone per disk, the earlier snapshots are not copied (said so)
+        {
+            Json o2, a = Json::object(); a["vm"] = f.spec.name; a["name"] = "manual snapshot"; ctl.call("snapshot", a, o2);
+            Json a2 = Json::object(); a2["vm"] = f.spec.name; a2["disk"] = 0; a2["offset"] = 4096; a2["length"] = 5000; a2["seed"] = 3; ctl.call("guestwrite", a2, o2);
+            Str err; VmSource* src = NewEsxiSource(e.cfg(), err); Target* t = LocalAt(tmp.sub("s5")); Pr pr; Manifest man; Str warn;
+            bool ok = BackupVm(*src, f.spec.name, *t, o, &pr, man, warn, err);
+            if (!ok) c_.note("%s: %s", e.name.c_str(), err.c_str());
+            T_CHECK(ok); T_CHECK(Contains(warn, "earlier snapshot")); T_CHECK(ctl.leaked() == 0); T_CHECK(ctl.snapCount(f.spec.name) == 1); T_CHECK(CloneFolders(f.m.dir) == 0);
+            if (ok) {
+                Str dest = tmp.sub("r5"), re;
+                if (Restore(c_, *t, man, o, dest, re)) {
+                    Vec<FI> after; Walk(JoinPath(dest, f.spec.name), "", after);
+                    for (const FI& b : f.before) if (b.rel.ends_with("-flat.vmdk")) { const FI* x2 = FindFi(after, b.rel); T_CHECK(x2 != nullptr && x2->size == b.size); }   // same disk, same size (with the guest's writes up to the snapshot)
+                    int vmsn = 0; for (const FI& a3 : after) { bool bad = a3.rel.find("-delta") >= 0 || a3.rel.find("-sesparse") >= 0; if (a3.rel.ends_with(".vmsn")) ++vmsn; if (bad) c_.note("unexpected in a consolidated copy: %s", a3.rel.c_str()); T_CHECK(!bad); }
+                    T_CHECK(vmsn == 1);                                                  // only the description of the VM2Backup snapshot itself, not the VM's own
+                }
+            }
+            delete t; delete src; RemoveTree(tmp.sub("s5")); RemoveTree(tmp.sub("r5"));
+        }
+        DeleteVm(ctl, f.spec.name);
+    }
+    if (!n) c_.note("no profile drawn");
+    return true;
+}
+
 VM2B_TEST("esxi", esxi_resume_across_runs)
 {
     Vec<Env> all, es; if (!Envs(c_, all)) return true; Normal(all, es);
@@ -525,18 +648,20 @@ VM2B_TEST("esxi", esxi_resume_across_runs)
             delete t; delete src;
             T_CHECK(ctl.snapCount(f.spec.name) == 1);               // kept for the continuation
             T_CHECK(ctl.leaked() == 1);
+            T_CHECK(CloneFolders(f.m.dir) == 1);                    // the clone of the running VM's disk is kept with the snapshot (the continuation reads it)
         }
         if (mode == 0) { Json o2, a = Json::object(); a["vm"] = f.spec.name; a["disk"] = 0; a["offset"] = 4096; a["length"] = 9000; a["seed"] = 5; ctl.call("guestwrite", a, o2); }
         if (mode == 1) {
             Json st = ctl.vmState(f.spec.name); Json o2, a = Json::object(); a["vm"] = f.spec.name; a["name"] = st.get("snapshots").at(0).str(); ctl.call("remove_snapshot", a, o2);
             Json a2 = Json::object(); a2["vm"] = f.spec.name; a2["disk"] = 0; a2["offset"] = 4096; a2["length"] = 9000; a2["seed"] = 5; ctl.call("guestwrite", a2, o2);
             f.before.clear(); Walk(f.m.dir, "", f.before);
+            for (size_t i = f.before.size(); i-- > 0;) if (f.before[i].rel.starts_with("VM2Backup-")) f.before.erase(i);
         }
         if (mode == 2) {
             Json o2, a = Json::object(); a["vm"] = f.spec.name; a["file"] = f.spec.name + ".vmx"; ctl.call("touch", a, o2);
             f.before.clear(); Walk(f.m.dir, "", f.before);
             // the snapshot's own files are part of `before` now: they stay in the VM folder until the first run's snapshot is removed
-            for (size_t i = f.before.size(); i-- > 0;) if (f.before[i].rel.find("-0000") >= 0) f.before.erase(i);
+            for (size_t i = f.before.size(); i-- > 0;) if (f.before[i].rel.find("-0000") >= 0 || f.before[i].rel.starts_with("VM2Backup-")) f.before.erase(i);
         }
         {   // run 2
             VmSource* src = NewEsxiSource(e.cfg(), err); Target* t = LocalAt(store);
@@ -560,12 +685,12 @@ VM2B_TEST("esxi", esxi_resume_across_runs)
                     if (mode == 0) T_CHECK(CheckTree(c_, f.before, after));
                     else {
                         // compare the disk and the config only (the file list of the folder changed with the snapshots)
-                        for (const FI& b : f.before) if (b.rel.ends_with("-flat.vmdk")) { const FI* a = FindFi(after, b.rel); T_CHECK(a != nullptr && a->sha == b.sha); }
+                        for (const FI& b : f.before) if (b.rel.ends_with("-flat.vmdk")) { const FI* a = FindFi(after, b.rel); if (!a) c_.note("mode %d: %s missing in the restore", mode, b.rel.c_str()); else if (a->sha != b.sha) c_.note("mode %d: %s differs (%llu vs %llu)", mode, b.rel.c_str(), (unsigned long long)b.size, (unsigned long long)a->size); T_CHECK(a != nullptr && a->sha == b.sha); }
                         for (const FI& b : f.before) if (b.rel.ends_with(".vmx")) { const FI* a = FindFi(after, b.rel); T_CHECK(a != nullptr && NormVmx(a->full) == NormVmx(b.full)); }
                     }
                 }
             }
-            T_CHECK(ctl.leaked() == 0); T_CHECK(ctl.snapCount(f.spec.name) == 0);
+            T_CHECK(ctl.leaked() == 0); T_CHECK(ctl.snapCount(f.spec.name) == 0); T_CHECK(CloneFolders(f.m.dir) == 0);
             delete t; delete src;
         }
         DeleteVm(ctl, f.spec.name); RemoveTree(store); RemoveTree(tmp.sub("r"));
@@ -621,7 +746,7 @@ VM2B_TEST("esxi", esxi_snapshot_failure_paths)
         bool ok = BackupVm(*src, f.spec.name, *t, o, &pr, man, warn, err);
         bool perm = !src->transient;
         if (kind == 0) {
-            T_CHECK(!ok); T_CHECK(Contains(err, "license")); T_CHECK(Contains(err, "SSH")); T_CHECK(perm); T_CHECK(!Contains(err, e.password.c_str()));
+            T_CHECK(!ok); T_CHECK(Contains(err, "license")); T_CHECK(Contains(err, "write API")); T_CHECK(perm); T_CHECK(!Contains(err, e.password.c_str()));
             T_CHECK(ctl.leaked() == 0); T_CHECK(ctl.snapCount(f.spec.name) == 0);
         } else if (kind == 1) {
             T_CHECK(ok); T_CHECK(Contains(warn, "without quiescing"));
@@ -1035,6 +1160,7 @@ static bool CheckRestoredFolder(Ctx& c, const Env& e, const RFix& r, const Str& 
         if (Excluded(b.rel) || b.rel.ends_with(".vmx") || b.rel.ends_with(".vmsd") || b.rel.starts_with("<ds2>/")) continue;
         const FI* a = FindFi(after, b.rel);
         if (!a) { c.note("not restored: %s", b.rel.c_str()); ok = false; continue; }
+        if ((a->sha != b.sha || a->size != b.size) && b.rel.ends_with(".vmdk") && !b.rel.ends_with("-flat.vmdk") && CloneDescriptorOf(a->full, b.full)) continue;     // a running VM: the host's clone has a new descriptor
         if (a->sha != b.sha || a->size != b.size) { c.note("restored file differs: %s", b.rel.c_str()); ok = false; }
     }
     for (const FI& a : after) {
@@ -1044,7 +1170,7 @@ static bool CheckRestoredFolder(Ctx& c, const Env& e, const RFix& r, const Str& 
     }
     if (r.ds2 && !everythingInOneDs) {
         Str d2 = JoinPath(JoinPath(e.root, "datastore2"), newName); Vec<FI> a2; Walk(d2, "", a2);
-        for (const FI& b : r.ds2before) { const FI* a = FindFi(a2, b.rel); if (!a || a->sha != b.sha) { c.note("second datastore: %s", b.rel.c_str()); ok = false; } }
+        for (const FI& b : r.ds2before) { const FI* a = FindFi(a2, b.rel); if (a && a->sha != b.sha && b.rel.ends_with(".vmdk") && !b.rel.ends_with("-flat.vmdk") && CloneDescriptorOf(a->full, b.full)) continue; if (!a || a->sha != b.sha) { c.note("second datastore: %s", b.rel.c_str()); ok = false; } }
         if (a2.size() != r.ds2before.size()) { c.note("second datastore holds %d files, %d expected", (int)a2.size(), (int)r.ds2before.size()); ok = false; }
     }
     // the .vmx: base disks, the new name, no snapshot / change tracking lines
@@ -1062,7 +1188,7 @@ static bool CheckRestoredFolder(Ctx& c, const Env& e, const RFix& r, const Str& 
         if (r.ds2 && i == 1 && !everythingInOneDs && v.find("[datastore2]") != 0) { c.note("disk 1 should be on datastore2: %s", v.c_str()); ok = false; }
     }
     const FI* vs = nullptr; for (const FI& a : after) if (a.rel.ends_with(".vmsd")) vs = &a;
-    if (vs) { Bytes sb; ReadWholeFile(vs->full.c_str(), sb, ve); Str st((const char*)sb.data(), sb.size()); if (VmxValue(st, "snapshot.numSnapshots") != "0" || st.find("VM2Backup") >= 0) { c.note(".vmsd still lists the backup snapshot"); ok = false; } }
+    if (vs) { Bytes sb; ReadWholeFile(vs->full.c_str(), sb, ve); Str st((const char*)sb.data(), sb.size()); if ((VmxValue(st, "snapshot.numSnapshots") != "0" && !VmxValue(st, "snapshot.numSnapshots").empty()) || st.find("VM2Backup") >= 0) { c.note(".vmsd still lists the backup snapshot"); ok = false; } }
     // everything else of the original .vmx is kept
     for (const FI& b : r.f.before) if (b.rel.ends_with(".vmx")) {
         Bytes ob; ReadWholeFile(b.full.c_str(), ob, ve); Str ot((const char*)ob.data(), ob.size());
@@ -1536,7 +1662,7 @@ VM2B_TEST("esxi", esxi_user_snapshot_chain_and_middle_leftover)
     for (const Env& e : es) {
         if (c_.coin(50)) continue;
         Ctl ctl(e); ctl.reset();
-        Fix f; T_CHECK(MakeFix(c_, ctl, e, f, "CH", 2, 300000, c_.coin() ? "poweredOn" : "poweredOff", true)); if (!f.m.ok) return false;
+        Fix f; T_CHECK(MakeFix(c_, ctl, e, f, "CH", 2, 300000, "poweredOff", true)); if (!f.m.ok) return false;
         bool leftover = c_.coin(60);
         int levels = c_.range(1, 3);
         auto snap = [&](const Str& name) { Json a = Json::object(), o; a["vm"] = f.spec.name; a["name"] = name; ctl.call("snapshot", a, o); };
@@ -1958,7 +2084,7 @@ VM2B_TEST("esxi", esxi_branching_snapshot_tree)
     for (const Env& e : es) {
         if (c_.coin(45)) continue;
         Ctl ctl(e); ctl.reset();
-        Fix f; T_CHECK(MakeFix(c_, ctl, e, f, "BR", c_.range(1, 2), 300000, c_.coin() ? "poweredOn" : "poweredOff", true)); if (!f.m.ok) return false;
+        Fix f; T_CHECK(MakeFix(c_, ctl, e, f, "BR", c_.range(1, 2), 300000, "poweredOff", true)); if (!f.m.ok) return false;
         auto snap = [&](const Str& name) { Json a = Json::object(), o; a["vm"] = f.spec.name; a["name"] = name; ctl.call("snapshot", a, o); };
         auto revert = [&](const Str& name) { Json a = Json::object(), o; a["vm"] = f.spec.name; a["name"] = name; ctl.call("revert", a, o); };
         auto write = [&](int disk, int off, int len, int seed) { Json a = Json::object(), o; a["vm"] = f.spec.name; a["disk"] = disk; a["offset"] = off; a["length"] = len; a["seed"] = seed; ctl.call("guestwrite", a, o); };
@@ -1992,7 +2118,7 @@ VM2B_TEST("esxi", esxi_files_vanish_from_the_datastore)
         if (c_.coin(45)) continue;
         kind = (kind + 1) % 6;
         Ctl ctl(e); ctl.reset();
-        Fix f; T_CHECK(MakeFix(c_, ctl, e, f, "GN", 2, 300000, c_.coin() ? "poweredOn" : "poweredOff", true)); if (!f.m.ok) return false;
+        Fix f; T_CHECK(MakeFix(c_, ctl, e, f, "GN", 2, 300000, "poweredOff", true)); if (!f.m.ok) return false;
         auto unlink = [&](const Str& file) { Json a = Json::object(), o; a["vm"] = f.spec.name; a["file"] = file; a["suffix"] = true; ctl.call("unlink", a, o); };
         Str what;
         if (kind == 0) { unlink(".vmxf"); what = ".vmxf"; }
@@ -2137,7 +2263,7 @@ VM2B_TEST("esxi", esxi_zero_and_unaligned_disks_with_deep_chains)
     for (const Env& e : es) {
         if (c_.coin(50)) continue;
         Ctl ctl(e); ctl.reset();
-        Str nm = UniqueName(c_, "DP"); Json a = Json::object(); a["name"] = nm; a["power"] = c_.coin() ? "poweredOn" : "poweredOff";
+        Str nm = UniqueName(c_, "DP"); Json a = Json::object(); a["name"] = nm; a["power"] = "poweredOff";   /* a running VM gets one consolidated clone per disk: esxi_running_vm_disks_are_cloned */
         Json d = Json::array(); int nd = c_.range(1, 3);
         for (int i = 0; i < nd; ++i) { Json o = Json::object(); o["size"] = kSizes[c_.rnd(7)]; o["thin"] = c_.coin(); o["seed"] = (i64)c_.range(1, 999); d.push(o); }
         a["disks"] = d;
@@ -2685,6 +2811,7 @@ VM2B_TEST("esxi", esxi_snapshot_history_option)
         { Json o, a = Json::object(); a["vm"] = f.spec.name; a["name"] = "hist-s1"; ctl.call("revert", a, o); }       // a side branch: s2 is not an ancestor of the current state
         write(13); snap("hist-s3"); write(14);
         int mockSnaps = ctl.snapCount(f.spec.name); T_CHECK(mockSnaps == 3);
+        { Json o, a = Json::object(); a["vm"] = f.spec.name; a["state"] = "poweredOff"; ctl.call("power", a, o); }       // the VM is switched off now: its snapshots (with memory) are read in place (a running VM is cloned: esxi_running_vm_disks_are_cloned)
         int nTrue = 0, nFalse = 0;
         for (int hist = 1; hist >= 0; --hist) {
             Json cfg = e.cfg(); cfg["snapshot"]["history"] = hist != 0;
@@ -2771,6 +2898,13 @@ VM2B_TEST("esxi", esxi_real_fixtures_parse)
           if (v) for (const XmlNode& k : v->kids) { if (k.name == "file") ++files; if (k.name == "disk") for (const XmlNode& c : k.kids) if (c.name == "chain") ++chains; if (k.name == "snapshot") ++snaps; }
       }
       T_CHECK(files >= 8); T_CHECK(chains >= 2); T_CHECK(snaps >= 3); }
+    // the disk clone call of a running VM (VirtualDiskManager.CopyVirtualDisk_Task): the answer is a Task, and the service content names the manager
+    XmlNode cd;
+    T_CHECK(load("CopyVirtualDisk_Task.resp.xml", cd));
+    { const XmlNode* r = cd.child("Body") ? cd.child("Body")->child("CopyVirtualDisk_TaskResponse") : nullptr; T_CHECK(r != nullptr);
+      const XmlNode* rv = r ? r->child("returnval") : nullptr; T_CHECK(rv != nullptr); if (rv) { T_CHECK(rv->attr("type") == "Task"); T_CHECK(!rv->text.trim().empty()); } }
+    { const XmlNode* r = d.child("Body") ? d.child("Body")->child("RetrieveServiceContentResponse") : nullptr; const XmlNode* rv = r ? r->child("returnval") : nullptr;
+      T_CHECK(rv != nullptr && rv->childText("virtualDiskManager").trim() == "ha-vdiskmanager"); }
     return true;
 }
 } // namespace vm2b

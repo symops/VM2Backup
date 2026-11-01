@@ -137,20 +137,6 @@ VM2B_TEST("esxireal", esxireal_backup_verify_restore_matrix)
     static const Mode modes[] = { { "", 1, 0 }, { "real-\xd0\xbf\xd0\xb0\xd1\x80\xd0\xbe\xd0\xbb\xd1\x8c", 5, (u64)512 * 200000 }, { "", 9, (u64)512 * 4096 }, { "x", 0, 0 } };
     int idx = 0;
     for (const RealVm& v : r.vms) {
-        if (v.on) {          // ВКЛЮЧЁННАЯ ВМ: настоящий ESXi 7.0.3 не отдаёт её диск по /folder даже после снимка; ждём внятную ошибку и чистоту (нет оставшегося снимка)
-            BackupOptions o; o.kdfIterations = 3000; o.verify = false; o.allowLive = true; o.codec.level = 1;
-            Str err; VmSource* src = NewEsxiSource(r.cfg(), err); T_CHECK(src != nullptr); if (!src) return false;
-            Target* t = LocalAtR(tmp.sub("store-on")); Manifest man; Str warn; Pr pr;
-            bool ok = BackupVm(*src, v.name, *t, o, &pr, man, warn, err);
-            c_.note("%s (включена): %s", v.name.c_str(), ok ? "копия снята (диск прочитан)" : err.c_str());
-            if (ok) { Str re; Manifest rm; T_CHECK(RestoreBackup(*t, man.archive, tmp.sub("r-on"), o.password, nullptr, &rm, re)); T_CHECK(CheckFlats(c_, v, tmp.sub("r-on"))); }
-            else { T_CHECK(Has(err, "locked") && Has(err, "-flat.vmdk")); T_CHECK(!src->transient); }
-            delete t; delete src;
-            // после неудачи снимка не осталось: следующий begin() не сообщает об удалении старых снимков
-            Str e2; VmSource* s2 = NewEsxiSource(r.cfg(), e2); Str fp, tok, w2; bool b = s2 && s2->begin(v.name, true, Str(), fp, tok, w2);
-            T_CHECK(b); T_CHECK(!Has(w2, "removed")); if (s2) { if (b) s2->end(false); delete s2; }
-            continue;
-        }
         for (const Mode& m : modes) {
             ++idx;
             Str store = tmp.sub(Str::fmt("store%d", idx).c_str()), dest = tmp.sub(Str::fmt("r%d", idx).c_str());
@@ -173,6 +159,9 @@ VM2B_TEST("esxireal", esxireal_backup_verify_restore_matrix)
             }
             delete t; delete src; RemoveTree(store); RemoveTree(dest);
         }
+        // после копии (в том числе ВКЛЮЧЁННОЙ ВМ: снимок и клоны дисков) на хосте ничего не осталось: следующий begin() не находит старых снимков
+        Str e2; VmSource* s2 = NewEsxiSource(r.cfg(), e2); Str fp, tok, w2; bool b = s2 && s2->begin(v.name, true, Str(), fp, tok, w2);
+        T_CHECK(b); T_CHECK(!Has(w2, "removed")); if (s2) { if (b) s2->end(false); delete s2; }
     }
     return true;
 }
@@ -182,7 +171,7 @@ VM2B_TEST("esxireal", esxireal_resume_after_abort)
     Real r; if (!Load(c_, r)) return true;
     Tmp tmp(c_, "esxireal-rs");
     for (const RealVm& v : r.vms) {
-        if (v.on || v.hist) continue;       // включённую ВМ по /folder прочитать нельзя (см. esxireal_backup_verify_restore_matrix); у ВМ со снимками тома малы
+        if (v.hist) continue;               // у ВМ со снимками тома малы; включённая ВМ идёт через клон диска, продолжение внутри файла клона работает (Range)
         Str store = tmp.sub("store"), dest = tmp.sub("r");
         BackupOptions o; o.kdfIterations = 3000; o.verify = true; o.segmentBytes = (u64)512 * 8192; o.codec.level = 1; o.allowLive = v.on;
         Str err; VmSource* src = NewEsxiSource(r.cfg(), err); T_CHECK(src != nullptr); if (!src) return false;
@@ -209,7 +198,6 @@ VM2B_TEST("esxireal", esxireal_restore_to_host)
     Tmp tmp(c_, "esxireal-rh");
     int n = 0;
     for (const RealVm& v : r.vms) {
-        if (v.on) continue;
         ++n;
         Str store = tmp.sub("store");
         BackupOptions o; o.kdfIterations = 3000; o.verify = false; o.allowLive = v.on; o.codec.level = 1;
@@ -274,6 +262,40 @@ VM2B_TEST("esxireal", esxireal_snapshot_history)
 }
 
 
+// ВКЛЮЧЁННАЯ ВМ со СВОИМ деревом снимков (перед этим тестом vm2b-hist включают: LIVE_HIST=1 tools/esxi7/run-real.sh --only esxireal_live_hist_running): цепочка свёртывается в один клон
+// на диск, чужие снимки не копируются (в предупреждении сказано), восстановленная ВМ регистрируется и включается, sha256 диска равна эталону
+// (в дельтах этой ВМ без ОС ничего не записано, поэтому клон верхнего звена побитно равен базе).
+VM2B_TEST("esxireal", esxireal_live_hist_running)
+{
+    Real r; if (!Load(c_, r)) return true;
+    Tmp tmp(c_, "esxireal-lh");
+    for (const RealVm& v : r.vms) {
+        if (!v.hist) continue;
+        Str err; VmSource* s0 = NewEsxiSource(r.cfg(), err); T_CHECK(s0 != nullptr); if (!s0) return false;
+        Vec<VmInfo> vms; T_CHECK(s0->list(vms)); bool running = false; for (const VmInfo& i : vms) if (i.name == v.name && i.state == "running") running = true; delete s0;
+        if (!running) { c_.skip("ВМ со снимками выключена (LIVE_HIST=1 tools/esxi7/run-real.sh включает её)"); continue; }
+        Str store = tmp.sub("s"), dest = tmp.sub("d");
+        BackupOptions o; o.kdfIterations = 3000; o.verify = true; o.codec.level = 1;
+        VmSource* src = NewEsxiSource(r.cfg(), err); T_CHECK(src != nullptr); if (!src) return false;
+        Target* t = LocalAtR(store); Manifest man; Str warn; Pr pr;
+        bool ok = BackupVm(*src, v.name, *t, o, &pr, man, warn, err); if (!ok) c_.note("%s: %s", v.name.c_str(), err.c_str());
+        T_CHECK(ok); delete src; if (!ok) { delete t; continue; }
+        c_.note("%s (включена, со своими снимками): %llu байт; предупреждение: %s", v.name.c_str(), (unsigned long long)man.rawSize, warn.c_str());
+        T_CHECK(Has(warn, "earlier snapshot"));
+        Str re; Manifest rm; T_CHECK(RestoreBackup(*t, man.archive, dest, o.password, nullptr, &rm, re));
+        Bytes mb; Str me, pe; Json mj; if (ReadWholeFile(JoinPath(dest, "vm2backup-meta.json").c_str(), mb, me)) Json::parse((const char*)mb.data(), mb.size(), mj, pe);
+        T_CHECK(mj.get("live_clone").boolean());
+        const Json& fl = mj.get("files"); int deltas = 0; for (size_t i = 0; i < fl.size(); ++i) { Str p = fl.at(i).get("path").str(); c_.note("  %s (%lld)", p.c_str(), (long long)fl.at(i).get("size").integer()); if (p.find("sesparse") >= 0 || p.find("-delta") >= 0) ++deltas; }
+        T_CHECK(deltas == 0);
+        T_CHECK(CheckFlats(c_, v, dest));
+        EsxiRestoreOptions ro; ro.vmName = Str::fmt("%s-lh%u", r.prefix.c_str(), (unsigned)(GetTickCount() % 100000)); ReadOptions rd; rd.stateDir = tmp.sub("state"); Str se; MakeDirs(rd.stateDir, se);
+        EsxiRestoreResult res; Str rr; Pr pr2; bool rok = RestoreToEsxi(*t, man.archive, r.cfg(), ro, o.password, rd, &pr2, &res, rr); if (!rok) c_.note("restore: %s", rr.c_str());
+        T_CHECK(rok); if (rok) c_.note("RESTORED %s -> %s (%s)", v.name.c_str(), res.vmName.c_str(), res.vmxPath.c_str());
+        delete t; RemoveTree(store); RemoveTree(dest);
+    }
+    return true;
+}
+
 // ---- сценарий «включённая ВМ: пауза, выключение, включение, продолжение / отмена» (этапы запускает tools/esxi7/live-scenario.sh, между этапами по SSH меняется питание ВМ) ----
 static Str LiveStore(Ctx& c)
 {
@@ -281,14 +303,14 @@ static Str LiveStore(Ctx& c)
     return JoinPath(pf.substr(0, (size_t)cut), "live-store");
 }
 static const RealVm* LiveVm(const Real& r) { for (const RealVm& v : r.vms) if (v.on) return &v; return nullptr; }
-static BackupOptions LiveOpts() { BackupOptions o; o.kdfIterations = 3000; o.verify = false; o.allowLive = true; o.codec.level = 1; o.segmentBytes = (u64)512 * 8; return o; }
+static BackupOptions LiveOpts() { BackupOptions o; o.kdfIterations = 3000; o.verify = false; o.allowLive = true; o.codec.level = 1; o.segmentBytes = (u64)512 * 2000; return o; }
 
 VM2B_TEST("esxireal", esxireal_live_stage_pause)
 {
     Real r; if (!Load(c_, r)) return true; const RealVm* v = LiveVm(r); if (!v) return true;
     Str store = LiveStore(c_); RemoveTree(store);
     Str err; VmSource* src = NewEsxiSource(r.cfg(), err); T_CHECK(src != nullptr); if (!src) return false;
-    Target* t = LocalAtR(store); Manifest man; Str warn; Pr pr; pr.abortAt = true; pr.keep = true; pr.limit = 9000;
+    Target* t = LocalAtR(store); Manifest man; Str warn; Pr pr; pr.abortAt = true; pr.keep = true; pr.limit = (u64)40 << 20;
     BackupOptions o = LiveOpts();
     bool ok = BackupVm(*src, v->name, *t, o, &pr, man, warn, err);
     c_.note("этап «пауза»: backup %s: %s", ok ? "готов" : "прерван", err.c_str());
@@ -317,7 +339,7 @@ VM2B_TEST("esxireal", esxireal_live_stage_cancel)
     Str store = LiveStore(c_);
     Str err; VmSource* src = NewEsxiSource(r.cfg(), err); T_CHECK(src != nullptr); if (!src) return false;
     Target* t = LocalAtR(store); Manifest man; Str warn; BackupOptions o = LiveOpts();
-    { Pr pr; pr.abortAt = true; pr.keep = true; pr.limit = 9000; bool ok = BackupVm(*src, v->name, *t, o, &pr, man, warn, err); T_CHECK(!ok); }
+    { Pr pr; pr.abortAt = true; pr.keep = true; pr.limit = (u64)40 << 20; bool ok = BackupVm(*src, v->name, *t, o, &pr, man, warn, err); T_CHECK(!ok); }
     delete src; src = NewEsxiSource(r.cfg(), err);
     { Pr pr; pr.abortAt = true; pr.keep = false; pr.limit = 1; bool ok = BackupVm(*src, v->name, *t, o, &pr, man, warn, err); c_.note("этап «отмена»: %s (%s)", ok ? "готов" : "отменён", err.c_str()); T_CHECK(!ok); }
     Vec<ResumeInfo> ri; Str le; ListResumable(*t, &v->name, ri, le); c_.note("после отмены возобновляемых копий: %d", (int)ri.size());

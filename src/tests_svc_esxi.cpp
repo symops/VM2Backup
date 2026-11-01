@@ -154,6 +154,16 @@ bool MakeFx(Ctx& c, Ctl& ctl, const Env& e, Fx& f, const char* tag, int maxDisks
 }
 
 // every file of the original (but swap, logs, .vmx, .vmsd) is in the restored VM folder byte for byte, and the folder has a .vmx
+static bool IsCloneDescriptor(const Str& afterFile, const Str& beforeFile)
+{
+    Bytes ab, bb; Str e; if (!ReadWholeFile(afterFile.c_str(), ab, e) || !ReadWholeFile(beforeFile.c_str(), bb, e)) return false;
+    Str at((const char*)ab.data(), ab.size()), bt((const char*)bb.data(), bb.size());
+    if (at.find("CID=fffffffe") < 0 || at.find("parentCID=ffffffff") < 0 || at.find("ddb.uuid") >= 0 || at.find("parentFileNameHint") >= 0) return false;
+    int pa = at.find("\nRW "), pb = bt.find("\nRW "); if (pa < 0 || pb < 0) return false;
+    int sa = at.find(' ', (size_t)pa + 4), sb = bt.find(' ', (size_t)pb + 4); if (sa < 0 || sb < 0) return false;
+    return at.substr((size_t)pa + 4, (size_t)(sa - pa - 4)) == bt.substr((size_t)pb + 4, (size_t)(sb - pb - 4));
+}
+
 bool CheckRestored(Ctx& c, const Env& e, const Fx& f, const Str& newName, const Str& ds)
 {
     bool ok = true;
@@ -162,6 +172,7 @@ bool CheckRestored(Ctx& c, const Env& e, const Fx& f, const Str& newName, const 
         if (Excluded(b.rel)) continue;
         const FI* a = FindFi(after, b.rel);
         if (!a) { c.note("not restored: %s", b.rel.c_str()); ok = false; continue; }
+        if ((a->sha != b.sha || a->size != b.size) && b.rel.ends_with(".vmdk") && !b.rel.ends_with("-flat.vmdk") && IsCloneDescriptor(JoinPath(JoinPath(JoinPath(e.root, ds), newName), a->rel), JoinPath(f.m.dir, b.rel))) continue;    // a running VM: the host's clone has a new descriptor
         if (a->sha != b.sha || a->size != b.size) { c.note("restored file differs: %s", b.rel.c_str()); ok = false; }
     }
     bool vmx = false; for (const FI& a : after) if (a.rel.ends_with(".vmx")) vmx = true;

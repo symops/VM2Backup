@@ -15,7 +15,7 @@ struct EsxiSource : VmSource {
 };
 
 // Server config (a JSON object): type "esxi"|"vcenter", host, port (443), user, password, verify, fingerprint "sha256:..", tls_min "1.0"|"1.2",
-// transport "api" (default) | "ssh" (not available yet), snapshot {quiesce:true, memory:false}, datacenter (vCenter: only this one),
+// transport "api" (default; "ssh" is refused: not needed), live_disk "clone" (default: the disks of a powered-on VM are cloned on the host, CopyVirtualDisk) | "direct", clone_timeout (s, one clone), snapshot {quiesce:true, memory:false}, datacenter (vCenter: only this one),
 // and the tuning keys timeout (idle seconds of one network step), task_timeout (s, snapshot creation, default 600), remove_timeout (s, default 3600),
 // poll_ms (first task polling interval).
 VmSource* NewEsxiSource(const Json& server, Str& err);

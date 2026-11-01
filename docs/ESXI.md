@@ -9,11 +9,34 @@ datastore file access over HTTPS (`/folder`). Supported: ESXi 6.0 / 6.5 / 6.7 / 
 ## Server config (JSON, see `esxi.h`)
 
 `type` esxi|vcenter, `host`, `port` (443), `user`, `password`, `verify`, `fingerprint` ("sha256:..", a self-signed host is pinned),
-`tls_min` ("1.0" for ESXi 6.0 / 6.5 hosts that offer nothing newer, default "1.2"), `transport` "api" (default) | "ssh" (**not available
-yet**: `NewEsxiSource` fails with a clear text), `snapshot` {quiesce: true, memory: false} (the service copies it from the task element),
+`tls_min` ("1.0" for ESXi 6.0 / 6.5 hosts that offer nothing newer, default "1.2"), `transport` "api" (default; "ssh" is **not needed and not
+implemented**: the disks of a running VM are cloned by the host itself through the API, see "Powered-on VMs" below; `NewEsxiSource` refuses "ssh" with that text), `snapshot` {quiesce: true, memory: false} (the service copies it from the task element),
 `datacenter` (vCenter: only this datacenter; without it every datacenter is searched and a name that exists twice is refused with a
 message asking for it). Tuning keys: `timeout` (idle seconds of a network step), `task_timeout` (600 s, snapshot creation),
-`remove_timeout` (3600 s, a consolidation can be long), `poll_ms` (first task polling interval, doubles up to 1.5 s).
+`remove_timeout` (3600 s, a consolidation can be long), `poll_ms` (first task polling interval, doubles up to 1.5 s),
+`live_disk` ("clone" (default) | "direct": how the disks of a powered-on VM are read, see below), `clone_timeout` (21600 s, one disk clone).
+
+## Powered-on VMs: disk clones (since the real ESXi 7.0.3 run)
+
+A powered-on VM keeps its disk files locked: a real ESXi answers `GET /folder/...-flat.vmdk` with an empty HTTP 500 ("Failed to lock file" in `hostd.log`),
+also for the base disk a snapshot has just frozen. So for a powered-on VM (`live_disk` = "clone", the default) the source does this after the snapshot:
+1. for every disk the snapshot froze, `VirtualDiskManager.CopyVirtualDisk_Task` (the API twin of `vmkfstools -i <link> -d thin <clone>`, `sourceName` = the descriptor of the
+   NEWEST frozen link of the chain, so the whole chain is read by the host) makes a thin, parent-free clone `d<N>.vmdk` + `d<N>-flat.vmdk` in a temporary folder
+   `<VM folder>/VM2Backup-<10 hex>/` (the name of the run's snapshot; a disk in another folder or datastore: `[datastore] VM2Backup-<10 hex>/`);
+2. `ready` (a tiny file) is written into every folder after the last clone: only then are the clones trusted by a continuation;
+3. the clone's flat file is read through `/folder` (Range works: a continuation goes on INSIDE the disk), and its descriptor is made reproducible (`CID=fffffffe`, no
+   `ddb.uuid` / `longContentID`, the extent line names the archive's flat file, `ddb.adapterType` of the original) and put into the archive under the BASE
+   link's name (`<disk>.vmdk` + `<disk>-flat.vmdk`), the meta file says `live_clone: true`, `disks[].cloned: true`;
+4. the folders are deleted before the snapshot is removed (`end()`, a failed `begin()`, a cancel); a pause keeps snapshot and folders for the continuation. A leftover
+   VM2Backup snapshot of a dead run is removed together with its folder; a `VM2Backup-<10 hex>` folder without a snapshot (the snapshot was removed by hand)
+   is found in the VM folder listing and deleted; anything else is never touched (`VM2Backup-before-upgrade` stays).
+Consequences, said honestly: (a) the datastore needs room for a thin copy of the disks' data for the duration of the copy; the clone is made before the first byte
+streams (the time of a read plus a write of the disk on the host); (b) the VM's OWN earlier snapshots are not copied for a powered-on VM (the chain is consolidated
+into the clone; `snapshot.history` is treated as off, a warning says so), the restored VM has one flat disk of the state at the moment of the snapshot and no snapshots;
+(c) a restored disk is thin even when the original was thick; (d) an independent disk or an RDM is not cloned (as before: copied live / skipped); (e) a host that allows
+reading in place (older hosts?) can be told `"live_disk": "direct"`; (f) the license: `CopyVirtualDisk` is a write call, the free Hypervisor license refuses it (clear message).
+Not implemented, by choice: NFC export (`ExportSnapshot` answers NotSupported on a standalone ESXi 7.0.3, `ExportVm` needs the VM powered off, see the facts below) and SSH
+(`vmkfstools`): both need more (a stream-optimized VMDK converter; credentials of the shell) and give nothing the API clone does not.
 
 ## What a backup does
 
@@ -24,7 +47,7 @@ message asking for it). Tuning keys: `timeout` (idle seconds of a network step),
 2. Snapshot `VM2Backup-<10 hex>` (`CreateSnapshot_Task`, quiesce / memory per config, only for powered-on VMs). Task polling through the
    property collector. A quiesce failure (VMware Tools missing: `ToolsUnavailable`, `ApplicationQuiesceFault`, ...) retries once without
    quiescing and adds a warning. A refused write API (`RestrictedVersion`, "current license ... prohibits", `NoPermission`: free ESXi) is a
-   permanent error that names the SSH transport / a licensed host. A hung task is cancelled after `task_timeout`.
+   permanent error that names a licensed host. A hung task is cancelled after `task_timeout`.
 3. File list AFTER the snapshot (task option `snapshot.history`, default true: see "Snapshots of the VM itself" below), from `layoutEx`: the configuration files (`config` .vmx, `extendedConfig` .vmxf, `nvram`, `snapshotList`
    .vmsd, `namespaceData`), snapshot data/memory (.vmsn/.vmem), suspend state, and for every snapshot of the VM the disk chains it froze
    (`layoutEx.snapshot[].disk[].chain[]`: descriptors and base/flat/delta extents of earlier snapshots). **Excluded**: swap (.vswp,
@@ -88,7 +111,7 @@ here; ESXi 6.0 needs `tls_min` 1.0, which also lowers the OpenSSL security level
 
 ## Known gaps
 
-* SSH transport (a later phase). Restore TO a host is the API transport only (see Restore below).
+* No SSH transport (not needed: the disks of a powered-on VM are cloned by the host through the API, see "Powered-on VMs"). Restore TO a host is the API transport only (see Restore below).
 * Abort during `begin()` / `list()` needs the caller to call `EsxiSource::requestAbort()` (the engine passes no Progress to `begin`).
 * vSAN / vVol / NFS-specific layouts, linked clones, RDM and shared disks, encrypted VMs (vSphere VM encryption) and VMs in a folder with `/` or `%` in the *datastore folder* name beyond what the tests draw are not specially handled.
 * Restored disk descriptors are byte-exact: a linked clone whose `parentFileNameHint` is an absolute path (View / Horizon replicas) still points at the original parent after a restore (the parent's files are copied too, but not wired in). Not verified against a real host.
@@ -174,11 +197,8 @@ VM, restoring as a template, vApp / cluster-DRS placement choices beyond folder 
 1. **SOAPAction определяет набор свойств.** Источник искал версию с «6.0» (первую принятую), и настоящий ESXi 7.0.3 отвечал HTTP 500 `InvalidProperty config.keyId` (свойство 6.5+): список ВМ не работал вообще.
    Исправлено в `negotiate()` (`src/esxi.cpp`): после `RetrieveServiceContent` берётся самая новая известная версия не выше `apiVersion` сервера; `config.keyId` запрашивается только при версии запроса 6.5+.
    Эмулятор (`esxi_mock.py`) теперь так же отвечает `InvalidProperty` на `config.keyId` при SOAPAction ниже 6.5 у любого профиля: регрессия в существующих тестах эмуляторов. Образец настоящего ответа: `tests/fixtures/esxi7-real/RetrievePropertiesEx-fault-InvalidProperty-keyId.resp.xml`.
-2. **Диск ВКЛЮЧЁННОЙ ВМ по HTTP не читается, даже после снимка.** `GET /folder/.../vm2b-on-flat.vmdk` отвечает пустым HTTP 500 (в `hostd.log`: «Error creating Reader: Failed to lock file»,
-   в `vmkernel.log`: «Failed to open file ... Busy», файл открыт процессом ВМ), а `.vmdk` (дескриптор) читается. `dd` и `cp` на хосте тоже получают «Device or resource busy»; читают такой диск только VDDK / NFC и `vmkfstools -i`.
-   Копия ВЫКЛЮЧЕННОЙ ВМ со снимком работает. Что сделано: ошибка теперь говорит причину (диск удерживается запущенной ВМ, выключить ВМ на время копии), снимок после неудачи не остаётся (проверено тестом).
-   **Не исправлено:** резервное копирование включённой ВМ по HTTP на ESXi 7.0.3 невозможно; нужен транспорт NFC (`VirtualMachineSnapshot.ExportSnapshot` / `HttpNfcLease`, поток stream-optimized VMDK с обратным преобразованием при восстановлении) или SSH (`vmkfstools`). Оба не реализованы.
-   Эмулятор по-прежнему отдаёт такие диски (его тесты с включёнными ВМ остаются, но не отражают этого поведения настоящего хоста).
+2. **Диск ВКЛЮЧЁННОЙ ВМ по HTTP не читается, даже после снимка** (найдено первым прогоном, РЕШЕНО вторым: раздел «Включённая ВМ: исследование и выбранный транспорт»). `GET /folder/.../vm2b-on-flat.vmdk` отвечает пустым HTTP 500
+   (в `hostd.log`: «Error creating Reader: Failed to lock file», в `vmkernel.log`: «Failed to open file ... Busy»). Эмулятор теперь воспроизводит это (`live_locked()` в `esxi_mock.py`), продукт читает такие диски из клона.
 3. **Список папок восстановления** содержал корневую папку ВМ дважды (настоящий хост отдаёт `ha-folder-vm` среди найденных, эмулятор нет). Исправлено (`EsxiRestoreTargets`).
 4. Прочие формы ответов совпали с эмулятором без правок: пространство имён `urn:vim25`, `xsi:type`, `layoutEx` с цепочками (7.0: `-sesparse.vmdk`, дескриптор снимка `-000001.vmdk`), задачи через `PropertyCollector`, `RenameSnapshot` с меткой `[live ...]`,
    `MakeDirectory` / `RegisterVM_Task`, Range и HEAD на `/folder`, TLS 1.2, самоподписанный сертификат с закреплением отпечатка, `Content-Range` в ответе 500. Запись образцов: `tests/fixtures/esxi7-real/` (тест `esxi_real_fixtures_parse` разбирает их тем же XML-кодом).
@@ -206,7 +226,7 @@ VM, restoring as a template, vApp / cluster-DRS placement choices beyond folder 
 `history = false` отключает: (1) `.vmsn` / `.vmem` (состояние и память) ВСЕХ чужих снимков; (2) дисковые файлы веток дерева снимков, не входящих в цепочку текущего состояния (боковые ветки); (3) записи снимков в `.vmsd` при восстановлении.
 **Остаётся и копируется всегда:** диски-предки текущего состояния (текущий диск есть дельта поверх цепочки родителей, без родителей он не читается). Поэтому вес копии ВМ с линейной историей без памяти почти не уменьшается; уменьшается у ВМ со снимками
 с памятью и с ветвлением. В мета-файле: `snapshot_history: false`, `snapshots_not_copied: N`. Восстановление такой копии: .vmx указывает на диск текущей точки (родители по дескрипторам), `.vmsd` пустой, предупреждение
-«the VM was backed up without its snapshots: its disks keep the parent chain, the snapshot tree is not restored» (в vSphere может понадобиться «Consolidate»). Для ВМ без снимков и для выключенных ВМ без снимков опция ничего не меняет.
+«the VM was backed up without its snapshots: its disks keep the parent chain, the snapshot tree is not restored» (в vSphere может понадобиться «Consolidate»). Для ВМ без снимков и для выключенных ВМ без снимков опция ничего не меняет. У ВКЛЮЧЁННОЙ ВМ опция всегда как «выключена» (цепочка свёрнута в клон, предупреждение в отчёте): раздел «Включённая ВМ».
 Не делается (возможное развитие): консолидация на лету (CloneVM / экспорт плоского диска без цепочки родителей) для получения самостоятельного диска; это отдельная дорогая функция.
 
 Проверено: эмулятор (`esxi_snapshot_history_option`: дерево s1 -> s2, s1 -> s3 со снимками с памятью; с историей 27 файлов, 4 `.vmsn`, 3 `.vmem`; без истории 17 файлов, один `.vmsn`, без `.vmem`; диски текущего состояния побитово те же;
@@ -214,13 +234,37 @@ VM, restoring as a template, vApp / cluster-DRS placement choices beyond folder 
 без истории 9 файлов (один `.vmsn`, две дельты: только предки текущей точки; ветка s2 не скопирована); verify, восстановление в папку и на хост, ВМ включается, цепочка согласована, sha256 базового диска совпал. С историей восстановленная ВМ
 имеет все 3 своих снимка и тоже включается.
 
-## Включённая ВМ: пауза, выключение, включение, продолжение, отмена (факты на настоящем ESXi 7.0.3)
+## Включённая ВМ: исследование и выбранный транспорт (настоящий ESXi 7.0.3, 02.11.2026)
 
-Сценарий `tools/esxi7/live-scenario.sh` (результат: `.winvm-results/esxi7-<дата>/live-scenario.txt`), ВМ `vm2b-on` без ОС. Тело диска включённой ВМ не читается (см. расхождение 2), поэтому проверены те части, что не зависят от чтения диска:
-1. Копия начата и поставлена на паузу с сохранением (`keepOnAbort`): три тома конфигурационных файлов готовы, возобновляемая копия 1, на хосте остаётся снимок `VM2Backup-<10 hex>` (`consolidationNeeded = false`).
-2. ВМ выключена `power.off` при существующем снимке: выключение проходит, снимок остаётся.
-3. ВМ включена снова: снимок остаётся (тот же).
-4. Следующий запуск продолжает по тому же токену `<ссылка снимка>|<имя>`: источник заново присоединяется к существующему снимку (новый не создаётся; `resumes = 1`, три готовых тома не копируются заново), затем упирается в блокировку диска (HTTP 500)
-   и при этой окончательной ошибке снимок удаляется (`end(false)`), дельта сворачивается, `consolidationNeeded = false`.
-5. Явная отмена (прерывание без `keepOnAbort`) удаляет снимок и журнал: возобновляемых копий 0, снимков на ВМ нет.
-Не проверено на настоящем хосте (нужно чтение диска включённой ВМ): продолжение внутри диска после выключения/включения ВМ, пока диск прочитать нельзя.
+Исследовано на `vm2b-on` (включена, диск thin 256 МБ с ~50 МБ случайных данных, эталон sha256 снят ДО снимка). После снимка:
+
+| Путь | Результат на настоящем хосте |
+|---|---|
+| (a) чтение замороженной БАЗЫ в оболочке: `dd`, `cp`, `cat`, `sha256sum` по SSH (то же самое, что дали бы SCP/SFTP: файл один) | **нет**: «Device or resource busy». Не зависит от режима снимка: без памяти и с памятью (`.vmem`) одинаково. Файл, который держит процесс ВМ, читает только средство самого хоста |
+| `GET /folder/...-flat.vmdk` базы или дельты (Datastore HTTP) | **нет**: пустой HTTP 500, `hostd.log`: «Failed to lock file» (имя файла в этом сообщении — именно БАЗА, замороженная снимком, а не «живая» точка: живая точка лежит в `-sesparse.vmdk`) |
+| (b) `vmkfstools -i <база.vmdk> -d thin <папка>/c.vmdk` (метод ghettoVCB) | **да**: 9 → 100 %, sha256 клона **= эталону**. Нужен SSH на хосте |
+| (b') то же самое через API: `VirtualDiskManager.CopyVirtualDisk_Task(sourceName, destName, destSpec thin)` | **да**: тот же результат, sha256 клона = эталону; клон отдаётся `GET /folder` (200, а с `Range` 206 `Content-Range: bytes 1000-2999/268435456`); SSH не нужен, лицензия — evaluation |
+| (c) NFC: `VirtualMachineSnapshot.ExportSnapshot` | **нет**: `NotSupported` на самостоятельном хосте 7.0.3 (метод vCenter) |
+| `VirtualMachine.ExportVm` у включённой ВМ | **нет**: `InvalidState` (нужна выключенная ВМ) |
+| `AcquireTicket` | только билет консоли (mks / vmrc), к диску не ведёт |
+| (d) другое: чтение дельты «живой» точки, `-ctk.vmdk` | живая точка меняется (это не копия), `-ctk` читается, но это не диск |
+
+**Выбор: (b') клон средствами API** (`live_disk` = "clone", по умолчанию). Причины: побитно согласованная копия замороженного состояния (sha256 клона = эталон до снимка); работает по уже поддерживаемому транспорту (SOAP + `/folder`), без SSH, без VDDK/NFC, без лицензий кроме evaluation; клон читается по `Range`, поэтому продолжение идёт ВНУТРИ диска; остатки (`VM2Backup-<10 hex>` папка клонов) убираются теми же путями, что и остатки снимков (метка и имя, чужое не трогается). SSH в настройки сервера поэтому НЕ добавлялся (полей, интерфейса и перевода на 17 языков нет: не нужны). Не выбраны: (a) невозможно; NFC (`ExportSnapshot` недоступен на хосте, а при выгрузке через vCenter получился бы stream-optimized VMDK, для которого нужно писать преобразователь «поток в flat» и обратный при восстановлении: заметно больше кода и риска без выигрыша).
+
+Что проверено на настоящем хосте (группа `esxireal`, тесты те же, что для выключенных ВМ, плюс новые):
+* `esxireal_backup_verify_restore_matrix`: **включённая** `vm2b-on` в четырёх режимах (без пароля xz 1; пароль + xz 5 + тома ~100 МБ; xz 9 + тома 2 МБ; пароль + без сжатия): снимок, клон (`CopyVirtualDisk`), чтение клона, удаление клона и снимка, verify, неверный пароль архива отвергнут, восстановление в папку: **sha256 `vm2b-on-flat.vmdk` совпал побитно во всех четырёх режимах** (268 435 456 байт, в архиве 43 МБ). После копии на хосте нет ни одного остатка (`VM2Backup-*` в корне датастора и в папках ВМ: 0, снимков `VM2Backup-*`: 0; следующий `begin()` не находит старых снимков).
+* `esxireal_resume_after_abort` и `esxireal_restore_to_host` теперь идут и для включённой ВМ (восстановление на хост: sha256 flat-диска на самом хосте совпал с эталоном).
+* `esxireal_live_hist_running`: включённая `vm2b-hist` со СВОИМ деревом снимков (s1 -> s2, s1 -> s3): предупреждение «the VM is running: its disks are copied as one consolidated clone each, the 3 earlier snapshot(s) of the VM are not copied»; в копии один flat (128 МБ) + один дескриптор, ни одной дельты, sha256 совпал с эталоном; восстановление на хост.
+* Согласованность при записях: у ВМ без ОС писать некому (процесс ВМ только крутит BIOS), «живой» гостевой записи нет, а менять диск включённой ВМ извне нельзя (файлы заперты). Проверено поэтому то, что можно проверить на настоящем хосте: замороженная база не меняется за время копии и побитно равна эталону, снятому ДО снимка; запись в гостя при копии (дельта) воспроизведена только на эмуляторе (`esxi_running_vm_disks_are_cloned`, `esxi_guest_writes_are_frozen_out`: ВМ пишет во время копии, копия остаётся состоянием снимка). Образ-гость (tinycore / alpine) в образах пользователя отсутствует, сети для загрузки из интернета в стенде нет (host-only).
+
+### Сценарий «ВМ включена → копия начата → ВМ выключили → связь пропала → ВМ включили → следующий запуск продолжает» на рабочем транспорте
+
+`tools/esxi7/live-scenario.sh` (`vm2b-on`; тома по ~1 МБ, пауза на 40 МБ данных диска):
+1. Копия начата и поставлена на паузу с сохранением (`keepOnAbort`): **40 томов** готовы, возобновляемая копия 1. На хосте: снимок `VM2Backup-<10 hex>` (`consolidationNeeded = false`) и папка клонов `vm2b-on/VM2Backup-<10 hex>/` с файлами `d0.vmdk`, `d0-flat.vmdk`, `ready`.
+2. ВМ выключена `power.off` при существующем снимке: проходит, снимок и папка клонов остаются.
+3. ВМ включена снова: снимок и клон те же.
+4. Следующий запуск **продолжает**: источник присоединяется к существующему снимку (новый не создаётся), клон признаётся годным по файлу `ready` (повторного клонирования нет), отпечаток тот же (`resumes = 1`, 40 готовых томов не копируются заново), копия идёт дальше с места остановки ВНУТРИ flat-диска запросом `Range`. Копия закончена, `end()` удаляет папку клонов, потом снимок: на хосте остаётся только `vm2b-on-flat.vmdk vm2b-on.vmdk vm2b-on.vmsd`.
+5. Явная отмена (прерывание без `keepOnAbort`) удаляет снимок, папку клонов и журнал: возобновляемых копий 0, снимков на ВМ нет.
+Если ВМ к моменту продолжения выключена (а не включена): источник читает диски на месте (выключенная ВМ не держит замок), набор файлов другой, отпечаток другой, движок начинает копию заново с новым снимком; папка клонов прерванного запуска при этом удаляется.
+Пределы продолжения: внутри диска продолжение возможно, пока жив снимок и папка клонов с `ready`; если снимок убрали руками, продолжения нет (снимок и клоны исчезают как остатки при следующей копии, копия начинается заново). Клон делается ДО передачи первого байта диска: время чтения и записи диска хостом (на этом стенде 256 МБ: секунды; на реальных ВМ — минуты и часы, `clone_timeout`), и нужно место на датасторе под тонкий клон; ограничение скорости, пауза и отмена работают на этапе передачи, отмена во время клонирования отменяет задачу на хосте (`CancelTask`), папка удаляется.
+
