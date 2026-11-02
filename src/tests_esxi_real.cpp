@@ -10,6 +10,7 @@
 #include "crypto.h"
 #include "engine.h"
 #include "esxi.h"
+#include "throttle.h"
 #include "winutil.h"
 
 namespace vm2b {
@@ -47,7 +48,7 @@ static bool Load(Ctx& c, Real& r)
         const Json& f = v.at(i).get("flat"); for (size_t k = 0; k < f.size(); ++k) { m.files.push_back(f.key_at(k)); m.hashes.push_back(f.value_at(k).str()); }
         r.vms.push_back(m);
     }
-    return !r.vms.empty();
+    return true;
 }
 
 struct Tmp {
@@ -364,6 +365,205 @@ VM2B_TEST("esxireal", esxireal_live_stage_cancel)
     { Pr pr; pr.abortAt = true; pr.keep = false; pr.limit = 1; bool ok = BackupVm(*src, v->name, *t, o, &pr, man, warn, err); c_.note("этап «отмена»: %s (%s)", ok ? "готов" : "отменён", err.c_str()); T_CHECK(!ok); }
     Vec<ResumeInfo> ri; Str le; ListResumable(*t, &v->name, ri, le); c_.note("после отмены возобновляемых копий: %d", (int)ri.size());
     delete t; delete src; RemoveTree(store);
+    return true;
+}
+
+
+// ================= Запись гостя ВО ВРЕМЯ копии включённой ВМ (docs/ESXI.md, «Запись гостя во время копии — проверено на настоящем ESXi 7») =================
+// ВМ `vm2b-guest`: Alpine Linux (live, из ОЗУ с CD) пишет «сырым» блочным писателем (tools/esxi7/guest/vm2bio.c) на диск данных: блок 4 КиБ = заголовок {seq, блок, CRC, время} +
+// данные из splitmix64 от (seed, блок, seq); запись k идёт в блок, который определяется только по (seed, k), одна запись в полёте (O_DIRECT|O_DSYNC).  Поэтому ЛЮБОЙ согласованный по
+// времени образ диска есть ровно «состояние после записей 1..M»: проверка ниже восстанавливает эталон для найденного M и сверяет каждый блок.  Окно M относительно момента снимка
+// (хронология хоста: tools/esxi7/guest/esxi-watch.py) определяет скрипт tools/esxi7/guest-run.sh; тест отвечает за копию, восстановление и «префикс»-согласованность.
+//   "esxi_guest": { "vm": "vm2b-guest", "out": "<папка результатов, путь Windows>", "tag": "<метка этапа>", "mbit": <ограничение копии>, "pause_mb": <для этапа паузы>,
+//                   "restore_name": "<имя ВМ при восстановлении на хост>" }
+namespace {
+struct GScan { bool valid = false; u64 M = 0, blocks = 0, ok = 0, zero = 0, torn = 0, stale = 0, inflight = 0, viol = 0; Str seed; };
+static const u64 kG = 0x9E3779B97F4A7C15ULL;
+static u64 GFin(u64 z) { z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL; z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL; return z ^ (z >> 31); }
+static u64 GMix(u64 x) { return GFin(x + kG); }
+static u64 GKey(u64 seed, u32 idx, u64 seq) { return GMix(seed + GMix(GMix(idx) ^ GMix(seq ^ 0x5851F42D4C957F2DULL))); }
+static u32 g_crct[256];
+static void GCrcInit() { for (u32 i = 0; i < 256; ++i) { u32 c = i; for (int k = 0; k < 8; ++k) c = c & 1 ? 0xEDB88320u ^ (c >> 1) : c >> 1; g_crct[i] = c; } }
+static u32 GCrc(u32 c, const u8* p, size_t n) { for (size_t i = 0; i < n; ++i) c = g_crct[(c ^ p[i]) & 255] ^ (c >> 8); return c; }
+static void GBlockSeq(u64 seed, u64 N, u64 k, u32& idx) {
+    u64 s = k >> 6;
+    if ((GMix(seed ^ s) & 3) == 0) idx = (u32)(1 + (s * 64 + (k & 63)) % (N - 1)); else idx = (u32)(1 + GMix(seed ^ GMix(k)) % (N - 1));
+}
+// 0 пусто, 1 верный (seq), 2 испорчен
+static int GCheck(u64 seed, const u8* b, u32 idx, u64& seq) {
+    bool zero = true; for (int i = 0; i < 4096; ++i) if (b[i]) { zero = false; break; }
+    if (zero) return 0;
+    u64 s; u32 i, cr; memcpy(&s, b + 8, 8); memcpy(&i, b + 16, 4); memcpy(&cr, b + 20, 4);
+    if (memcmp(b, "VM2BBLK1", 8) != 0 || i != idx) return 2;
+    u32 c = GCrc(0xFFFFFFFFu, b, 20); c = ~GCrc(c, b + 32, 4096 - 32); if (c != cr) return 2;
+    u64 key = GKey(seed, idx, s);
+    for (int j = 0; j < (4096 - 32) / 8; ++j) { u64 w = GFin(key + (u64)(j + 1) * kG); if (memcmp(b + 32 + j * 8, &w, 8) != 0) return 2; }
+    seq = s; return 1;
+}
+static GScan GuestScan(const Str& path)
+{
+    GScan r; GCrcInit();
+    HANDLE h = CreateFileW(FilePath(path), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return r;
+    LARGE_INTEGER sz; GetFileSizeEx(h, &sz); u64 N = (u64)sz.QuadPart / 4096;
+    Bytes sup; sup.resize(4096); DWORD got = 0; ReadFile(h, sup.data(), 4096, &got, nullptr);
+    u64 seed = 0, n2 = 0; if (got != 4096 || memcmp(sup.data(), "VM2BSUPR", 8) != 0) { CloseHandle(h); return r; }
+    memcpy(&seed, sup.data() + 8, 8); memcpy(&n2, sup.data() + 16, 8); if (n2 != N) { CloseHandle(h); return r; }
+    Vec<u32> seq; seq.resize((size_t)N); Vec<u8> st; st.resize((size_t)N); Bytes buf; buf.resize(1 << 20);
+    for (u64 b = 1; b < N;) {
+        u64 cnt = N - b; if (cnt > 256) cnt = 256; got = 0;
+        if (!ReadFile(h, buf.data(), (DWORD)(cnt * 4096), &got, nullptr) || got != cnt * 4096) { CloseHandle(h); return r; }
+        for (u64 i = 0; i < cnt; ++i) { u64 s = 0; int k = GCheck(seed, buf.data() + i * 4096, (u32)(b + i), s); st[(size_t)(b + i)] = (u8)k; if (k == 1) { seq[(size_t)(b + i)] = (u32)s; if (s > r.M) r.M = s; } }
+        b += cnt;
+    }
+    CloseHandle(h);
+    Vec<u32> last; last.resize((size_t)N); for (u64 k = 1; k <= r.M; ++k) { u32 idx; GBlockSeq(seed, N, k, idx); last[idx] = (u32)k; }
+    u32 infl; GBlockSeq(seed, N, r.M + 1, infl);
+    r.blocks = N - 1;
+    for (u64 b = 1; b < N; ++b) {
+        bool bad = false;
+        if (st[(size_t)b] == 1) { if (seq[(size_t)b] == last[(size_t)b]) ++r.ok; else { ++r.stale; bad = true; } } else if (st[(size_t)b] == 0) { ++r.zero; bad = true; } else { ++r.torn; bad = true; }
+        if (bad) { if (b == infl && st[(size_t)b] != 0) ++r.inflight; else ++r.viol; }
+    }
+    r.seed = Str::fmt("%llx", (unsigned long long)seed); r.valid = true; return r;
+}
+struct GuestCfg { Str vm, out, tag, restoreName; double mbit = 0; int pauseMB = 100; bool expectResume = true; };
+static bool LoadGuest(Ctx& c, GuestCfg& g)
+{
+    if (c.servers.is_null() || !c.servers.has("esxi_guest")) { c.skip("нет ключа \"esxi_guest\" (tools/esxi7/guest-run.sh)"); return false; }
+    const Json& j = c.servers.get("esxi_guest");
+    g.vm = j.get("vm").str("vm2b-guest"); g.out = j.get("out").str(); g.tag = j.get("tag").str("t"); g.restoreName = j.get("restore_name").str();
+    g.mbit = (double)j.get("mbit").integer(); g.pauseMB = (int)j.get("pause_mb").integer(); if (g.pauseMB <= 0) g.pauseMB = 100;
+    g.expectResume = !j.has("expect_resume") || j.get("expect_resume").boolean();
+    return !g.out.empty();
+}
+struct GPr : Pr { double tFirst = 0; void onBytes(u64 n) override { if (tFirst == 0) tFirst = UnixNow(); Pr::onBytes(n); } };
+static void GuestReport(Ctx& c_, const char* tag, const GScan& s)
+{
+    c_.note("GUESTSCAN %s: valid=%d M=%llu blocks=%llu ok=%llu zero=%llu torn=%llu stale=%llu inflight=%llu violations=%llu seed=%s", tag, (int)s.valid, (unsigned long long)s.M,
+            (unsigned long long)s.blocks, (unsigned long long)s.ok, (unsigned long long)s.zero, (unsigned long long)s.torn, (unsigned long long)s.stale, (unsigned long long)s.inflight,
+            (unsigned long long)s.viol, s.seed.c_str());
+}
+// нет остатков на хосте: следующий begin() не находит старых снимков VM2Backup
+static bool NoLeftovers(Ctx& c_, const Real& r, const Str& vm)
+{
+    Str e2; VmSource* s2 = NewEsxiSource(r.cfg(), e2); Str fp, tok, w2; bool b = s2 && s2->begin(vm, true, Str(), fp, tok, w2);
+    T_CHECK(b); T_CHECK(!Has(w2, "removed")); if (s2) { if (b) s2->end(false); delete s2; }
+    return true;
+}
+} // namespace
+
+// Два режима (xz 1 без пароля; пароль + xz 5 + тома ~100 МБ); копия ограничена по скорости (BackupOptions::limiter), чтобы шла минуты, пока гость пишет.
+static bool Body_esxireal_guest_write_copy(Ctx& c_)
+{
+    Real r; if (!Load(c_, r)) return true; GuestCfg g; if (!LoadGuest(c_, g)) return true;
+    struct Mode { const char* name; const char* pw; int level; u64 seg; };
+    static const Mode modes[] = { { "xz1", "", 1, 0 }, { "pw-xz5-vol100", "guest-\xd0\xbf\xd0\xb0\xd1\x80\xd0\xbe\xd0\xbb\xd1\x8c", 5, (u64)512 * 200000 } };
+    Tmp tmp(c_, "esxireal-gw");
+    for (const Mode& m : modes) {
+        Str store = tmp.sub(m.name), dest = JoinPath(g.out, m.name); RemoveTree(dest); Str me; MakeDirs(g.out, me);
+        BackupOptions o; o.kdfIterations = 3000; o.verify = true; o.password = m.pw; o.codec.level = m.level; if (m.seg) o.segmentBytes = m.seg; o.allowLive = true;
+        RateLimiter lim; if (g.mbit > 0) { lim.setMbit(g.mbit); o.limiter = &lim; }
+        Str err; VmSource* src = NewEsxiSource(r.cfg(), err); T_CHECK(src != nullptr); if (!src) return false;
+        Target* t = LocalAtR(store); Manifest man; Str warn; GPr pr;
+        double t0 = UnixNow();
+        c_.note("GUESTRUN %s: начало копии unix=%.3f", m.name, t0);
+        bool ok = BackupVm(*src, g.vm, *t, o, &pr, man, warn, err);
+        double t1 = UnixNow();
+        c_.note("GUESTRUN %s: копия %s unix=%.3f, первый байт диска unix=%.3f, всего %.1f с (%.1f мин), %llu байт, в архиве %llu, томов %d, предупреждение: %s", m.name, ok ? "готова" : "НЕ УДАЛАСЬ",
+                t1, pr.tFirst, t1 - t0, (t1 - t0) / 60.0, (unsigned long long)man.rawSize, (unsigned long long)man.size, (int)man.segments.size(), warn.c_str());
+        if (!ok) c_.note("ошибка: %s", err.c_str());
+        T_CHECK(ok);
+        if (ok) {
+            Str ve; T_CHECK(VerifyBackup(*t, man.archive, o.password, nullptr, nullptr, ve));
+            if (!o.password.empty()) { Str e2; T_CHECK(!VerifyBackup(*t, man.archive, "wrong", nullptr, nullptr, e2)); }
+            Str re; Manifest rm; T_CHECK(RestoreBackup(*t, man.archive, dest, o.password, nullptr, &rm, re));
+            GScan s = GuestScan(JoinPath(JoinPath(dest, EsxiArchivePrefix(g.vm)), g.vm + "-flat.vmdk")); GuestReport(c_, m.name, s);
+            T_CHECK(s.valid); T_CHECK(s.viol == 0); T_CHECK(s.M > 0);
+        }
+        delete t; delete src; RemoveTree(store);
+        T_CHECK(NoLeftovers(c_, r, g.vm));
+    }
+    return true;
+}
+VM2B_TEST("esxireal", esxireal_guest_write_copy) { g_realKey = "esxi_real"; return Body_esxireal_guest_write_copy(c_); }
+
+// Восстановление на сам ESXi из копии, снятой во время записи гостя (ВМ включает и проверяет скрипт: гость печатает «VERIFY OK seq<=S»); та же копия — и в папку для сверки M.
+VM2B_TEST("esxireal", esxireal_guest_restore_to_host)
+{
+    Real r; if (!Load(c_, r)) return true; GuestCfg g; if (!LoadGuest(c_, g)) return true; if (g.restoreName.empty()) return true;
+    Tmp tmp(c_, "esxireal-gh"); Str store = tmp.sub("store"), dest = JoinPath(g.out, "tohost-folder"); RemoveTree(dest); Str me; MakeDirs(g.out, me);
+    BackupOptions o; o.kdfIterations = 3000; o.verify = true; o.codec.level = 1; o.allowLive = true;
+    Str err; VmSource* src = NewEsxiSource(r.cfg(), err); T_CHECK(src != nullptr); if (!src) return false;
+    Target* t = LocalAtR(store); Manifest man; Str warn; GPr pr; double t0 = UnixNow();
+    bool ok = BackupVm(*src, g.vm, *t, o, &pr, man, warn, err); T_CHECK(ok); delete src;
+    c_.note("GUESTRUN tohost: копия %s unix=%.3f..%.3f", ok ? "готова" : "НЕ УДАЛАСЬ", t0, UnixNow()); if (!ok) { c_.note("ошибка: %s", err.c_str()); delete t; return false; }
+    Str re; Manifest rm; T_CHECK(RestoreBackup(*t, man.archive, dest, o.password, nullptr, &rm, re));
+    GScan s = GuestScan(JoinPath(JoinPath(dest, EsxiArchivePrefix(g.vm)), g.vm + "-flat.vmdk")); GuestReport(c_, "tohost-folder", s); T_CHECK(s.valid); T_CHECK(s.viol == 0);
+    EsxiRestoreOptions ro; ro.vmName = g.restoreName;
+    ReadOptions rd; rd.stateDir = tmp.sub("state"); Str se; MakeDirs(rd.stateDir, se); EsxiRestoreResult res; Str rr; Pr pr2;
+    bool rok = RestoreToEsxi(*t, man.archive, r.cfg(), ro, o.password, rd, &pr2, &res, rr); if (!rok) c_.note("restore на хост: %s", rr.c_str());
+    T_CHECK(rok); if (rok) c_.note("RESTORED %s -> %s (%s)", g.vm.c_str(), res.vmName.c_str(), res.vmxPath.c_str());
+    delete t; RemoveTree(store);
+    T_CHECK(NoLeftovers(c_, r, g.vm));
+    return true;
+}
+
+// Пауза посреди копии (снимок и клон остаются), затем продолжение (между ними скрипт может выключить и включить ВМ): копия = состояние на момент ПЕРВОГО снимка.
+VM2B_TEST("esxireal", esxireal_guest_stage_pause)
+{
+    Real r; if (!Load(c_, r)) return true; GuestCfg g; if (!LoadGuest(c_, g)) return true;
+    Str store = JoinPath(g.out, "store-" + g.tag); RemoveTree(store); Str me; MakeDirs(g.out, me);
+    BackupOptions o; o.kdfIterations = 3000; o.verify = false; o.codec.level = 1; o.allowLive = true; o.segmentBytes = (u64)512 * 2000;
+    RateLimiter lim; if (g.mbit > 0) { lim.setMbit(g.mbit); o.limiter = &lim; }
+    Str err; VmSource* src = NewEsxiSource(r.cfg(), err); T_CHECK(src != nullptr); if (!src) return false;
+    Target* t = LocalAtR(store); Manifest man; Str warn; GPr pr; pr.abortAt = true; pr.keep = true; pr.limit = (u64)g.pauseMB << 20;
+    double t0 = UnixNow(); bool ok = BackupVm(*src, g.vm, *t, o, &pr, man, warn, err); T_CHECK(!ok);
+    c_.note("GUESTRUN %s: пауза после %d МБ, unix=%.3f..%.3f: %s", g.tag.c_str(), g.pauseMB, t0, UnixNow(), err.c_str());
+    Vec<ResumeInfo> ri; Str le; ListResumable(*t, &g.vm, ri, le); c_.note("возобновляемых копий: %d (томов %d)", (int)ri.size(), ri.size() ? ri[0].volumesDone : 0); T_CHECK(ri.size() == 1);
+    delete t; delete src; return true;
+}
+// Копия без паузы под управлением скрипта: пока она идёт, скрипт ВЫКЛЮЧАЕТ ВМ (hard power-off гостя посреди передачи); копия должна дойти до конца и быть состоянием на момент снимка.
+VM2B_TEST("esxireal", esxireal_guest_stage_full)
+{
+    Real r; if (!Load(c_, r)) return true; GuestCfg g; if (!LoadGuest(c_, g)) return true;
+    Tmp tmp(c_, "esxireal-gf"); Str store = tmp.sub("store"), dest = JoinPath(g.out, "restored-" + g.tag); RemoveTree(dest); Str me; MakeDirs(g.out, me);
+    BackupOptions o; o.kdfIterations = 3000; o.verify = true; o.codec.level = 1; o.allowLive = true; o.segmentBytes = (u64)512 * 2000;
+    RateLimiter lim; if (g.mbit > 0) { lim.setMbit(g.mbit); o.limiter = &lim; }
+    Str err; VmSource* src = NewEsxiSource(r.cfg(), err); T_CHECK(src != nullptr); if (!src) return false;
+    Target* t = LocalAtR(store); Manifest man; Str warn; GPr pr; double t0 = UnixNow();
+    c_.note("GUESTRUN %s: начало копии unix=%.3f", g.tag.c_str(), t0);
+    bool ok = BackupVm(*src, g.vm, *t, o, &pr, man, warn, err); T_CHECK(ok);
+    c_.note("GUESTRUN %s: копия %s unix=%.3f, первый байт диска unix=%.3f, предупреждение: %s", g.tag.c_str(), ok ? "готова" : "НЕ УДАЛАСЬ", UnixNow(), pr.tFirst, warn.c_str());
+    if (!ok) c_.note("ошибка: %s", err.c_str());
+    delete src;
+    if (ok) {
+        Str re; Manifest rm; T_CHECK(RestoreBackup(*t, man.archive, dest, o.password, nullptr, &rm, re));
+        GScan s = GuestScan(JoinPath(JoinPath(dest, EsxiArchivePrefix(g.vm)), g.vm + "-flat.vmdk")); GuestReport(c_, g.tag.c_str(), s); T_CHECK(s.valid); T_CHECK(s.viol == 0);
+    }
+    delete t; T_CHECK(NoLeftovers(c_, r, g.vm));
+    return true;
+}
+VM2B_TEST("esxireal", esxireal_guest_stage_resume)
+{
+    Real r; if (!Load(c_, r)) return true; GuestCfg g; if (!LoadGuest(c_, g)) return true;
+    Str store = JoinPath(g.out, "store-" + g.tag), dest = JoinPath(g.out, "restored-" + g.tag); RemoveTree(dest);
+    BackupOptions o; o.kdfIterations = 3000; o.verify = false; o.codec.level = 1; o.allowLive = true; o.segmentBytes = (u64)512 * 2000;
+    RateLimiter lim; if (g.mbit > 0) { lim.setMbit(g.mbit); o.limiter = &lim; }
+    Str err; VmSource* src = NewEsxiSource(r.cfg(), err); T_CHECK(src != nullptr); if (!src) return false;
+    Target* t = LocalAtR(store); Manifest man; Str warn; Pr pr; double t0 = UnixNow();
+    bool ok = BackupVm(*src, g.vm, *t, o, &pr, man, warn, err);
+    c_.note("GUESTRUN %s: продолжение %s, возобновлений %d, unix=%.3f..%.3f; ошибка: %s; предупреждение: %s", g.tag.c_str(), ok ? "готово" : "НЕ УДАЛОСЬ", pr.resumes, t0, UnixNow(), err.c_str(), warn.c_str());
+    T_CHECK(ok);
+    // expect_resume = false: ВМ выключали и включали, пока копия стояла на паузе. ESXi при первом выключении/включении переписывает .vmx (размер меняется) -> отпечаток ВМ другой, и копия честно начинается заново с НОВЫМ снимком; при неизменном .vmx копия продолжается по прежнему снимку.
+    // при expect_resume = false любой исход допустим (оба согласованы; результат разбирает analyse.py): продолжение (resumes >= 1) или честный перезапуск с новым снимком (resumes = 0)
+    c_.note("возобновлений: %d", pr.resumes); if (g.expectResume) T_CHECK(pr.resumes >= 1); delete src;
+    if (ok) {
+        Str re; Manifest rm; T_CHECK(RestoreBackup(*t, man.archive, dest, o.password, nullptr, &rm, re));
+        GScan s = GuestScan(JoinPath(JoinPath(dest, EsxiArchivePrefix(g.vm)), g.vm + "-flat.vmdk")); GuestReport(c_, g.tag.c_str(), s); T_CHECK(s.valid); T_CHECK(s.viol == 0);
+    }
+    delete t; RemoveTree(store);
+    T_CHECK(NoLeftovers(c_, r, g.vm));
     return true;
 }
 
