@@ -1,0 +1,10 @@
+HTTP 200
+<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/"
+ xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+ xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<soapenv:Body>
+<RetrievePropertiesExResponse xmlns="urn:vim25"><returnval><objects><obj type="VirtualMachine">vm-46</obj><propSet><name>name</name><val xsi:type="xsd:string">vm2b-vc-rt-2</val></propSet></objects><objects><obj type="VirtualMachine">vm-44</obj><propSet><name>name</name><val xsi:type="xsd:string">vm2b-vc-rt-1</val></propSet></objects><objects><obj type="VirtualMachine">vm-24</obj><propSet><name>name</name><val xsi:type="xsd:string">vm2b-on</val></propSet></objects><objects><obj type="VirtualMachine">vm-48</obj><propSet><name>name</name><val xsi:type="xsd:string">vm2b-vc-rt-3</val></propSet></objects><objects><obj type="VirtualMachine">vm-31</obj><propSet><name>name</name><val xsi:type="xsd:string">vm2b-vc-rt-svc</val></propSet></objects><objects><obj type="VirtualMachine">vm-54</obj><propSet><name>name</name><val xsi:type="xsd:string">vm2b-vc-rt-nohist</val></propSet></objects><objects><obj type="VirtualMachine">vm-23</obj><propSet><name>name</name><val xsi:type="xsd:string">vm2b-off</val></propSet></objects><objects><obj type="VirtualMachine">vm-25</obj><propSet><name>name</name><val xsi:type="xsd:string">vm2b-hist</val></propSet></objects><objects><obj type="VirtualMachine">vm-29</obj><propSet><name>name</name><val xsi:type="xsd:string">vm2b-rt-livehist</val></propSet></objects></returnval></RetrievePropertiesExResponse>
+</soapenv:Body>
+</soapenv:Envelope>

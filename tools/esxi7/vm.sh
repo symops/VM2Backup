@@ -13,7 +13,7 @@ mkdir -p "$D" "$TMPD"
 PID=$D/qemu.pid
 MON=$D/mon.sock
 common() {
-  echo -name vm2b-esxi -machine q35,accel=kvm -cpu host,+vmx,migratable=off -smp 4 -m 8192 -display none \
+  echo -name vm2b-esxi -machine q35,accel=kvm -cpu host,+vmx,migratable=off -smp ${ESXI_SMP:-4} -m ${ESXI_MEM:-8192} -display none \
     -pidfile "$PID" -monitor unix:"$MON",server,nowait -serial file:"$D/serial.log" \
     -drive file="$D/esxi-os.qcow2",if=none,id=d0,format=qcow2 -device ide-hd,drive=d0,bus=ide.0 \
     -drive file="$D/esxi-ds.qcow2",if=none,id=d1,format=qcow2 -device ide-hd,drive=d1,bus=ide.1 \

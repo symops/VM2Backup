@@ -1070,10 +1070,12 @@ namespace vm2b {
 // ============================================================================================================================
 // НАСТОЯЩИЙ ESXi через службу (группа esxireal, ключ "esxi_real" в servers.json; см. tests_esxi_real.cpp и tools/esxi7/run-real.sh)
 // ============================================================================================================================
-VM2B_TEST("esxireal", esxireal_service_flow_and_lockout_guard)
+static thread_local const char* g_svcRealKey = "esxi_real";     // "esxi_real" (хост) или "vcenter_real" (vCenter): то же тело теста
+static bool Body_service_flow(Ctx& c_)
 {
-    if (c_.servers.is_null() || !c_.servers.has("esxi_real")) { c_.skip("нет ключа \"esxi_real\" (tools/esxi7/run-real.sh)"); return true; }
-    const Json& j = c_.servers.get("esxi_real");
+    if (c_.servers.is_null() || !c_.servers.has(g_svcRealKey)) { c_.skip((Str("нет ключа \"") + g_svcRealKey + "\" (tools/esxi7/run-real.sh)").c_str()); return true; }
+    const Json& j = c_.servers.get(g_svcRealKey);
+    const bool isVc = Str(g_svcRealKey) == "vcenter_real";
     Bytes pb; Str pe; if (!ReadWholeFile(j.get("password_file").str().c_str(), pb, pe)) { c_.note("не прочитан файл пароля: %s", pe.c_str()); return false; }
     size_t pn = pb.size(); while (pn > 0 && (pb[pn - 1] == '\n' || pb[pn - 1] == '\r')) --pn;
     Str password((const char*)pb.data(), pn);
@@ -1082,7 +1084,7 @@ VM2B_TEST("esxireal", esxireal_service_flow_and_lockout_guard)
     Svc s(c_, "svcreal"); if (!s.up) return false;
     s.record = true;
     auto rec = [&](const char* name, const Str& pw) {
-        Json c = Obj(); c["type"] = "esxi"; c["name"] = name; c["host"] = j.get("host").str(); c["port"] = j.get("port").integer(); c["user"] = j.get("user").str(); c["password"] = pw;
+        Json c = Obj(); c["type"] = isVc ? "vcenter" : "esxi"; c["name"] = name; c["host"] = j.get("host").str(); c["port"] = j.get("port").integer(); c["user"] = j.get("user").str(); c["password"] = pw;
         if (!j.get("fingerprint").str().empty()) { c["verify"] = true; c["fingerprint"] = j.get("fingerprint"); } else c["verify"] = false;
         c["tls_min"] = "1.2"; c["transport"] = "api"; c["timeout"] = 120; c["task_timeout"] = 300; c["remove_timeout"] = 600; return c;
     };
@@ -1135,7 +1137,7 @@ VM2B_TEST("esxireal", esxireal_service_flow_and_lockout_guard)
         T_CHECK(allOk);
     }
     { Json oa = Obj(); oa["server"] = badId; Json opts = s.ok("esxi.restore_options", oa); c_.note("варианты восстановления: %s", opts.dump().c_str());
-      T_CHECK(opts.get("kind").str() == "esxi"); T_CHECK(opts.get("datastores").size() >= 1);
+      T_CHECK(opts.get("kind").str() == (isVc ? "vcenter" : "esxi")); T_CHECK(opts.get("datastores").size() >= 1);
       Str newName = j.get("restore_prefix").str("vm2b-rt") + "-svc";
       Json op = GuiOptions(newName, opts.get("datacenter").str(), "", "", "", "", false);
       Str rj; T_CHECK(StartOp(s, "backups.restore_esxi", RestoreArgs(bdir, archive, archPw, badId, op), rj)); Str rs = s.waitJob(rj, 900000); T_CHECK(rs == "Success" || rs == "Gone");
@@ -1146,4 +1148,6 @@ VM2B_TEST("esxireal", esxireal_service_flow_and_lockout_guard)
     Str hit = FindSecretInTree(s.opt.dataDir, secrets); if (!hit.empty()) c_.note("секрет найден в %s", hit.c_str()); T_CHECK(hit.empty());
     return true;
 }
+VM2B_TEST("esxireal", esxireal_service_flow_and_lockout_guard) { g_svcRealKey = "esxi_real"; return Body_service_flow(c_); }
+VM2B_TEST("vcreal", vcreal_service_flow_and_lockout_guard) { g_svcRealKey = "vcenter_real"; bool r = Body_service_flow(c_); g_svcRealKey = "esxi_real"; return r; }
 } // namespace vm2b

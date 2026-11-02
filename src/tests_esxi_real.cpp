@@ -16,12 +16,14 @@ namespace vm2b {
 
 namespace {
 
+// Какой сервер проверяют: "esxi_real" (сам хост) или "vcenter_real" (vCenter 7, VCSA под qemu, хост добавлен в него); одни и те же тела тестов идут в обеих группах
+static thread_local const char* g_realKey = "esxi_real";
 struct RealVm { Str name; bool on, hist; Vec<Str> files, hashes; };
 struct Real {
-    Str host, user, password, fp, prefix; int port; Vec<RealVm> vms;
+    Str host, user, password, fp, prefix, dc; int port; bool vc = false; Vec<RealVm> vms;
     Json cfg(const Str& pw = Str(), bool quiesce = false) const {
         Json c = Json::object();
-        c["type"] = "esxi"; c["host"] = host; c["port"] = port; c["user"] = user; c["password"] = pw.empty() ? password : pw;
+        c["type"] = vc ? "vcenter" : "esxi"; c["host"] = host; c["port"] = port; c["user"] = user; c["password"] = pw.empty() ? password : pw;
         if (!fp.empty()) c["fingerprint"] = fp; else c["verify"] = false;
         c["task_timeout"] = 300; c["remove_timeout"] = 600; c["timeout"] = 120;
         Json s = Json::object(); s["quiesce"] = quiesce; s["memory"] = false; c["snapshot"] = s;
@@ -31,8 +33,8 @@ struct Real {
 
 static bool Load(Ctx& c, Real& r)
 {
-    if (c.servers.is_null() || !c.servers.has("esxi_real")) { c.skip("нет ключа \"esxi_real\" (tools/esxi7/run-real.sh)"); return false; }
-    const Json& j = c.servers.get("esxi_real");
+    if (c.servers.is_null() || !c.servers.has(g_realKey)) { c.skip((Str("нет ключа \"") + g_realKey + "\" (tools/esxi7/run-real.sh)").c_str()); return false; }
+    const Json& j = c.servers.get(g_realKey); r.vc = Str(g_realKey) == "vcenter_real"; r.dc = j.get("datacenter").str();
     r.host = j.get("host").str(); r.user = j.get("user").str(); r.fp = j.get("fingerprint").str(); r.port = (int)j.get("port").integer();
     r.prefix = j.get("restore_prefix").str("vm2b-rt");
     Bytes b; Str e;
@@ -99,7 +101,7 @@ static bool CheckFlats(Ctx& c, const RealVm& vm, const Str& dest)
 
 } // namespace
 
-VM2B_TEST("esxireal", esxireal_connect_and_list)
+static bool Body_esxireal_connect_and_list(Ctx& c_)
 {
     Real r; if (!Load(c_, r)) return true;
     Str err; VmSource* src = NewEsxiSource(r.cfg(), err); T_CHECK(src != nullptr); if (!src) return false;
@@ -111,7 +113,7 @@ VM2B_TEST("esxireal", esxireal_connect_and_list)
     return true;
 }
 
-VM2B_TEST("esxireal", esxireal_wrong_credentials)
+static bool Body_esxireal_wrong_credentials(Ctx& c_)
 {
     Real r; if (!Load(c_, r)) return true;
     for (int kind = 0; kind < 3; ++kind) {
@@ -129,7 +131,7 @@ VM2B_TEST("esxireal", esxireal_wrong_credentials)
     return true;
 }
 
-VM2B_TEST("esxireal", esxireal_backup_verify_restore_matrix)
+static bool Body_esxireal_backup_verify_restore_matrix(Ctx& c_)
 {
     Real r; if (!Load(c_, r)) return true;
     Tmp tmp(c_, "esxireal");
@@ -137,7 +139,8 @@ VM2B_TEST("esxireal", esxireal_backup_verify_restore_matrix)
     static const Mode modes[] = { { "", 1, 0 }, { "real-\xd0\xbf\xd0\xb0\xd1\x80\xd0\xbe\xd0\xbb\xd1\x8c", 5, (u64)512 * 200000 }, { "", 9, (u64)512 * 4096 }, { "x", 0, 0 } };
     int idx = 0;
     for (const RealVm& v : r.vms) {
-        for (const Mode& m : modes) {
+        for (size_t mi = 0; mi < (r.vc ? 2u : 4u); ++mi) {                      // через vCenter два режима (весь набор уже прошёл на хосте)
+            const Mode& m = modes[mi];
             ++idx;
             Str store = tmp.sub(Str::fmt("store%d", idx).c_str()), dest = tmp.sub(Str::fmt("r%d", idx).c_str());
             BackupOptions o; o.kdfIterations = 3000; o.verify = true; o.password = m.pw; o.codec.level = m.level; if (m.seg) o.segmentBytes = m.seg;
@@ -166,7 +169,7 @@ VM2B_TEST("esxireal", esxireal_backup_verify_restore_matrix)
     return true;
 }
 
-VM2B_TEST("esxireal", esxireal_resume_after_abort)
+static bool Body_esxireal_resume_after_abort(Ctx& c_)
 {
     Real r; if (!Load(c_, r)) return true;
     Tmp tmp(c_, "esxireal-rs");
@@ -192,7 +195,7 @@ VM2B_TEST("esxireal", esxireal_resume_after_abort)
 }
 
 // Восстановление на сам ESXi: файлы PUT /folder + RegisterVM; потом побитовую сверку делает внешний скрипт (sha256sum на хосте).
-VM2B_TEST("esxireal", esxireal_restore_to_host)
+static bool Body_esxireal_restore_to_host(Ctx& c_)
 {
     Real r; if (!Load(c_, r)) return true;
     Tmp tmp(c_, "esxireal-rh");
@@ -205,8 +208,8 @@ VM2B_TEST("esxireal", esxireal_restore_to_host)
         Target* t = LocalAtR(store); Manifest man; Str warn; Pr pr;
         bool ok = BackupVm(*src, v.name, *t, o, &pr, man, warn, err);
         T_CHECK(ok); delete src; if (!ok) { c_.note("бэкап: %s", err.c_str()); delete t; continue; }
-        EsxiRestoreOptions ro; ro.vmName = Str::fmt("%s-%d", r.prefix.c_str(), n);
-        Str e1; Json info; T_CHECK(EsxiRestoreTargets(r.cfg(), Str(), info, e1)); c_.note("варианты восстановления: %s", info.dump().c_str());
+        EsxiRestoreOptions ro; ro.vmName = Str::fmt("%s-%d", r.prefix.c_str(), n); ro.datacenter = r.dc;
+        Str e1; Json info; T_CHECK(EsxiRestoreTargets(r.cfg(), r.dc, info, e1)); c_.note("варианты восстановления: %s", info.dump().c_str());
         ReadOptions rd; rd.stateDir = tmp.sub("state"); Str se; MakeDirs(rd.stateDir, se);
         EsxiRestoreResult res; Str re; Pr pr2;
         bool rok = RestoreToEsxi(*t, man.archive, r.cfg(), ro, o.password, rd, &pr2, &res, re);
@@ -228,7 +231,7 @@ VM2B_TEST("esxireal", esxireal_restore_to_host)
 
 
 // snapshot.history: ВМ со СВОИМ деревом снимков (s1 -> s2 и s1 -> s3, текущее состояние на s3): копия с историей и без неё
-VM2B_TEST("esxireal", esxireal_snapshot_history)
+static bool Body_esxireal_snapshot_history(Ctx& c_)
 {
     Real r; if (!Load(c_, r)) return true;
     Tmp tmp(c_, "esxireal-hi");
@@ -250,7 +253,7 @@ VM2B_TEST("esxireal", esxireal_snapshot_history)
             c_.note("history=%d: %d файлов, %d .vmsn, %d дельт, не скопировано снимков: %d", hist, counts[hist], vmsn, deltas, (int)mj.get("snapshots_not_copied").integer());
             T_CHECK(CheckFlats(c_, v, dest));
             if (!hist) {
-                EsxiRestoreOptions ro; ro.vmName = r.prefix + "-nohist"; ReadOptions rd; rd.stateDir = tmp.sub("state"); Str se; MakeDirs(rd.stateDir, se);
+                EsxiRestoreOptions ro; ro.vmName = r.prefix + "-nohist"; ro.datacenter = r.dc; ReadOptions rd; rd.stateDir = tmp.sub("state"); Str se; MakeDirs(rd.stateDir, se);
                 EsxiRestoreResult res; Str rr; Pr pr2; bool rok = RestoreToEsxi(*t, man.archive, r.cfg(), ro, o.password, rd, &pr2, &res, rr); if (!rok) c_.note("restore: %s", rr.c_str());
                 T_CHECK(rok); if (rok) c_.note("RESTORED %s -> %s (%s); предупреждение: %s", v.name.c_str(), res.vmName.c_str(), res.vmxPath.c_str(), res.warning.c_str());
             }
@@ -265,7 +268,7 @@ VM2B_TEST("esxireal", esxireal_snapshot_history)
 // ВКЛЮЧЁННАЯ ВМ со СВОИМ деревом снимков (перед этим тестом vm2b-hist включают: LIVE_HIST=1 tools/esxi7/run-real.sh --only esxireal_live_hist_running): цепочка свёртывается в один клон
 // на диск, чужие снимки не копируются (в предупреждении сказано), восстановленная ВМ регистрируется и включается, sha256 диска равна эталону
 // (в дельтах этой ВМ без ОС ничего не записано, поэтому клон верхнего звена побитно равен базе).
-VM2B_TEST("esxireal", esxireal_live_hist_running)
+static bool Body_esxireal_live_hist_running(Ctx& c_)
 {
     Real r; if (!Load(c_, r)) return true;
     Tmp tmp(c_, "esxireal-lh");
@@ -288,13 +291,30 @@ VM2B_TEST("esxireal", esxireal_live_hist_running)
         const Json& fl = mj.get("files"); int deltas = 0; for (size_t i = 0; i < fl.size(); ++i) { Str p = fl.at(i).get("path").str(); c_.note("  %s (%lld)", p.c_str(), (long long)fl.at(i).get("size").integer()); if (p.find("sesparse") >= 0 || p.find("-delta") >= 0) ++deltas; }
         T_CHECK(deltas == 0);
         T_CHECK(CheckFlats(c_, v, dest));
-        EsxiRestoreOptions ro; ro.vmName = Str::fmt("%s-lh%u", r.prefix.c_str(), (unsigned)(GetTickCount() % 100000)); ReadOptions rd; rd.stateDir = tmp.sub("state"); Str se; MakeDirs(rd.stateDir, se);
+        EsxiRestoreOptions ro; ro.vmName = Str::fmt("%s-lh%u", r.prefix.c_str(), (unsigned)(GetTickCount() % 100000)); ro.datacenter = r.dc; ReadOptions rd; rd.stateDir = tmp.sub("state"); Str se; MakeDirs(rd.stateDir, se);
         EsxiRestoreResult res; Str rr; Pr pr2; bool rok = RestoreToEsxi(*t, man.archive, r.cfg(), ro, o.password, rd, &pr2, &res, rr); if (!rok) c_.note("restore: %s", rr.c_str());
         T_CHECK(rok); if (rok) c_.note("RESTORED %s -> %s (%s)", v.name.c_str(), res.vmName.c_str(), res.vmxPath.c_str());
         delete t; RemoveTree(store); RemoveTree(dest);
     }
     return true;
 }
+
+
+// ---- те же тела тестов для самого ESXi (esxireal) и для vCenter (vcreal) ----
+VM2B_TEST("esxireal", esxireal_connect_and_list) { g_realKey = "esxi_real"; return Body_esxireal_connect_and_list(c_); }
+VM2B_TEST("vcreal", vcreal_connect_and_list) { g_realKey = "vcenter_real"; bool r = Body_esxireal_connect_and_list(c_); g_realKey = "esxi_real"; return r; }
+VM2B_TEST("esxireal", esxireal_wrong_credentials) { g_realKey = "esxi_real"; return Body_esxireal_wrong_credentials(c_); }
+VM2B_TEST("vcreal", vcreal_wrong_credentials) { g_realKey = "vcenter_real"; bool r = Body_esxireal_wrong_credentials(c_); g_realKey = "esxi_real"; return r; }
+VM2B_TEST("esxireal", esxireal_backup_verify_restore_matrix) { g_realKey = "esxi_real"; return Body_esxireal_backup_verify_restore_matrix(c_); }
+VM2B_TEST("vcreal", vcreal_backup_verify_restore_matrix) { g_realKey = "vcenter_real"; bool r = Body_esxireal_backup_verify_restore_matrix(c_); g_realKey = "esxi_real"; return r; }
+VM2B_TEST("esxireal", esxireal_resume_after_abort) { g_realKey = "esxi_real"; return Body_esxireal_resume_after_abort(c_); }
+VM2B_TEST("vcreal", vcreal_resume_after_abort) { g_realKey = "vcenter_real"; bool r = Body_esxireal_resume_after_abort(c_); g_realKey = "esxi_real"; return r; }
+VM2B_TEST("esxireal", esxireal_restore_to_host) { g_realKey = "esxi_real"; return Body_esxireal_restore_to_host(c_); }
+VM2B_TEST("vcreal", vcreal_restore_to_host) { g_realKey = "vcenter_real"; bool r = Body_esxireal_restore_to_host(c_); g_realKey = "esxi_real"; return r; }
+VM2B_TEST("esxireal", esxireal_snapshot_history) { g_realKey = "esxi_real"; return Body_esxireal_snapshot_history(c_); }
+VM2B_TEST("vcreal", vcreal_snapshot_history) { g_realKey = "vcenter_real"; bool r = Body_esxireal_snapshot_history(c_); g_realKey = "esxi_real"; return r; }
+VM2B_TEST("esxireal", esxireal_live_hist_running) { g_realKey = "esxi_real"; return Body_esxireal_live_hist_running(c_); }
+VM2B_TEST("vcreal", vcreal_live_hist_running) { g_realKey = "vcenter_real"; bool r = Body_esxireal_live_hist_running(c_); g_realKey = "esxi_real"; return r; }
 
 // ---- сценарий «включённая ВМ: пауза, выключение, включение, продолжение / отмена» (этапы запускает tools/esxi7/live-scenario.sh, между этапами по SSH меняется питание ВМ) ----
 static Str LiveStore(Ctx& c)

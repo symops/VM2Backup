@@ -2905,6 +2905,24 @@ VM2B_TEST("esxi", esxi_real_fixtures_parse)
       const XmlNode* rv = r ? r->child("returnval") : nullptr; T_CHECK(rv != nullptr); if (rv) { T_CHECK(rv->attr("type") == "Task"); T_CHECK(!rv->text.trim().empty()); } }
     { const XmlNode* r = d.child("Body") ? d.child("Body")->child("RetrieveServiceContentResponse") : nullptr; const XmlNode* rv = r ? r->child("returnval") : nullptr;
       T_CHECK(rv != nullptr && rv->childText("virtualDiskManager").trim() == "ha-vdiskmanager"); }
+    // a real vCenter 7.0.3 (tests/fixtures/vcenter7-real): the same code parses its answers
+    {
+        Str vfx = fx; int cut2 = vfx.rfind('\\'); if (cut2 > 0) vfx = vfx.substr(0, (size_t)cut2) + "\\vcenter7-real";
+        auto loadv = [&](const char* n, XmlNode& doc) {
+            Bytes b; Str e; if (!ReadWholeFile(JoinPath(vfx, n).c_str(), b, e)) { c_.note("не прочитан vcenter7-real/%s", n); return false; }
+            size_t i = 0; while (i < b.size() && b[i] != '\n') ++i; Str xe; return XmlParse((const char*)b.data() + i, b.size() - i, doc, xe);
+        };
+        XmlNode vs;
+        if (loadv("RetrieveServiceContent.resp.xml", vs)) {
+            const XmlNode* r = vs.child("Body") ? vs.child("Body")->child("RetrieveServiceContentResponse") : nullptr; const XmlNode* rv = r ? r->child("returnval") : nullptr; T_CHECK(rv != nullptr);
+            if (rv) { const XmlNode* ab = rv->child("about"); T_CHECK(ab && ab->childText("apiType").trim() == "VirtualCenter"); T_CHECK(ab && ab->childText("apiVersion").trim() == "7.0.3.0");
+                      T_CHECK(rv->childText("virtualDiskManager").trim() == "virtualDiskManager"); T_CHECK(rv->childText("rootFolder").trim() == "group-d1"); }
+        } else T_CHECK(false);
+        XmlNode vl;
+        T_CHECK(loadv("RetrievePropertiesEx-vmlist.resp.xml", vl));
+        { const XmlNode* rv = vl.child("Body") && vl.child("Body")->child("RetrievePropertiesExResponse") ? vl.child("Body")->child("RetrievePropertiesExResponse")->child("returnval") : nullptr;
+          int objs = 0; if (rv) for (const XmlNode& o : rv->kids) if (o.name == "objects") ++objs; T_CHECK(objs >= 1); }
+    }
     return true;
 }
 } // namespace vm2b

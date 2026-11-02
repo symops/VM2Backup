@@ -626,7 +626,7 @@ def service_content():
             '<sessionManager type="SessionManager">%s</sessionManager><fileManager type="FileManager">ha-nfc-file-manager</fileManager><virtualDiskManager type="VirtualDiskManager">%s</virtualDiskManager>'
             '<viewManager type="ViewManager">ViewManager</viewManager><customFieldsManager type="CustomFieldsManager">ha-customfields-manager</customFieldsManager></returnval>'
             % (root_ref(), 'ha-property-collector' if esx else 'propertyCollector', about_xml(), 'HostAgentSettings' if esx else 'VpxSettings', 'ha-sessionmgr' if esx else 'SessionManager',
-               'ha-vdiskmanager' if esx else 'VirtualDiskManager'))
+               'ha-vdiskmanager' if esx else 'virtualDiskManager'))
 
 
 def session_alive(sid, touch=True):
