@@ -250,6 +250,32 @@ Str PasswordCheck(const Str& pw, const u8 salt[16], u32 iter)
     return HexEncode(mac, 8);
 }
 
+// The token of a source may carry the VM's configuration files (an ESXi .vmx, .nvram): on an encrypted backup it is not written to the target in clear text.
+Str ProtectToken(const Str& pw, const u8 salt[16], u32 iter, const Str& token)
+{
+    if (pw.empty() || token.empty()) return token;
+    u8 key[32], nonce[12], tag[16];
+    if (!DeriveBackupKey(pw, salt, iter, key) || !RandomBytes(nonce, 12)) return Str();
+    AesGcm aes; Bytes out; out.resize(12 + token.size() + 16);
+    bool ok = aes.init(key) && aes.encrypt(nonce, "vm2b-resume-token", 17, token.data(), token.size(), out.data() + 12, tag);
+    memset(key, 0, 32);
+    if (!ok) return Str();
+    memcpy(out.data(), nonce, 12); memcpy(out.data() + 12 + token.size(), tag, 16);
+    return "e1:" + Base64Encode(out.data(), out.size());
+}
+
+Str UnprotectToken(const Str& pw, const u8 salt[16], u32 iter, const Str& token)
+{
+    if (!token.starts_with("e1:")) return token;
+    if (pw.empty()) return Str();
+    Bytes in; if (!Base64Decode(token.c_str() + 3, token.size() - 3, in) || in.size() < 28) return Str();
+    u8 key[32]; if (!DeriveBackupKey(pw, salt, iter, key)) return Str();
+    AesGcm aes; Bytes out; out.resize(in.size() - 28);
+    bool ok = aes.init(key) && aes.decrypt(in.data(), "vm2b-resume-token", 17, in.data() + 12, in.size() - 28, out.data(), in.data() + in.size() - 16);
+    memset(key, 0, 32);
+    return ok ? Str((const char*)out.data(), out.size()) : Str();
+}
+
 struct Journal {
     bool ok; Str vm, archive, stamp, options, pwcheck, fingerprint, token; double created; u8 salt[16]; Vec<Segment> segs;
     Journal() : ok(false), created(0) { memset(salt, 0, 16); }
@@ -337,7 +363,7 @@ bool BackupVm(VmSource& src, const Str& vm, Target& target, const BackupOptions&
                     }
                 }
                 bool same = allThere && j.options == OptionsKey(o) && j.pwcheck == PasswordCheck(o.password, j.salt, o.kdfIterations);
-                if (same && !resuming) { jr = j; resuming = true; }
+                if (same && !resuming) { jr = j; jr.token = UnprotectToken(o.password, j.salt, o.kdfIterations, j.token); resuming = true; }
                 else { Str e3; RemoveAllOf(target, rs[i].archive, e3); }       // another setting or password: this partial backup is of no use
             }
         }
@@ -349,10 +375,12 @@ bool BackupVm(VmSource& src, const Str& vm, Target& target, const BackupOptions&
     warning = w2;
     if (resuming && jr.fingerprint != fp) {                                   // the VM changed since: the partial copy does not belong to it
         Str e3; RemoveAllOf(target, jr.archive, e3);
+        Str why = src.restartReason();
         src.end(false);
         resuming = false; jr = Journal();
         if (!src.begin(vm, o.allowLive, Str(), fp, token, w2)) { err = src.err; return false; }
-        warning = w2;
+        warning = "the interrupted backup could not be continued (" + (why.empty() ? Str("the VM or its snapshot changed since") : why) + "): it was started over";
+        if (!w2.empty()) warning += "; " + w2;
     }
 
     // 3. names, salt, the state that survives passes
@@ -381,7 +409,7 @@ bool BackupVm(VmSource& src, const Str& vm, Target& target, const BackupOptions&
     WriteCtx wc; wc.target = &target; wc.opt = &o; wc.mf = &mf; wc.pr = pr; wc.done = &done; memcpy(wc.salt, salt, 16);
     Json jb = Json::object();
     jb["version"] = 1; jb["vm"] = vm; jb["archive"] = mf.archive; jb["stamp"] = mf.stamp; jb["created"] = mf.created; jb["options"] = OptionsKey(o);
-    jb["pwcheck"] = PasswordCheck(o.password, salt, o.kdfIterations); jb["fingerprint"] = fp; jb["token"] = token; jb["salt"] = HexEncode(salt, 16);
+    jb["pwcheck"] = PasswordCheck(o.password, salt, o.kdfIterations); jb["fingerprint"] = fp; jb["token"] = ProtectToken(o.password, salt, o.kdfIterations, token); jb["salt"] = HexEncode(salt, 16);
     wc.journalBase = jb;
 
     // 4. passes: each one writes the volumes that are still missing; a transient failure gives another pass after reconnecting

@@ -164,6 +164,7 @@ static int CloneFolders(const Str& vmDir)
     FindClose(h);
     return n;
 }
+static bool BytesEq(const Bytes& a, const Bytes& b) { return a.size() == b.size() && (a.empty() || !memcmp(a.data(), b.data(), a.size())); }
 static const FI* FindFi(const Vec<FI>& v, const Str& rel) { for (const FI& f : v) if (f.rel == rel) return &f; return nullptr; }
 static bool Excluded(const Str& rel) { return rel.ends_with(".vswp") || rel.ends_with(".log") || rel.find(".lck") >= 0; }
 
@@ -657,8 +658,10 @@ VM2B_TEST("esxi", esxi_resume_across_runs)
             f.before.clear(); Walk(f.m.dir, "", f.before);
             for (size_t i = f.before.size(); i-- > 0;) if (f.before[i].rel.starts_with("VM2Backup-")) f.before.erase(i);
         }
-        if (mode == 2) {
-            Json o2, a = Json::object(); a["vm"] = f.spec.name; a["file"] = f.spec.name + ".vmx"; ctl.call("touch", a, o2);
+        if (mode == 2) {                                            // the frozen state changed (the clone of the first run is damaged): a new start (the live .vmx is NOT such a change, see esxi_resume_survives_power_cycles)
+            Vec<FI> now0; Walk(f.m.dir, "", now0); Str cf; for (const FI& x : now0) if (x.rel.starts_with("VM2Backup-") && x.rel.ends_with("-flat.vmdk")) cf = x.rel;
+            T_CHECK(!cf.empty());
+            Json o2, a = Json::object(); a["vm"] = f.spec.name; a["file"] = cf; ctl.call("touch", a, o2);
             f.before.clear(); Walk(f.m.dir, "", f.before);
             // the snapshot's own files are part of `before` now: they stay in the VM folder until the first run's snapshot is removed
             for (size_t i = f.before.size(); i-- > 0;) if (f.before[i].rel.find("-0000") >= 0 || f.before[i].rel.starts_with("VM2Backup-")) f.before.erase(i);
@@ -688,6 +691,108 @@ VM2B_TEST("esxi", esxi_resume_across_runs)
                         for (const FI& b : f.before) if (b.rel.ends_with("-flat.vmdk")) { const FI* a = FindFi(after, b.rel); if (!a) c_.note("mode %d: %s missing in the restore", mode, b.rel.c_str()); else if (a->sha != b.sha) c_.note("mode %d: %s differs (%llu vs %llu)", mode, b.rel.c_str(), (unsigned long long)b.size, (unsigned long long)a->size); T_CHECK(a != nullptr && a->sha == b.sha); }
                         for (const FI& b : f.before) if (b.rel.ends_with(".vmx")) { const FI* a = FindFi(after, b.rel); T_CHECK(a != nullptr && NormVmx(a->full) == NormVmx(b.full)); }
                     }
+                }
+            }
+            T_CHECK(ctl.leaked() == 0); T_CHECK(ctl.snapCount(f.spec.name) == 0); T_CHECK(CloneFolders(f.m.dir) == 0);
+            delete t; delete src;
+        }
+        DeleteVm(ctl, f.spec.name); RemoveTree(store); RemoveTree(tmp.sub("r"));
+    }
+    return true;
+}
+
+// Настоящий ESXi 7.0.3: ВМ выключают и включают посреди паузы копии, хост ПЕРЕПИСЫВАЕТ .vmx (1972 -> 1994 байта), меняет .nvram и время файлов. Продолжение должно идти по ТОМУ ЖЕ снимку:
+// отпечаток считается по замороженному состоянию (диски, снимок), а конфигурация в архиве - та, что была прочитана в начале копии (она хранится в состоянии возобновления).
+// Режимы: 0 выключена; 1 выключена и включена; 2 три цикла; 3 выключена и папка клонов удалена вручную (клон делается заново, поток тот же); 4 замороженный клон изменён (копия
+// начинается заново); 5 выключенная ВМ (диски читаются на месте) включена до продолжения (читать на месте уже нельзя: копия начинается заново); 6 выключенная ВМ, цикл
+// включение-выключение (продолжение на месте); 7 выключенная ВМ, замороженная база изменена (копия начинается заново).
+// На старом коде режимы 0-3 и 6 падают (после смены .vmx копия начинается с нуля: resumes == 0, лишние снимки).
+VM2B_TEST("esxi", esxi_resume_survives_power_cycles)
+{
+    Vec<Env> all, es; if (!Envs(c_, all)) return true; Normal(all, es);
+    EsTmp tmp(c_, "esxi-pwr");
+    int round = (int)c_.rnd(8);
+    for (const Env& e : es) {
+        int mode = round++ % 8;
+        bool startOn = mode <= 4;
+        Ctl ctl(e); ctl.reset();
+        Fix f; T_CHECK(MakeFix(c_, ctl, e, f, "PW", 1, 5000000, startOn ? "poweredOn" : "poweredOff", false, 3000000)); if (!f.m.ok) return false;
+        if (startOn) { Json o2, a = Json::object(); a["vm"] = f.spec.name; a["disk"] = 0; a["offset"] = 0; a["length"] = 10; ctl.call("guestwrite", a, o2); f.before.clear(); Walk(f.m.dir, "", f.before); }
+        BackupOptions o = RandomOpts(c_, true);
+        o.segmentBytes = (u64)512 * (u64)c_.range(64, 300);
+        if (mode == 0) o.password.clear();                           // both ways of the state in the journal are always exercised: clear (0) and encrypted (1, 6)
+        if (mode == 1 || mode == 6) o.password = "pw-state-\xd1\x8b";
+        Str store = tmp.sub("store"), err;
+        Str vmxName = f.spec.name + ".vmx", nvName = f.spec.name + ".nvram";
+        Bytes vmx1, nv1;
+        {   // run 1: stopped half way as a pause
+            VmSource* src = NewEsxiSource(e.cfg(), err); Target* t = LocalAt(store);
+            Pr pr; pr.abortAt = true; pr.keep = true; pr.limit = (u64)c_.range(600000, 1500000);
+            Manifest man; Str warn;
+            bool ok = BackupVm(*src, f.spec.name, *t, o, &pr, man, warn, err);
+            T_CHECK(!ok); T_CHECK(err == kAbortedMessage); T_CHECK(ctl.leaked() == 1);
+            delete t; delete src;
+            Str re; ReadWholeFile(JoinPath(f.m.dir, vmxName).c_str(), vmx1, re); ReadWholeFile(JoinPath(f.m.dir, nvName).c_str(), nv1, re);
+            // the journal holds the state (the VM's configuration files): in clear text (a plain token names the snapshot) for a backup without a password, encrypted (no snapshot name visible) with one
+            Vec<FI> sf; Walk(store, "", sf); int journals = 0;
+            for (const FI& x : sf) if (x.rel.ends_with(".resume")) { ++journals; Bytes jb; Str je; ReadWholeFile(x.full.c_str(), jb, je); Str jt((const char*)jb.data(), jb.size()); T_CHECK(o.password.empty() == (jt.find("VM2Backup-") >= 0)); T_CHECK(jt.find("\"token\"") >= 0); }
+            T_CHECK(journals == 1);
+        }
+        auto power = [&](const char* st) { Json o2, a = Json::object(); a["vm"] = f.spec.name; a["state"] = st; ctl.call("power", a, o2); };
+        auto touchFrozen = [&](bool clone) {
+            Vec<FI> now; Walk(f.m.dir, "", now); Str target;
+            for (const FI& x : now) if (clone ? (x.rel.starts_with("VM2Backup-") && x.rel.ends_with("-flat.vmdk")) : (x.rel.ends_with("-flat.vmdk") && !x.rel.starts_with("VM2Backup-"))) target = x.rel;
+            T_CHECK(!target.empty());
+            Json o2, a = Json::object(); a["vm"] = f.spec.name; a["file"] = target; ctl.call("touch", a, o2);
+        };
+        int clonesBefore = ctl.counter("fm:CopyVirtualDisk");
+        bool restart = false;
+        switch (mode) {
+            case 0: power("poweredOff"); break;
+            case 1: power("poweredOff"); power("poweredOn"); break;
+            case 2: power("poweredOff"); power("poweredOn"); power("poweredOff"); break;
+            case 3: power("poweredOff"); { Vec<FI> now; Walk(f.m.dir, "", now); for (const FI& x : now) if (x.rel.starts_with("VM2Backup-")) { int sl = x.rel.find('/'); RemoveTree(JoinPath(f.m.dir, x.rel.substr(0, (size_t)sl))); break; } } T_CHECK(CloneFolders(f.m.dir) == 0); break;
+            case 4: power("poweredOff"); touchFrozen(true); restart = true; break;
+            case 5: power("poweredOn"); restart = true; break;
+            case 6: power("poweredOn"); power("poweredOff"); break;
+            case 7: power("poweredOn"); power("poweredOff"); touchFrozen(false); restart = true; break;
+        }
+        // the live configuration files really did change (the point of the test)
+        { Bytes v2, n2; Str re; ReadWholeFile(JoinPath(f.m.dir, vmxName).c_str(), v2, re); ReadWholeFile(JoinPath(f.m.dir, nvName).c_str(), n2, re); T_CHECK(v2.size() != vmx1.size()); T_CHECK(n2.size() == nv1.size() && !BytesEq(n2, nv1)); }
+        Str warn2;
+        {   // run 2
+            VmSource* src = NewEsxiSource(e.cfg(), err); Target* t = LocalAt(store);
+            Pr pr; Manifest man;
+            bool ok = BackupVm(*src, f.spec.name, *t, o, &pr, man, warn2, err);
+            if (!ok) c_.note("%s mode %d: %s", e.name.c_str(), mode, err.c_str());
+            T_CHECK(ok);
+            if (!restart) {
+                T_CHECK(pr.resumes == 1);                                     // the same backup goes on, the finished volumes are kept
+                T_CHECK(ctl.events("create") == 1);                           // by the snapshot of the first run: no second one was made
+                T_CHECK(Contains(warn2, "continued with the snapshot"));
+                T_CHECK(Contains(warn2, "the VM was powered off/on and its configuration files changed while the backup was paused: the archive keeps the configuration from the start of the backup"));
+                if (mode <= 2) T_CHECK(ctl.counter("fm:CopyVirtualDisk") == clonesBefore);      // the clone of the first run is read again, not made again
+                if (mode == 3) T_CHECK(ctl.counter("fm:CopyVirtualDisk") == clonesBefore * 2);  // the folder was lost: made again, the bytes are the same
+            } else {
+                T_CHECK(pr.resumes == 0);
+                T_CHECK(Contains(warn2, "could not be continued"));
+                if (mode == 5) T_CHECK(Contains(warn2, "powered on"));
+                else T_CHECK(Contains(warn2, "frozen state"));
+            }
+            if (ok) {
+                Str dest = tmp.sub("r"), re;
+                if (Restore(c_, *t, man, o, dest, re)) {
+                    Vec<FI> after; Walk(JoinPath(dest, f.spec.name), "", after);
+                    // the disk: the frozen state at the snapshot (the guest's writes after it and the changes of a "touched" file are not in the archive when it was a clone; a touched
+                    // in-place base makes a restart that copies the base as it is now)
+                    if (mode != 7) for (const FI& b : f.before) if (b.rel.ends_with("-flat.vmdk") && !b.rel.starts_with("VM2Backup-")) { const FI* a = FindFi(after, b.rel); T_CHECK(a != nullptr && a->sha == b.sha); }
+                    // the configuration: the first run's bytes (a continuation), whatever the host wrote into the files since
+                    if (!restart) {
+                        const FI* av = FindFi(after, vmxName); const FI* an = FindFi(after, nvName);
+                        T_CHECK(av != nullptr && an != nullptr);
+                        if (av && an) { Bytes bv, bn; Str re2; ReadWholeFile(av->full.c_str(), bv, re2); ReadWholeFile(an->full.c_str(), bn, re2); T_CHECK(BytesEq(bv, vmx1)); T_CHECK(BytesEq(bn, nv1)); }
+                    }
+                    for (const FI& a : after) T_CHECK(!a.rel.starts_with("VM2Backup-"));
                 }
             }
             T_CHECK(ctl.leaked() == 0); T_CHECK(ctl.snapCount(f.spec.name) == 0); T_CHECK(CloneFolders(f.m.dir) == 0);

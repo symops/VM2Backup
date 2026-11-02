@@ -282,6 +282,34 @@ def create_vm(a):
         return vm
 
 
+def power_cycle_effects(vm):
+    """Настоящий ESXi 7.0.3 (проверено): при ПЕРВОМ выключении/включении ВМ хост ПЕРЕПИСЫВАЕТ .vmx (1972 -> 1994 байта: он дописывает свои служебные ключи), .nvram меняется при каждом
+    включении/выключении (содержимое, время), .vmxf может быть переписан; после того как .vmx «устоялся», размер больше не меняется (меняется только время).
+    Диски выключенной ВМ не заперты (live_locked смотрит на vm.power)."""
+    vm.cycles = getattr(vm, 'cycles', 0) + 1
+    if not getattr(vm, 'vmx_settled', False):
+        vm.vmx_extra.append('sched.swap.derivedName = "/vmfs/volumes/%s/%s/%s-%08x.vswp"' % (vm.ds, vm.dir, vm.vmx[:-4], random.getrandbits(32)))
+        vm.vmx_extra.append('migrate.hostLog = "%s-%08x.hlog"' % (vm.vmx[:-4], random.getrandbits(32)))
+        vm.vmx_settled = True
+        try:
+            with open(vm_path(vm, vm.vmx[:-4] + '.vmxf'), 'ab') as f:
+                f.write(b'\n')
+        except OSError:
+            pass
+    write_vmx(vm)
+    nv = vm_path(vm, vm.vmx[:-4] + '.nvram')
+    if os.path.exists(nv):
+        n = os.path.getsize(nv)
+        with open(nv, 'wb') as f:
+            f.write(random.Random(vm.cycles * 7919 + n).randbytes(n))
+    t = time.time() + 5 * vm.cycles
+    for fn in (vm.vmx, vm.vmx[:-4] + '.vmxf', vm.vmx[:-4] + '.nvram'):
+        try:
+            os.utime(vm_path(vm, fn), (t, t))
+        except OSError:
+            pass
+
+
 def make_snapshot(vm, name, desc, memory, quiesce):
     """the effect of CreateSnapshot_Task (called when the task completes)"""
     sid = nid('snap')
@@ -1802,8 +1830,11 @@ def control(cmd, a, q):
             return dict(ok=True, level=len(disk.levels) - 1)
         if cmd == 'power':
             vm = next(v for v in S.vms.values() if v.name == a['vm'])
+            prev = vm.power
             vm.power = a['state']
-            return dict(ok=True)
+            if prev != vm.power and not a.get('plain'):
+                power_cycle_effects(vm)
+            return dict(ok=True, vmx_size=os.path.getsize(vm_path(vm, vm.vmx)))
         if cmd == 'snapshot':       # an instant snapshot (a user's own, or a leftover of a crashed backup)
             vm = next(v for v in S.vms.values() if v.name == a['vm'])
             sn = make_snapshot(vm, a['name'], a.get('desc', ''), bool(a.get('memory')), False)

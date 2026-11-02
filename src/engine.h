@@ -59,7 +59,8 @@ struct VmSource {
     // Writes the whole VM into the tar. May be called again after a failure; use tar.skippable() / skip_data() to avoid reading
     // data that lies in the part of the stream that is already stored. kAbortedMessage after an abort.
     virtual bool pack(TarWriter& tar, Progress* pr, Str& warning) = 0;
-    virtual void end(bool keepForResume) {}                // releases what begin() took (the snapshot), unless the backup will continue
+    virtual void end(bool keepForResume) {}
+    virtual Str restartReason() const { return Str(); }    // after begin() with a resume token: why the interrupted backup cannot go on (empty = no particular reason known)                // releases what begin() took (the snapshot), unless the backup will continue
 protected:
     bool fail(const Str& e, bool temp = false) { err = e; transient = temp; return false; }
 };

@@ -5,6 +5,7 @@
 #include "crypto.h"
 #include "winutil.h"
 #include "version.h"
+#include "codec.h"
 
 namespace vm2b {
 
@@ -313,11 +314,64 @@ static bool SnapshotIsLive(const Str& desc)
     return alive;
 }
 
-struct FileItem { Str name, ds, path, arc, origArc, type; u64 size; i64 mtime; int group; Bytes inl; bool hasInl; FileItem() : size(0), mtime(0), group(0), hasInl(false) {} };
+struct FileItem { Str name, ds, path, arc, origArc, type; u64 size; i64 mtime; int group; Bytes inl; bool hasInl; bool vol; FileItem() : size(0), mtime(0), group(0), hasInl(false), vol(false) {} };
 // Диск включённой ВМ: замороженное снимком звено (и его родители) удерживает процесс ВМ, /folder отдаёт для него HTTP 500 («Failed to lock file»), поэтому
 // копия берётся из КЛОНА (VirtualDiskManager.CopyVirtualDisk_Task, тонкий диск без цепочки родителей), который лежит во временной папке «VM2Backup-<10 hex>»
 // рядом с ВМ и читается обычным /folder (с Range, то есть продолжение внутри диска работает).
 struct CloneInfo { i64 diskKey; Str srcDesc, baseDesc, ds, descPath, flatPath, descArc, flatArc, adapter; Bytes desc; CloneInfo() : diskKey(-1) {} };
+
+// ---- the state of an interrupted backup (it travels in the resume token, see Impl::begin) --------------------------------------------------------------
+// The files that describe the VM's CONFIGURATION (.vmx, .vmxf, .nvram, .vmsd, namespace data) are live: ESXi rewrites them when the VM is powered off or on, so their
+// size and content differ between two runs of the same backup, whereas the part of the stream already in finished volumes cannot change. So the first run reads them
+// once, at begin(), and keeps their bytes (and the meta file, and the list of all files with sizes and times) in the state; a continuation streams the SAVED bytes
+// and builds its fingerprint from the FROZEN files only (disk extents, snapshot data, ...), so it goes on exactly when the frozen state (the snapshot and its disks) is intact.
+static bool IsVolatileType(const Str& t) { return t == "config" || t == "extendedConfig" || t == "nvram" || t == "snapshotList" || t == "namespaceData"; }
+static const size_t kMaxSavedFile = (size_t)4 << 20;                           // a configuration file bigger than this is not kept: it is read again and counts as frozen
+static const size_t kMaxSavedTotal = (size_t)6 << 20;                          // all kept files together (the journal is read back whole, 16 MiB at most, base64 of incompressible data included)
+
+struct SavedFile { Str arc, type; u64 size; i64 mtime; bool vol, hasInl; Bytes bytes; SavedFile() : size(0), mtime(0), vol(false), hasInl(false) {} };
+struct SavedState { bool ok, clone; Str meta, power; i64 metaTime; Vec<SavedFile> files; SavedState() : ok(false), clone(false), metaTime(0) {} };
+
+static Str SavedStateEncode(const SavedState& st)
+{
+    Json o = Json::object(), fl = Json::array();
+    o["v"] = 1; o["clone"] = st.clone; o["power"] = st.power; o["meta"] = st.meta; o["meta_time"] = st.metaTime;
+    for (const SavedFile& f : st.files) {
+        Json e = Json::object(); e["a"] = f.arc; e["t"] = f.type; e["s"] = f.size; e["m"] = f.mtime; e["vol"] = f.vol;
+        if (f.hasInl) e["b"] = Base64Encode(f.bytes.data(), f.bytes.size());
+        fl.push(e);
+    }
+    o["files"] = fl;
+    Str js = o.dump();
+    MemSink ms; Sink* cs = CodecMakeSink(CodecOptions(1, 1), &ms);
+    bool ok = cs && cs->write(js.data(), js.size()) && cs->finish();
+    delete cs;
+    if (!ok) return Str();
+    return Base64Encode(ms.data.data(), ms.data.size());
+}
+
+static bool SavedStateDecode(const Str& text, SavedState& st)
+{
+    st = SavedState();
+    Bytes z; if (!Base64Decode(text.c_str(), text.size(), z) || z.empty()) return false;
+    MemSource ms(z.data(), z.size()); Source* ds = CodecMakeSource(&ms);
+    Str js; Bytes buf; buf.resize(65536); bool ok = true;
+    for (;;) { i64 k = ds ? ds->read(buf.data(), buf.size()) : -1; if (k < 0) { ok = false; break; } if (k == 0) break; js.append((const char*)buf.data(), (size_t)k); if (js.size() > ((size_t)64 << 20)) { ok = false; break; } }
+    delete ds;
+    if (!ok) return false;
+    Json o; Str e; if (!Json::parse(js.data(), js.size(), o, e) || !o.is_object() || o.get("v").integer() != 1) return false;
+    st.clone = o.get("clone").boolean(); st.power = o.get("power").str(); st.meta = o.get("meta").str(); st.metaTime = o.get("meta_time").integer();
+    const Json& fl = o.get("files");
+    for (size_t i = 0; i < fl.size(); ++i) {
+        const Json& e2 = fl.at(i); SavedFile f;
+        f.arc = e2.get("a").str(); f.type = e2.get("t").str(); f.size = (u64)e2.get("s").integer(); f.mtime = e2.get("m").integer(); f.vol = e2.get("vol").boolean();
+        if (e2.has("b")) { Str b = e2.get("b").str(); f.hasInl = true; if (!Base64Decode(b.c_str(), b.size(), f.bytes)) return false; if (f.bytes.size() != f.size) return false; }
+        if (f.vol && !f.hasInl) return false;
+        st.files.push_back(f);
+    }
+    st.ok = !st.meta.empty() && !st.files.empty();
+    return st.ok;
+}
 
 struct VmData {
     Str id, name, power, conn, uuid, instUuid, guest, vmPath, dc;
@@ -383,6 +437,7 @@ public:
     bool begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fingerprint, Str& token, Str& warning) override;
     bool pack(TarWriter& tar, Progress* pr, Str& warning) override;
     void end(bool keepForResume) override;
+    Str restartReason() const override { return m_restartWhy; }
 
 private:
     // ---- plumbing ------------------------------------------------------------------------------------------------
@@ -853,15 +908,15 @@ private:
         int r = text.find('"', (size_t)q + 1); if (r < 0) return false;
         val = text.substr((size_t)q + 1, (size_t)(r - q - 1)); return true;
     }
-    bool readSmall(const Str& ds, const Str& path, Bytes& out, bool allowHtml = false) {
+    bool readSmall(const Str& ds, const Str& path, Bytes& out, bool allowHtml = false, size_t limit = (size_t)1 << 20) {
         HttpHeaders h; HttpResponse r;
         if (!FolderRequest(*m_files, "GET", EsxiFolderUrl(ds, path, m_dc), h, r, m_host, m_port)) return failHttp(*m_files);
-        if (r.status == 401 || r.status == 403) { m_files->close(); m_loggedIn = false; if (!ensureSession()) return false; return readSmall(ds, path, out, allowHtml); }
+        if (r.status == 401 || r.status == 403) { m_files->close(); m_loggedIn = false; if (!ensureSession()) return false; return readSmall(ds, path, out, allowHtml, limit); }
         if (r.status != 200) { m_files->close(); return fail(Str::fmt("reading [%s] %s: HTTP %d", ds.c_str(), path.c_str(), r.status), r.status >= 500); }
         if (!allowHtml && r.headers.value("Content-Type").lower().find("text/html") >= 0) { m_files->close(); return fail("reading [" + ds + "] " + path + ": the server answered with an HTML page instead of the file", true); }
         out.clear(); Bytes b; b.resize(65536);
-        for (;;) { i64 k = r.body->read(b.data(), b.size()); if (k < 0) { m_files->close(); return fail("reading [" + ds + "] " + path + ": " + r.body->err, r.body->transient); } if (k == 0) break; for (i64 j = 0; j < k; ++j) out.push_back(b[(size_t)j]); if (out.size() > (1u << 20)) break; }
-        if (r.contentLength >= 0 && (i64)out.size() != r.contentLength && out.size() <= (1u << 20)) { m_files->close(); return fail(Str::fmt("reading [%s] %s: the server delivered %lld of %lld bytes", ds.c_str(), path.c_str(), (long long)out.size(), (long long)r.contentLength), true); }
+        for (;;) { i64 k = r.body->read(b.data(), b.size()); if (k < 0) { m_files->close(); return fail("reading [" + ds + "] " + path + ": " + r.body->err, r.body->transient); } if (k == 0) break; for (i64 j = 0; j < k; ++j) out.push_back(b[(size_t)j]); if (out.size() > limit) break; }
+        if (r.contentLength >= 0 && (i64)out.size() != r.contentLength && out.size() <= limit) { m_files->close(); return fail(Str::fmt("reading [%s] %s: the server delivered %lld of %lld bytes", ds.c_str(), path.c_str(), (long long)out.size(), (long long)r.contentLength), true); }
         return true;
     }
     bool headFile(const Str& ds, const Str& path, i64& size) {
@@ -1058,7 +1113,7 @@ private:
     bool m_noEx; bool m_vmOn = false;
     // what begin() prepared
     bool m_begun, m_reused; int m_skippedLive; DWORD m_hbTick; Str m_runToken;
-    Str m_vmRef, m_vmName, m_dc, m_snapRef, m_snapName, m_prefix, m_meta, m_leaked; i64 m_metaTime;
+    Str m_vmRef, m_vmName, m_dc, m_snapRef, m_snapName, m_prefix, m_meta, m_leaked, m_restartWhy; i64 m_metaTime;
     Vec<FileItem> m_list;
 };
 
@@ -1219,7 +1274,7 @@ bool Impl::buildFiles(const VmData& vm, const Str& snapRef, Vec<FileItem>& out, 
 bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fingerprint, Str& token, Str& warning)
 {
     (void)allowLive;                                                       // a snapshot makes a running VM consistent: there is nothing to refuse
-    m_begun = false; m_reused = false; m_list.clear(); m_snapRef.clear(); m_snapName.clear(); m_meta.clear(); token.clear(); warning.clear();
+    m_begun = false; m_reused = false; m_list.clear(); m_snapRef.clear(); m_snapName.clear(); m_meta.clear(); token.clear(); warning.clear(); m_restartWhy.clear();
     { unsigned char tb[4]; RandomBytes(tb, 4); LiveRegister(m_runToken, false); m_runToken = HexEncode(tb, 4); LiveRegister(m_runToken, true); }
     m_leaked.clear(); m_history = m_historyCfg; m_clones.clear(); m_cloneDirs.clear(); m_cloning = false;
     if (vm.empty()) return fail("no VM name");
@@ -1241,6 +1296,21 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
     if (!v.conn.empty() && v.conn != "connected") return fail("the VM \"" + vm + "\" is not accessible (state: " + v.conn + ")");
     bool poweredOn = v.power == "poweredOn"; m_vmOn = poweredOn;
     bool cloneMode = poweredOn && m_liveClone;
+    // The state of the interrupted run (the third part of the token): the way its disks were read is kept, whatever the power state of the VM is now.
+    Str resumeRef, resumeName; SavedState st; bool haveState = false; Str restartWhy;
+    if (!resumeToken.empty()) {
+        int b1 = resumeToken.find('|');
+        if (b1 > 0) {
+            resumeRef = resumeToken.substr(0, (size_t)b1); Str rest = resumeToken.substr((size_t)b1 + 1);
+            int b2 = rest.find('|');
+            if (b2 < 0) resumeName = rest;
+            else { resumeName = rest.substr(0, (size_t)b2); haveState = SavedStateDecode(rest.substr((size_t)b2 + 1), st); }
+        }
+    }
+    if (haveState) {
+        if (st.clone) cloneMode = true;                                     // the stream of the interrupted run is made of clones (the VM may be powered off now: the clone of the frozen state is still the right source)
+        else if (cloneMode) { haveState = false; restartWhy = "the VM was powered on while the backup was paused: the part of the disks already copied was read in place, which a running VM does not allow"; }
+    }
     if (cloneMode) {
         // the chain of a running VM is consolidated into one clone per disk: the VM's earlier snapshots (their disks, .vmsn, .vmem, the tree) cannot be kept consistently
         int own = 0; for (const SnapInfo& s : v.snaps) if (!IsOurSnapshotName(s.name)) ++own;
@@ -1250,13 +1320,11 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
 
     // 1. the snapshot: re-attach to the one of the interrupted run, or start over (leftovers of earlier runs are removed)
     Str keepRef, keepName; bool reuse = false;
-    if (!resumeToken.empty()) {
-        int bar = resumeToken.find('|');
-        if (bar > 0) {
-            Str ref = resumeToken.substr(0, (size_t)bar), name = resumeToken.substr((size_t)bar + 1);
-            for (const SnapInfo& s : v.snaps) if (s.ref == ref && s.name == name && IsOurSnapshotName(name)) { reuse = true; keepRef = ref; keepName = name; }
-        }
+    if (!resumeToken.empty() && restartWhy.empty()) {
+        for (const SnapInfo& s : v.snaps) if (s.ref == resumeRef && s.name == resumeName && IsOurSnapshotName(resumeName)) { reuse = true; keepRef = resumeRef; keepName = resumeName; }
+        if (!reuse) restartWhy = "the snapshot of the interrupted backup does not exist any more (it was removed or merged)";
     }
+    if (!reuse) haveState = false;
     {
         int n = 0;
         if (!removeLeftovers(v, keepRef, n)) { Str e = err; bool t = transient; return fail("cannot remove an old VM2Backup snapshot: " + e, t); }
@@ -1267,7 +1335,7 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
     if (m_skippedLive) { if (!warning.empty()) warning += "; "; warning += Str::fmt("%d VM2Backup snapshot(s) of another run that is working on this VM were left alone", m_skippedLive); }
     if (reuse) {
         m_snapRef = keepRef; m_snapName = keepName; m_reused = true; markSnapshot(true);
-        if (!cloneMode) deleteCloneDirsFor(v, m_snapName);                  // the VM was switched off meanwhile: the clones of the interrupted run are not needed
+        if (!cloneMode) deleteCloneDirsFor(v, m_snapName);                  // a run that read in place has no clones: whatever is there is not ours to keep
     } else {
         unsigned char rb[5]; RandomBytes(rb, 5);
         Str newName = "VM2Backup-" + HexEncode(rb, 5), newRef;
@@ -1330,6 +1398,57 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
         if (f.hasInl) continue;
         if (!statFile(f, relogged)) { abandon(!transient); return false; }
     }
+    for (FileItem& f : m_list) f.vol = IsVolatileType(f.type);
+
+    // 3a. the configuration files: a continuation uses the bytes of the FIRST run, a first run reads them now (once) and keeps them
+    auto frozenKey = [&](const Vec<FileItem>& l) {
+        Str k = Str("esxi2|") + after.uuid + "|" + after.instUuid + "|" + m_snapRef + "|" + m_snapName + (cloneMode ? "|clone\n" : "|direct\n");
+        for (const FileItem& f : l) if (!(f.vol && (f.hasInl || f.size <= kMaxSavedFile))) k += f.arc + "|" + Str::fmt("%llu", (unsigned long long)f.size) + "\n";
+        return k;
+    };
+    bool merged = false, cfgChanged = false, nvChanged = false;
+    if (haveState) {
+        Str want;                                                           // the frozen files of the interrupted run, in its order
+        want = Str("esxi2|") + after.uuid + "|" + after.instUuid + "|" + m_snapRef + "|" + m_snapName + (cloneMode ? "|clone\n" : "|direct\n");
+        for (const SavedFile& sf : st.files) if (!sf.vol) want += sf.arc + "|" + Str::fmt("%llu", (unsigned long long)sf.size) + "\n";
+        // the frozen files of this run, in the same order as the saved ones
+        bool all = true;
+        Str have = Str("esxi2|") + after.uuid + "|" + after.instUuid + "|" + m_snapRef + "|" + m_snapName + (cloneMode ? "|clone\n" : "|direct\n");
+        for (const FileItem& f : m_list) {                                  // a file is "live" if the interrupted run kept it (it did not, when it was too big)
+            bool live = false; for (const SavedFile& sf : st.files) if (sf.arc == f.arc && sf.vol) live = true;
+            if (!live) have += f.arc + "|" + Str::fmt("%llu", (unsigned long long)f.size) + "\n";
+        }
+        if (want == have) {
+            Vec<FileItem> out;
+            for (const SavedFile& sf : st.files) {
+                const FileItem* fr = nullptr; for (const FileItem& f : m_list) if (f.arc == sf.arc && f.type == sf.type) { fr = &f; break; }
+                FileItem it; if (fr) it = *fr;
+                if (!fr && !sf.vol) { all = false; break; }
+                it.arc = sf.arc; it.type = sf.type; it.size = sf.size; it.mtime = sf.mtime; it.vol = sf.vol;
+                if (sf.hasInl) { it.hasInl = true; it.inl = sf.bytes; }
+                if (sf.vol && (!fr || fr->size != sf.size || fr->mtime != sf.mtime)) { cfgChanged = true; if (sf.type == "nvram") nvChanged = true; }
+                out.push_back(it);
+            }
+            for (const FileItem& f : m_list) if (f.vol) { bool known = false; for (const SavedFile& sf : st.files) if (sf.arc == f.arc) known = true; if (!known) cfgChanged = true; }
+            if (all) { m_list = out; merged = true; }
+        }
+        if (!merged) restartWhy = "the frozen state of the VM (the snapshot, its disks, the list of the disks) is not what the interrupted backup copied";
+    }
+    if (!merged) {
+        size_t budget = kMaxSavedTotal;
+        for (FileItem& f : m_list) {
+            if (!f.vol || f.hasInl) continue;
+            if (f.size > kMaxSavedFile || f.size > budget) { f.vol = false; continue; }          // too big to keep: it is streamed and counts as frozen
+            bool got = false;
+            for (int attempt = 0; attempt < 3 && !got; ++attempt) {
+                Bytes b;
+                if (readSmall(f.ds, f.path, b, false, kMaxSavedFile)) { if (b.size() > kMaxSavedFile || b.size() > budget) { m_files->close(); break; } budget -= b.size(); f.inl = b; f.size = b.size(); f.hasInl = true; got = true; err.clear(); transient = false; break; }
+                if (!transient || attempt == 2) { abandon(!transient); return false; }
+                Sleep(300);
+            }
+            if (!got) f.vol = false;                                         // grew past the limit meanwhile: streamed, frozen
+        }
+    }
 
     // 4. meta file and fingerprint: fixed now, because the stream must be the same on every pass
     Json meta = Json::object();
@@ -1345,14 +1464,27 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
     for (const FileItem& f : m_list) { Json o = Json::object(); o["name"] = f.name; o["path"] = f.arc; if (f.origArc != f.arc) o["orig_path"] = f.origArc; o["size"] = f.size; o["type"] = f.type; fl.push(o); }
     meta["files"] = fl; meta["disks"] = disksMeta; meta["ignored_files"] = ignored;
     m_meta = meta.dump(true); m_metaTime = (i64)now;
+    if (merged) { m_meta = st.meta; m_metaTime = st.metaTime; }               // the meta file of the first run, byte for byte: the finished volumes hold it
     m_prefix = EsxiArchivePrefix(vm);
 
-    Str fp = "esxi|" + after.uuid + "|" + after.instUuid + "|" + m_snapRef + "|" + m_snapName + "\n";
-    for (const FileItem& f : m_list) fp += f.arc + "|" + Str::fmt("%llu", (unsigned long long)f.size) + "\n";
+    Str fp = frozenKey(m_list);                                             // the fingerprint covers the frozen state only: the live configuration files do not change it
     u8 h[32]; Sha256(fp.data(), fp.size(), h);
     fingerprint = "esxi:" + HexEncode(h, 32);
     token = m_snapRef + "|" + m_snapName;
+    if (merged) token = resumeToken;
+    else {
+        SavedState ns; ns.clone = cloneMode; ns.power = after.power; ns.meta = m_meta; ns.metaTime = m_metaTime;
+        for (const FileItem& f : m_list) { SavedFile sf; sf.arc = f.arc; sf.type = f.type; sf.size = f.size; sf.mtime = f.mtime; sf.vol = f.vol; if (f.hasInl) { sf.hasInl = true; sf.bytes = f.inl; } ns.files.push_back(sf); }
+        Str enc = SavedStateEncode(ns);
+        if (!enc.empty()) token += "|" + enc;
+    }
+    m_restartWhy = merged ? Str() : restartWhy;
     if (m_reused) { if (!warning.empty()) warning += "; "; warning += "continued with the snapshot of the interrupted run"; }
+    if (merged && (cfgChanged || st.power != after.power)) {
+        if (!warning.empty()) warning += "; ";
+        warning += (st.power != after.power || nvChanged) ? "the VM was powered off/on and its configuration files changed while the backup was paused: the archive keeps the configuration from the start of the backup"
+                                           : "the VM's configuration files changed while the backup was paused: the archive keeps the configuration from the start of the backup";
+    }
     m_begun = true;
     return true;
 }

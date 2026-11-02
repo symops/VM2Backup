@@ -123,7 +123,17 @@ def main():
         out['idle_match'] = lastR <= r['M'] <= lastR + 100
     out['copy_seconds'] = round((t1 - t0), 1) if t0 and t1 else None
     if opts.get('idle'): out['verdict'] = 'OK' if ok and out.get('idle_match') else 'BAD'
-    else: out['verdict'] = 'OK' if ok and out.get('stun_match', True) and out.get('clock_window_4s', [0, 0, True])[2] else 'BAD'
+    else:
+        out['verdict'] = 'OK' if ok and out.get('stun_match', True) and out.get('clock_window_4s', [0, 0, True])[2] else 'BAD'
+        # Часы гостя уходят от часов хоста на секунды, если перед снимком гость долго стоял (удаление СТАРОГО снимка = консолидация: «запись 4,2 с, пауза 12,9 с»; так бывает при перезапуске копии):
+        # окно по часам и выбор stun по ним тогда смещены. Запасная проверка без часов: самая длинная пауза гостя в окне ±12 с вокруг оценки момента снимка, и M ровно перед ней.
+        if out['verdict'] == 'BAD' and ok and tg:
+            wide = [x for x in ST if -12.0 < x[3] - tg < 12.0 and x[1] + x[2] >= 1000]
+            if wide:
+                w = max(wide, key=lambda x: x[1] + x[2])
+                if (w[0] - 3) <= r['M'] <= w[0]:
+                    out['stun_wide'] = {'seq': w[0], 'lat_ms': w[1], 'gap_ms': w[2], 'guest_time_vs_snapshot_s': round(w[3] - tg, 2)}
+                    out['M_vs_stun_wide'] = r['M'] - (w[0] - 1); out['clock_suspect'] = True; out['verdict'] = 'OK'
     print(json.dumps(out, ensure_ascii=False))
     if opts.get('json'): json.dump(out, open(opts['json'], 'w'), ensure_ascii=False, indent=1)
     return 0 if out['verdict'] == 'OK' else 1

@@ -2,8 +2,10 @@
 # Проверка на настоящем ESXi 7: гость ПИШЕТ на диск во время копии включённой ВМ (docs/ESXI.md, «Запись гостя во время копии»).
 #   tools/esxi7/guest-run.sh copy        2 режима копии (xz1; пароль + xz5 + тома 100 МБ) идут минуты, пока гость пишет; восстановление в папку, проверка «префикса»
 #   tools/esxi7/guest-run.sh host        копия + восстановление на ХОСТ ESXi; восстановленная ВМ загружается с проверяющего ISO и печатает «VERIFY OK seq<=S»
-#   tools/esxi7/guest-run.sh scenario    пауза посреди копии -> (A) продолжение при работающей ВМ, (B) ВМ выключена и включена -> продолжение
-#   tools/esxi7/guest-run.sh all    (SCEN="A B C" выбирает этапы сценария; C = ВМ выключается посреди передачи копии)
+#   tools/esxi7/guest-run.sh scenario    пауза посреди копии -> (A) продолжение при работающей ВМ, (B) ВМ выключена и включена -> продолжение ПО ТОМУ ЖЕ снимку,
+#                                        (D) ВМ выключена к моменту продолжения (диск читается из клона, ВМ потом включается), (E) три цикла выключить/включить,
+#                                        (F) негативный контроль: снимок пересоздан -> копия начинается заново, (G) негативный контроль: замороженный клон изменён -> заново
+#   tools/esxi7/guest-run.sh all    (SCEN="A B C D E F G" выбирает этапы сценария; C = ВМ выключается посреди передачи копии)
 # Нужно: ESXi запущен (vm.sh start), setup-guest.sh и guest-setup.sh выполнены (ВМ vm2b-guest включена, serial показывает «RUN start»), wine64, sshpass, numpy.
 # Результат: .winvm-results/esxi7-guest-<дата>/ (сырые журналы: наблюдатель хоста, serial гостя, вывод тестов; сводка analyse.py).  Пароль нигде не печатается.
 set -e
@@ -78,9 +80,12 @@ m = re.search(r'VERIFYRESULT M=(\d+) .*violations=(\d+)', t); ok = 'VERIFY OK se
 print('ВОССТАНОВЛЕННАЯ ВМ: гость сообщил M=%s violations=%s, M копии в папке=%s, «VERIFY OK seq<=S»: %s -> %s' % (m and m.group(1), m and m.group(2), a['M'], ok, 'OK' if ok and m and int(m.group(1)) == a['M'] else 'BAD'))
 PY
 }
-wait_writing() { # гость пишет: файл serial менялся в последние 15 с, и каждому BOOT соответствует RUN start (serial при включении ДОПИСЫВАЕТСЯ, старые строки остаются)
-  for i in $(seq 1 300); do
-    $S "F=$SER; [ \$((\$(date +%s) - \$(stat -c %Y \$F))) -lt 15 ] && [ \$(grep -c '^BOOT' \$F) -eq \$(grep -c '^RUN start' \$F) ]" 2>/dev/null && return 0; sleep 6
+wait_writing() { # гость пишет: число строк «R seq» в serial РАСТЁТ за 12 с (serial при включении ДОПИСЫВАЕТСЯ, старые строки остаются; при включении ВМ файл «меняется», пока гость ещё грузится, и BOOT/RUN прежней загрузки на месте: по ним и по времени файла загрузку не отличить)
+  for i in $(seq 1 400); do
+    n1=$($S "grep -c '^R seq' $SER" 2>/dev/null) || { sleep 6; continue; }
+    sleep 12
+    n2=$($S "grep -c '^R seq' $SER" 2>/dev/null) || continue
+    [ -n "$n1" ] && [ -n "$n2" ] && [ "$n2" -gt "$n1" ] && $S "[ \$(grep -c '^BOOT' $SER) -eq \$(grep -c '^RUN start' $SER) ]" && return 0
   done; return 1
 }
 cmd_scenario() {
@@ -88,24 +93,37 @@ cmd_scenario() {
   for kind in $KINDS; do
     wait_writing || { echo "гость не пишет"; exit 1; }
     case $kind in
-    A|B)
-      if [ $kind = B ]; then export EXPECT_RESUME=0; else export EXPECT_RESUME=1; fi
+    A|B|D|E|F|G)
+      case $kind in F|G) export EXPECT_RESUME=0 ;; *) export EXPECT_RESUME=1 ;; esac
       cfg pause$kind "${MBIT_S:-20}" 100
       watch_start; run_test esxireal_guest_stage_pause
       $S "cat $SER" > "$RES/serial-pause$kind-before.log"; host_state | tee -a "$RES/host-state.txt"
-      if [ $kind = A ]; then echo "--- A: ВМ работает, копия на паузе 40 с"; sleep 40
-      else
-        echo "--- B: ВМ выключается посреди копии, 20 с, включается (загрузка идёт, пока копия продолжается)"
+      case $kind in
+      A) echo "--- A: ВМ работает, копия на паузе 40 с"; sleep 40 ;;
+      B)
+        echo "--- B: ВМ выключается посреди паузы, 20 с, включается (загрузка идёт, пока копия продолжается): .vmx переписан хостом, продолжение обязано идти по ПЕРВОМУ снимку"
         $S "ID=\$(vim-cmd vmsvc/getallvms | grep ' vm2b-guest ' | cut -d' ' -f1); vim-cmd vmsvc/power.off \$ID | tail -1; sleep 3" ; host_state | tee -a "$RES/host-state.txt"; sleep 20
-        $S "ID=\$(vim-cmd vmsvc/getallvms | grep ' vm2b-guest ' | cut -d' ' -f1); vim-cmd vmsvc/power.on \$ID | tail -1"
-      fi
+        $S "ID=\$(vim-cmd vmsvc/getallvms | grep ' vm2b-guest ' | cut -d' ' -f1); vim-cmd vmsvc/power.on \$ID | tail -1" ;;
+      D)
+        echo "--- D: ВМ выключается и ОСТАЁТСЯ выключенной к моменту продолжения (клон замороженного состояния читается, ВМ не нужна)"
+        $S "ID=\$(vim-cmd vmsvc/getallvms | grep ' vm2b-guest ' | cut -d' ' -f1); vim-cmd vmsvc/power.off \$ID | tail -1; sleep 3; ls -la $VMDIR | grep -E 'vmx|nvram'" | tee -a "$RES/host-state.txt"; sleep 15 ;;
+      E)
+        echo "--- E: три цикла выключить/включить посреди паузы"
+        for i in 1 2 3; do
+          $S "ID=\$(vim-cmd vmsvc/getallvms | grep ' vm2b-guest ' | cut -d' ' -f1); vim-cmd vmsvc/power.off \$ID | tail -1; sleep 2; ls -la $VMDIR | grep -E 'vmx\$|nvram'; vim-cmd vmsvc/power.on \$ID | tail -1; sleep 8" | tee -a "$RES/host-state.txt"
+        done ;;
+      F)
+        echo "--- F (негативный контроль): снимок VM2Backup-* удалён и создан новый -> продолжать нельзя"
+        $S "ID=\$(vim-cmd vmsvc/getallvms | grep ' vm2b-guest ' | cut -d' ' -f1); vim-cmd vmsvc/snapshot.removeall \$ID | tail -1; vim-cmd vmsvc/snapshot.create \$ID VM2Backup-0123456789 negative-control 0 0 | tail -1; vim-cmd vmsvc/snapshot.get \$ID | head -4" | tee -a "$RES/host-state.txt" ;;
+      G)
+        echo "--- G (негативный контроль): замороженный клон изменён (в конец дописан байт) -> продолжать нельзя"
+        $S "cd $VMDIR/VM2Backup-*/ && ls -la && printf x >> d0-flat.vmdk && ls -la" | tee -a "$RES/host-state.txt" ;;
+      esac
       run_test esxireal_guest_stage_resume; watch_stop "$RES/watch-pause$kind.log"
       $S "cat $SER" > "$RES/serial-pause$kind.log"; host_state | tee -a "$RES/host-state.txt"
-      if [ $kind = A ]; then analyse pauseA "$OUT/restored-pauseA/vm2b-guest/vm2b-guest-flat.vmdk" "$RES/watch-pauseA.log" "$RES/serial-pauseA.log"
-      else
-        # B: после выключения/включения копия началась заново с НОВЫМ снимком, пока гость ещё грузился (не писал): диск = состояние на момент выключения
-        analyse pauseB "$OUT/restored-pauseB/vm2b-guest/vm2b-guest-flat.vmdk" "$RES/watch-pauseB.log" "$RES/serial-pauseB-before.log" "--idle 1"
-      fi ;;
+      # копия = состояние диска на момент снимка (первого для A B D E, нового для F G): M = последняя запись гостя до его остановки на снимке
+      analyse pause$kind "$OUT/restored-pause$kind/vm2b-guest/vm2b-guest-flat.vmdk" "$RES/watch-pause$kind.log" "$RES/serial-pause$kind.log"
+      if [ $kind = D ]; then $S "ID=\$(vim-cmd vmsvc/getallvms | grep ' vm2b-guest ' | cut -d' ' -f1); vim-cmd vmsvc/power.on \$ID | tail -1"; fi ;;
     C)
       cfg fullC "${MBIT_S:-20}" 100; unset EXPECT_RESUME
       watch_start
@@ -125,6 +143,7 @@ copy) cmd_copy ;;
 host) cmd_host ;;
 scenario) cmd_scenario ;;
 rerun-b-c) SCEN="B C" cmd_scenario ;;
+rerun) SCEN="${SCEN:-B D E F G}" cmd_scenario ;;
 all) cmd_copy; cmd_host; cmd_scenario ;;
 *) sed -n 2,8p "$0" ;;
 esac

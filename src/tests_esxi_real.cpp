@@ -427,7 +427,7 @@ static GScan GuestScan(const Str& path)
     }
     r.seed = Str::fmt("%llx", (unsigned long long)seed); r.valid = true; return r;
 }
-struct GuestCfg { Str vm, out, tag, restoreName; double mbit = 0; int pauseMB = 100; bool expectResume = true; };
+struct GuestCfg { Str vm, out, tag, restoreName; double mbit = 0; int pauseMB = 100; bool expectResume = true; };   // expect_resume: true - копия ОБЯЗАНА продолжиться по снимку первого запуска; false - негативный контроль: продолжать нельзя, копия начинается заново
 static bool LoadGuest(Ctx& c, GuestCfg& g)
 {
     if (c.servers.is_null() || !c.servers.has("esxi_guest")) { c.skip("нет ключа \"esxi_guest\" (tools/esxi7/guest-run.sh)"); return false; }
@@ -437,6 +437,7 @@ static bool LoadGuest(Ctx& c, GuestCfg& g)
     g.expectResume = !j.has("expect_resume") || j.get("expect_resume").boolean();
     return !g.out.empty();
 }
+struct RPr : Pr { int doneVols = 0; u64 doneRaw = 0; void onResume(int v, u64 raw) override { Pr::onResume(v, raw); doneVols = v; doneRaw = raw; } };
 struct GPr : Pr { double tFirst = 0; void onBytes(u64 n) override { if (tFirst == 0) tFirst = UnixNow(); Pr::onBytes(n); } };
 static void GuestReport(Ctx& c_, const char* tag, const GScan& s)
 {
@@ -551,13 +552,18 @@ VM2B_TEST("esxireal", esxireal_guest_stage_resume)
     BackupOptions o; o.kdfIterations = 3000; o.verify = false; o.codec.level = 1; o.allowLive = true; o.segmentBytes = (u64)512 * 2000;
     RateLimiter lim; if (g.mbit > 0) { lim.setMbit(g.mbit); o.limiter = &lim; }
     Str err; VmSource* src = NewEsxiSource(r.cfg(), err); T_CHECK(src != nullptr); if (!src) return false;
-    Target* t = LocalAtR(store); Manifest man; Str warn; Pr pr; double t0 = UnixNow();
+    Target* t = LocalAtR(store); Manifest man; Str warn; RPr pr; double t0 = UnixNow();
     bool ok = BackupVm(*src, g.vm, *t, o, &pr, man, warn, err);
     c_.note("GUESTRUN %s: продолжение %s, возобновлений %d, unix=%.3f..%.3f; ошибка: %s; предупреждение: %s", g.tag.c_str(), ok ? "готово" : "НЕ УДАЛОСЬ", pr.resumes, t0, UnixNow(), err.c_str(), warn.c_str());
     T_CHECK(ok);
-    // expect_resume = false: ВМ выключали и включали, пока копия стояла на паузе. ESXi при первом выключении/включении переписывает .vmx (размер меняется) -> отпечаток ВМ другой, и копия честно начинается заново с НОВЫМ снимком; при неизменном .vmx копия продолжается по прежнему снимку.
-    // при expect_resume = false любой исход допустим (оба согласованы; результат разбирает analyse.py): продолжение (resumes >= 1) или честный перезапуск с новым снимком (resumes = 0)
-    c_.note("возобновлений: %d", pr.resumes); if (g.expectResume) T_CHECK(pr.resumes >= 1); delete src;
+    // ESXi при первом выключении/включении ВМ переписывает .vmx (1972 -> 1994 байта), меняет .nvram. Отпечаток считается по ЗАМОРОЖЕННОМУ состоянию (снимок, диски), конфигурация берётся из состояния возобновления:
+    // expect_resume = true: копия обязана продолжиться по снимку первого запуска (готовые тома не копируются заново), с предупреждением о смене конфигурации, если ВМ выключали/включали;
+    // expect_resume = false (негативный контроль: снимок пересоздан, замороженный клон изменён): продолжения нет (resumes = 0), копия начинается заново и сообщает почему, склейки несовместимых томов нет.
+    c_.note("возобновлений: %d, готовых томов при продолжении: %d (%llu байт потока), предупреждение о смене конфигурации: %d, о перезапуске: %d", pr.resumes, pr.doneVols, (unsigned long long)pr.doneRaw,
+            (int)Has(warn, "configuration from the start of the backup"), (int)Has(warn, "could not be continued"));
+    if (g.expectResume) { T_CHECK(pr.resumes == 1); T_CHECK(pr.doneVols > 0); T_CHECK(Has(warn, "continued with the snapshot")); T_CHECK(!Has(warn, "could not be continued")); }
+    else { T_CHECK(pr.resumes == 0); T_CHECK(Has(warn, "could not be continued")); }
+    delete src;
     if (ok) {
         Str re; Manifest rm; T_CHECK(RestoreBackup(*t, man.archive, dest, o.password, nullptr, &rm, re));
         GScan s = GuestScan(JoinPath(JoinPath(dest, EsxiArchivePrefix(g.vm)), g.vm + "-flat.vmdk")); GuestReport(c_, g.tag.c_str(), s); T_CHECK(s.valid); T_CHECK(s.viol == 0);

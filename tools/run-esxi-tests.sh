@@ -7,7 +7,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 EXE=$ROOT/build/x64/vm2bautotest.exe
 if [ "$1" = "--exe" ]; then EXE=$2; shift 2; fi
 PY=python3
-RUN=$(mktemp -d /tmp/vm2b-esxi-run.XXXXXX)
+RUN=$(mktemp -d "${TMPDIR:-/tmp}/vm2b-esxi-run.XXXXXX")
 PIDS=$RUN/pids
 cleanup() { if [ -f "$PIDS" ]; then for p in $(cat "$PIDS"); do kill "$p" 2>/dev/null || true; done; fi; if [ -n "$VM2B_KEEP_MOCK_LOGS" ]; then mkdir -p "$VM2B_KEEP_MOCK_LOGS"; for d in "$RUN"/*/; do [ -f "$d/mock.log" ] && cp "$d/mock.log" "$VM2B_KEEP_MOCK_LOGS/$(basename "$d").log"; done; fi; rm -rf "$RUN"; }
 trap cleanup EXIT INT TERM
