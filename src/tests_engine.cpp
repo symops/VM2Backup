@@ -565,7 +565,8 @@ VM2B_TEST("resume", xz_encrypted_tiny_volumes_survive_connection_loss)
         Str store = tmp.sub("store");
         Manifest m; Str w, err; CountProgress pr; bool ok;
         if (later) {
-            FlakyTarget* ft = new FlakyTarget(LocalTargetAt(store), &c_, 1, 20000, 200000);
+            // the connection is lost for good only after at least one whole volume is on the target (a fault inside the first volume leaves nothing to continue: resumes would be 0)
+            FlakyTarget* ft = new FlakyTarget(LocalTargetAt(store), &c_, 1, o.segmentBytes * 2 + 20000, o.segmentBytes * 2 + 200000);
             VmSource* src = NewDirectorySource(root); T_CHECK(!BackupVm(*src, "vm", *ft, o, nullptr, m, w, err)); T_CHECK(ft->faults == 1); delete src; delete ft;
             o.retry = FastRetry();
         }
@@ -574,6 +575,7 @@ VM2B_TEST("resume", xz_encrypted_tiny_volumes_survive_connection_loss)
         ok = BackupVm(*src, "vm", *ft, o, &pr, m, w, err);
         if (!ok) c_.note("backup: %s (faults %d, retries %d, vol %d)", err.c_str(), ft->faults, pr.retries, pr.volumes);
         T_CHECK(ok); T_CHECK(CountNames(*ft->in, ".part") == 0); T_CHECK(CountNames(*ft->in, ".resume") == 0);
+        if (later && pr.resumes != 1) c_.note("round %d: resumes %d (faults %d, retries %d, volumes %d, segmentBytes %llu, xz level %d)", round, pr.resumes, ft->faults, pr.retries, pr.volumes, (unsigned long long)o.segmentBytes, o.codec.level);
         if (later) T_CHECK(pr.resumes == 1);
         if (ok) {
             T_CHECK(m.codec == "xz"); T_CHECK(m.segments.size() > 3);

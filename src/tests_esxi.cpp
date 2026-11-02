@@ -2586,7 +2586,7 @@ VM2B_TEST("esxi", esxi_vm_with_sixty_disks)
             for (const FI& f : vf) if (f.rel.ends_with(".vmx")) { Bytes vb; Str ve; ReadWholeFile(f.full.c_str(), vb, ve); vmxText = Str((const char*)vb.data(), vb.size()); }
             int present = 0; for (int i = 0; i < nd; ++i) if (!VmxValue(vmxText, Str::fmt("scsi0:%d.fileName", i)).empty()) ++present;
             T_CHECK(present == nd);
-            for (const FI& b : before) { if (Excluded(b.rel) || b.rel.ends_with(".vmx") || b.rel.ends_with(".vmsd") || b.rel.find("-0000") >= 0 || b.rel.ends_with(".vmsn")) continue; const FI* g = FindFi(vf, b.rel); if (!g || g->sha != b.sha) { c_.note("not restored right: %s", b.rel.c_str()); T_CHECK(false); break; } }
+            for (const FI& b : before) { if (Excluded(b.rel) || b.rel.ends_with(".vmx") || b.rel.ends_with(".vmsd") || b.rel.find("-0000") >= 0 || b.rel.ends_with(".vmsn")) continue; const FI* g = FindFi(vf, b.rel); if (g && g->sha != b.sha && b.rel.ends_with(".vmdk") && !b.rel.ends_with("-flat.vmdk") && CloneDescriptorOf(g->full, b.full)) continue; if (!g || g->sha != b.sha) { c_.note("not restored right: %s", b.rel.c_str()); T_CHECK(false); break; } }
         }
     }
     T_CHECK(ctl.leaked() == 0);

@@ -853,13 +853,15 @@ private:
         int r = text.find('"', (size_t)q + 1); if (r < 0) return false;
         val = text.substr((size_t)q + 1, (size_t)(r - q - 1)); return true;
     }
-    bool readSmall(const Str& ds, const Str& path, Bytes& out) {
+    bool readSmall(const Str& ds, const Str& path, Bytes& out, bool allowHtml = false) {
         HttpHeaders h; HttpResponse r;
         if (!FolderRequest(*m_files, "GET", EsxiFolderUrl(ds, path, m_dc), h, r, m_host, m_port)) return failHttp(*m_files);
-        if (r.status == 401 || r.status == 403) { m_files->close(); m_loggedIn = false; if (!ensureSession()) return false; return readSmall(ds, path, out); }
+        if (r.status == 401 || r.status == 403) { m_files->close(); m_loggedIn = false; if (!ensureSession()) return false; return readSmall(ds, path, out, allowHtml); }
         if (r.status != 200) { m_files->close(); return fail(Str::fmt("reading [%s] %s: HTTP %d", ds.c_str(), path.c_str(), r.status), r.status >= 500); }
+        if (!allowHtml && r.headers.value("Content-Type").lower().find("text/html") >= 0) { m_files->close(); return fail("reading [" + ds + "] " + path + ": the server answered with an HTML page instead of the file", true); }
         out.clear(); Bytes b; b.resize(65536);
         for (;;) { i64 k = r.body->read(b.data(), b.size()); if (k < 0) { m_files->close(); return fail("reading [" + ds + "] " + path + ": " + r.body->err, r.body->transient); } if (k == 0) break; for (i64 j = 0; j < k; ++j) out.push_back(b[(size_t)j]); if (out.size() > (1u << 20)) break; }
+        if (r.contentLength >= 0 && (i64)out.size() != r.contentLength && out.size() <= (1u << 20)) { m_files->close(); return fail(Str::fmt("reading [%s] %s: the server delivered %lld of %lld bytes", ds.c_str(), path.c_str(), (long long)out.size(), (long long)r.contentLength), true); }
         return true;
     }
     bool headFile(const Str& ds, const Str& path, i64& size) {
@@ -906,7 +908,7 @@ private:
         Str vmDir = vmPath.substr(0, (size_t)sl);
         Str e = err; bool t = transient; int n = 0;
         Bytes page;
-        if (readSmall(vmDs, vmDir + "/", page)) {
+        if (readSmall(vmDs, vmDir + "/", page, true)) {
             Str html((const char*)page.data(), page.size());
             size_t pos = 0;
             for (;;) {
@@ -999,6 +1001,7 @@ private:
         }
         for (CloneInfo& c : m_clones) {                                             // the descriptor texts (the clone's own, made reproducible later in buildFiles)
             if (!readSmall(c.ds, c.descPath, c.desc)) return false;
+            { Str dt((const char*)c.desc.data(), c.desc.size()); if (!dt.starts_with("# Disk DescriptorFile") || dt.find("\nRW ") < 0) return fail("the clone's descriptor " + c.descPath + " is not a disk descriptor (a damaged answer)", true); }
             Bytes orig; Str ods, op; EsxiParseDsPath(c.srcDesc, ods, op);
             if (readSmall(ods, op, orig)) { Str a, t((const char*)orig.data(), orig.size()); if (ddbValue(t, "ddb.adapterType", a)) c.adapter = a; }
             else { err.clear(); }
