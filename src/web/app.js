@@ -678,14 +678,15 @@ function createApp(env) {
         var verify = chk('Verify the backup after it is made', el.verify !== false);
         var transport = h('div', { class: 'note' });
         var snap = el.snapshot || {};
-        var hot = chk('Back up while the VM is running (hot backup)', snap.hot_backup === true), forceOff = chk('If the guest does not shut down, power it off (like pulling the plug)', snap.force_off === true), shutTimeout = num(snap.shutdown_timeout || 300, 10);
+        var hot = chk('Back up while the VM is running (hot backup)', snap.hot_backup === true), forceOff = chk('If the guest does not shut down, power it off (like pulling the plug)', snap.force_off === true), shutTimeout = num(snap.shutdown_timeout || 300, 10); shutTimeout.style.width = '90px';
         var quiesce = chk('Quiesce the guest file system (needs VMware Tools in the VM)', snap.quiesce !== false), memory = chk('Include the memory of the virtual machine in the snapshot', !!snap.memory), history = chk('Also back up the existing snapshots of the VM', snap.history !== false), snapDc = txt(el.source.datacenter || '');
         var snapNote = h('div', { class: 'note' }), liveRow = h('div', { class: 'f' }, live);
+        var forceRow = h('div', { class: 'f' }, forceOff), shutRow = field('Wait for the guest to shut down, seconds', shutTimeout, 'The default is 300; a longer wait helps a guest that needs minutes to stop its services.');
         var hotNote = h('div', { class: 'note bad', text: T('Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.') });
         var forceNote = h('div', { class: 'note bad', text: T('Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.') });
         var lockNote = h('div', { class: 'note', text: T('A vCenter locks the VM against power-on and changes for the whole backup. A standalone ESXi host does not allow that (DisableMethods is not supported): there the VM is shut down and marked as held, and another administrator can still power it on or change it; the next run notices that and starts the copy over.') });
         var snapBox = h('div', null, h('fieldset', null, h('legend', { text: T('Virtual machine during the backup') }), h('div', { class: 'f' }, hot), hotNote, lockNote,
-            h('div', { class: 'f' }, forceOff), forceNote, field('Wait for the guest to shut down, seconds', shutTimeout, 'The default is 300; a longer wait helps a guest that needs minutes to stop its services.')),
+            forceRow, forceNote, shutRow),
             h('fieldset', null, h('legend', { text: T('Snapshot') }), h('div', { class: 'f' }, quiesce), h('div', { class: 'f' }, memory), h('div', { class: 'f' }, history),
             h('div', { class: 'note', text: T('Without it, the memory files of the other snapshots, the side branches of the snapshot tree and the snapshot list are left out; the disks the current state depends on are always copied.') }),
             h('div', { class: 'note', text: T('A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.') })), field('Datacenter', snapDc, 'vCenter only; empty = the one of the server'));
@@ -701,6 +702,7 @@ function createApp(env) {
             var isHot = hot.input.checked;
             quiesce.input.disabled = !vm || !isHot; memory.input.disabled = !vm || !isHot;
             forceOff.input.disabled = !vm || isHot; shutTimeout.disabled = !vm || isHot;
+            forceRow.style.display = forceNote.style.display = shutRow.style.display = isHot ? 'none' : '';     // the shutdown options belong to the cold backup only
         }
         hot.input.addEventListener('change', function () { var sv = srvOf(srcSel.value), ty = sv ? sv.type : ''; updateHot(ty === 'esxi' || ty === 'vcenter'); });
         function updateSource() {

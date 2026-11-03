@@ -605,6 +605,64 @@ function makeEnv(router, lang) {
         ok(sent.elements[0].enabled === false && sent.elements[0].id === 'id2' && sent.elements[2].id === undefined, 'task: the element switch is sent, the copy has no id (the service makes one)');
     }
 
+    // 16b. cold (default) / hot backup on the Snapshot tab, English and Russian: the checkbox and the warning under it, which fields belong to which mode, the state survives save and reopen
+    for (const lang of ['en', 'ru']) {
+        const T = k => lang === 'ru' ? STRINGS.ru[k] || k : k;
+        const b = backend('admin', { 'servers.list': [{ id: 'local', name: 'Local Computer', type: 'local' }, { id: 'e1', name: 'ESX', type: 'esxi' }], 'servers.vms': { vms: [{ name: 'vm-a', state: 'running', size: 1024 }] }, 'tasks.save': {} });
+        t = makeEnv(b.r, lang === 'ru' ? 'ru-RU' : 'en-US'); app = createApp(t.env); await app.start(t.root); app.setLang(lang);
+        let inputs = find(t.root, x => x.tagName === 'input'); inputs[0].value = 'u'; inputs[1].value = 'good'; find(t.root, x => x.tagName === 'form')[0].submit(); await sleep(20);
+        inputs[2].value = '1'; find(t.root, x => x.tagName === 'form')[0].submit(); await sleep(60);
+        const ov = () => find(t.root, x => x.className === 'overlay').pop();
+        const labelInput = (txt) => { const l = find(ov(), x => x.tagName === 'label' && x.textContent.indexOf(txt) >= 0)[0]; return l ? find(l, x => x.tagName === 'input')[0] : null; };
+        const row = (n) => { let x = n; while (x && !(x.className === 'f')) x = x.parentNode; return x; };
+        const hotTxt = T('Back up while the VM is running (hot backup)'), qTxt = T('Quiesce the guest file system (needs VMware Tools in the VM)'), memTxt = T('Include the memory of the virtual machine in the snapshot'), hisTxt = T('Also back up the existing snapshots of the VM'), frcTxt = T('If the guest does not shut down, power it off (like pulling the plug)');
+        const el = { id: 'cx1', type: 'backup', enabled: true, source: { server: 'e1', vms: ['vm-a'] }, target: { server: 'local', directory: 'D:\\B\\{VM}' }, compress: { codec: 'xz' }, encrypt: { enabled: false }, keep: 0, verify: true, segment_mib: 256, speed_mbit: 0, on_error_next: true };   // no snapshot key at all
+        let got = null; app.vmBackupDialog({ element: el, onOk: (e) => { got = e; } }); await sleep(60);
+        const hot = labelInput(hotTxt), q = labelInput(qTxt), mem = labelInput(memTxt), his = labelInput(hisTxt), frc = labelInput(frcTxt);
+        ok(hot && q && mem && his && frc, lang + ': the hot checkbox, quiesce, memory, history and force-off boxes exist');
+        const warn = find(ov(), x => x.className.indexOf('note') >= 0 && x.textContent.indexOf(lang === 'ru' ? 'Горячий бэкап' : 'Hot backup') === 0)[0];
+        ok(warn && warn.textContent === T('Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.'), lang + ': the warning text under the checkbox');
+        ok(warn && warn.className.indexOf('bad') >= 0, lang + ': the warning is shown in the warning colour');
+        if (lang === 'ru') ok(warn && /[А-Яа-я]/.test(warn.textContent) && /Горячий бэкап/.test(warn.textContent), 'ru: the warning is in Russian');
+        // default = cold: hot off; quiesce / memory unavailable, the shutdown options visible, history available in both modes
+        ok(hot.checked === false && q.disabled === true && mem.disabled === true && his.disabled === false, lang + ': cold by default: quiesce / memory are blocked, history is open');
+        ok(frc.disabled === false && row(frc).style.display !== 'none', lang + ': cold: the force-off option is visible and enabled');
+        // hot on: the other way round
+        hot.checked = true; hot.fire('change');
+        ok(q.disabled === false && mem.disabled === false && his.disabled === false && frc.disabled === true && row(frc).style.display === 'none', lang + ': hot: quiesce / memory open, the shutdown options hidden');
+        buttons(ov(), 'OK')[0].click(); await sleep(10);
+        ok(got && got.snapshot.hot_backup === true && got.snapshot.force_off === false && typeof got.snapshot.shutdown_timeout === 'number', lang + ': hot_backup true is saved: ' + JSON.stringify(got && got.snapshot));
+        // reopen: the state is kept; back to cold with force-off and a timeout
+        const saved = got; got = null; app.vmBackupDialog({ element: saved, onOk: (e) => { got = e; } }); await sleep(60);
+        const hot2 = labelInput(hotTxt), frc2 = labelInput(frcTxt);
+        ok(hot2.checked === true && frc2.disabled === true, lang + ': reopened: the hot box is still on');
+        hot2.checked = false; hot2.fire('change'); frc2.checked = true;
+        const tmo = find(ov(), x => x.tagName === 'input' && x.attributes.type === 'number' && x.value === '300')[0]; tmo.value = '600';
+        buttons(ov(), 'OK')[0].click(); await sleep(10);
+        ok(got && got.snapshot.hot_backup === false && got.snapshot.force_off === true && got.snapshot.shutdown_timeout === 600, lang + ': cold with force-off and a timeout is saved: ' + JSON.stringify(got && got.snapshot));
+        const saved2 = got; got = null; app.vmBackupDialog({ element: saved2, onOk: (e) => { got = e; } }); await sleep(60);
+        ok(labelInput(hotTxt).checked === false && labelInput(frcTxt).checked === true && labelInput(qTxt).disabled === true, lang + ': reopened: cold, force-off on, quiesce blocked');
+        buttons(ov(), 'Cancel')[0] && buttons(ov(), 'Cancel')[0].click();
+    }
+    // the level selector of a task: "Use the global setting" + 0..9, a missing key stays missing
+    {
+        const b = backend('admin', { 'servers.list': [{ id: 'local', name: 'Local Computer', type: 'local' }, { id: 'e1', name: 'ESX', type: 'esxi' }], 'servers.vms': { vms: [{ name: 'vm-a', size: 1 }] }, state: { version: '1', now: 1000, jobs: [], settings: { level: 7 }, scheduler: false, data_dir: 'C:\\x' } });
+        t = makeEnv(b.r); app = createApp(t.env); await app.start(t.root); app.setLang('en');
+        let inputs = find(t.root, x => x.tagName === 'input'); inputs[0].value = 'u'; inputs[1].value = 'good'; find(t.root, x => x.tagName === 'form')[0].submit(); await sleep(20);
+        inputs[2].value = '1'; find(t.root, x => x.tagName === 'form')[0].submit(); await sleep(60);
+        const ov = () => find(t.root, x => x.className === 'overlay').pop();
+        const el = { id: 'cx2', type: 'backup', enabled: true, source: { server: 'e1', vms: ['vm-a'] }, target: { server: 'local', directory: 'D:\\B\\{VM}' }, compress: { codec: 'xz' }, encrypt: { enabled: false }, keep: 0, verify: true, segment_mib: 256, speed_mbit: 0, on_error_next: true };
+        let got = null; app.vmBackupDialog({ element: el, onOk: (e) => { got = e; } }); await sleep(60);
+        const lv = find(ov(), x => x.tagName === 'select' && x.options.some(o => o.textContent.indexOf('Use the global setting') === 0))[0];
+        ok(lv && lv.options.length === 11 && lv.options[0].value === '' && lv.options[1].textContent === '0 - Fastest' && lv.options[10].textContent === '9 - Maximum' && lv.value === '', 'level: "Use the global setting" + 0..9, the default is the global setting');
+        ok(lv && /^Use the global setting \(\d\)$/.test(lv.options[0].textContent), 'level: the global level is shown: ' + (lv && lv.options[0].textContent));
+        buttons(ov(), 'OK')[0].click(); await sleep(10); ok(got && got.compress && !('level' in got.compress), 'level: a task without a level keeps no level key: ' + JSON.stringify(got && got.compress));
+        const el0 = JSON.parse(JSON.stringify(el)); el0.compress.level = 0; got = null; app.vmBackupDialog({ element: el0, onOk: (e) => { got = e; } }); await sleep(60);
+        const lv0 = find(ov(), x => x.tagName === 'select' && x.options.some(o => o.textContent.indexOf('Use the global setting') === 0))[0];
+        ok(lv0 && lv0.value === '0', 'level: level 0 is shown as 0, not as "global"'); buttons(ov(), 'OK')[0].click(); await sleep(10);
+        ok(got && got.compress.level === 0, 'level: level 0 is saved as 0');
+    }
+
     // 17. sticky errors, test-connection dialog, scheduler notice, history filter / details / HTML report, settings fields
     {
         const EV = ['<img src=x onerror=alert(1)>', '"><script>alert(2)</script>'];
