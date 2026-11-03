@@ -3,12 +3,14 @@
 (the default resource pool)	(domyślna pula zasobów)
 (the root VM folder)	(główny folder maszyn wirtualnych)
 A PKCS#12 file (.pfx) with the certificate and its private key, 1 MB at most. Only the certificate itself is served, not the chain.	Plik PKCS#12 (.pfx) z certyfikatem i kluczem prywatnym, maksymalnie 1 MB. Udostępniany jest tylko sam certyfikat, bez łańcucha.
+A VM that is held for a backup is shut down and locked by VM2Backup until the copy is finished or cancelled.	Maszyna wirtualna przetrzymywana na potrzeby kopii zapasowej jest wyłączona i zablokowana przez VM2Backup, dopóki kopiowanie się nie zakończy lub nie zostanie anulowane.
 A mapped drive letter (Z:) cannot be used: the service does not see it. Choose "Network drive..." to use its UNC path, or enter the UNC path.	Nie można użyć zmapowanej litery dysku (Z:): usługa jej nie widzi. Wybierz „Dysk sieciowy...”, aby użyć jego ścieżki UNC, lub wpisz ścieżkę UNC.
 A new certificate was created. Your browser will ask you to trust it again.	Utworzono nowy certyfikat. Przeglądarka ponownie poprosi o jego zaufanie.
 A new user needs a password.	Nowy użytkownik wymaga hasła.
 A path on the server computer	Ścieżka na komputerze serwera
 A path on the server computer (the service reads it)	Ścieżka na komputerze serwera (odczytuje ją usługa)
 A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	Działająca maszyna ESXi / vCenter jest kopiowana z tymczasowej migawki, która potem jest usuwana. Bez VMware Tools migawka z wyciszeniem kończy się błędem: wyłącz wyciszanie dla takich maszyn.
+A vCenter locks the VM against power-on and changes for the whole backup. A standalone ESXi host does not allow that (DisableMethods is not supported): there the VM is shut down and marked as held, and another administrator can still power it on or change it; the next run notices that and starts the copy over.	vCenter blokuje maszynę przed włączeniem i zmianami na czas całej kopii. Samodzielny host ESXi na to nie pozwala (DisableMethods nie jest obsługiwane): tam maszyna jest wyłączana i oznaczana jako przetrzymywana, a inny administrator nadal może ją włączyć lub zmienić; następne uruchomienie to zauważy i rozpocznie kopię od nowa.
 A virtual machine with this name already exists on the server. Enter another name; an existing machine is never overwritten.	Maszyna wirtualna o tej nazwie już istnieje na serwerze. Wpisz inną nazwę; istniejąca maszyna nigdy nie jest nadpisywana.
 Abort	Przerwij
 Add Scheduled Task	Dodaj zaplanowane zadanie
@@ -37,6 +39,7 @@ At least 10 characters, not containing the user name.	Co najmniej 10 znaków, be
 Audit log	Dziennik audytu
 Auto	Automatycznie
 Back	Wstecz
+Back up while the VM is running (hot backup)	Kopia zapasowa przy działającej maszynie (kopia na gorąco)
 Backup Explorer	Eksplorator kopii zapasowych
 Backup of {0}	Kopia zapasowa {0}
 Backup started.	Rozpoczęto tworzenie kopii zapasowej.
@@ -159,9 +162,12 @@ Give the server a name.	Nadaj serwerowi nazwę.
 Give the task a title.	Nadaj zadaniu tytuł.
 Go	Idź
 HTML report...	Raport HTML...
+Held for backup	Przetrzymywana dla kopii
 History entries kept	Przechowywane wpisy historii
 Host	Host
 Host key	Klucz hosta
+Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Kopia na gorąco: maszyna działa dalej podczas kopiowania. Kopia jest spójna na poziomie awarii (jak po zaniku zasilania), chyba że VMware Tools może zamrozić system plików gościa; bazy danych i serwery pocztowe mogą wymagać odzyskiwania po przywróceniu. Dopóki istnieje migawka, maszyna działa wolniej, migawka rośnie w magazynie danych i nic nie powstrzymuje innych administratorów przed zmianą, wyłączeniem lub usunięciem maszyny w międzyczasie. Bez tej opcji maszyna jest wyłączana i blokowana na czas całej kopii, a po niej uruchamiana ponownie.
+If the guest does not shut down, power it off (like pulling the plug)	Jeśli gość się nie wyłączy, odłączyć zasilanie maszyny (jak wyciągnięcie wtyczki)
 Imported	Zaimportowano
 Include the memory of the virtual machine in the snapshot	Uwzględnij pamięć maszyny wirtualnej w migawce
 Job "{0}" finished: {1}	Zadanie „{0}” zakończone: {1}
@@ -241,6 +247,9 @@ Recovery code	Kod odzyskiwania
 Recovery codes	Kody odzyskiwania
 Recovery codes left	Pozostałe kody odzyskiwania
 Refresh	Odśwież
+Release the VM "{0}"? The VM2Backup lock is removed and a VM that was running before the backup is powered on. A paused backup of this VM then starts over.	Zwolnić maszynę „{0}”? Blokada VM2Backup zostanie zdjęta, a maszyna, która działała przed kopią, zostanie włączona. Wstrzymana kopia tej maszyny rozpocznie się wtedy od nowa.
+Release the VM (unlock and restore power)	Zwolnij maszynę (odblokuj i przywróć zasilanie)
+Released.	Zwolniona.
 Remove	Usuń
 Remove window	Usuń okno
 Repeat	Powtarzaj
@@ -274,6 +283,7 @@ Scheduler	Harmonogram
 Secret	Sekret
 Security	Zabezpieczenia
 Select	Wybierz
+Select a VM that is held for a backup.	Wybierz maszynę przetrzymywaną dla kopii.
 Select a drive first.	Najpierw wybierz dysk.
 Select a row first.	Najpierw wybierz wiersz.
 Self-signed	Z podpisem własnym
@@ -326,6 +336,7 @@ The connection test failed or has not finished. Save the server anyway?	Test po�
 The connection works.	Połączenie działa.
 The credentials of this server were not rejected.	Dane logowania tego serwera nie zostały odrzucone.
 The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	Magazyn danych „{0}” ma {1} wolnego miejsca, kopia zapasowa zajmuje do {2}. Przywrócić mimo to?
+The default is 300; a longer wait helps a guest that needs minutes to stop its services.	Domyślnie 300; dłuższe oczekiwanie pomaga gościowi, który potrzebuje minut na zatrzymanie usług.
 The figures are approximate (typical data). More CPU cores make compression faster.	Wartości są przybliżone (dane typowe). Więcej rdzeni procesora przyspiesza kompresję.
 The file is larger than 1 MB.	Plik jest większy niż 1 MB.
 The list is cut: only the first entries are shown.	Lista jest skrócona: pokazano tylko pierwsze wpisy.
@@ -378,6 +389,7 @@ Two-factor	Dwuskładnikowe
 Type	Typ
 Unfinished (resumable)	Niedokończone (z możliwością wznowienia)
 Unit	Jednostka
+Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.	Niezapisane dane gościa zostaną utracone, a jego system plików może wymagać sprawdzenia przy następnym uruchomieniu. Bez tej opcji kopia maszyny, której gość się nie wyłącza (brak VMware Tools, zawieszony gość), kończy się błędem, a maszyna jest zwracana nietknięta.
 Up	W górę
 Upload	Prześlij
 Upload PFX...	Prześlij PFX...
@@ -403,11 +415,13 @@ Verify the certificate	Weryfikuj certyfikat
 Version	Wersja
 Virtual Machine Backup	Kopia zapasowa maszyn wirtualnych
 Virtual machine	Maszyna wirtualna
+Virtual machine during the backup	Maszyna wirtualna podczas kopii zapasowej
 Virtual machines	Maszyny wirtualne
 Virtual machines...	Maszyny wirtualne...
 Volume size	Rozmiar woluminu
 Volume size, MiB (0 = one volume)	Rozmiar woluminu, MiB (0 = jeden wolumin)
 Volumes	Woluminy
+Wait for the guest to shut down, seconds	Czekaj na wyłączenie gościa, sekund
 Wait until the choices of the server are loaded.	Poczekaj, aż opcje serwera zostaną wczytane.
 Waiting	Oczekuje
 Warning	Ostrzeżenie
@@ -434,6 +448,7 @@ every {0} {1}	co {0} {1}
 fixed	stały
 folder	folder
 from {0}	od {0}
+held for backup since {0}	przetrzymywana dla kopii od {0}
 hours	godzin
 last	ostatnie
 limit {0} Mbit/s	limit {0} Mbit/s

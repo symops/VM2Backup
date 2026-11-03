@@ -3,12 +3,14 @@
 (the default resource pool)	(de standaard resourcepool)
 (the root VM folder)	(de hoofdmap voor VM's)
 A PKCS#12 file (.pfx) with the certificate and its private key, 1 MB at most. Only the certificate itself is served, not the chain.	Een PKCS#12-bestand (.pfx) met het certificaat en de persoonlijke sleutel, maximaal 1 MB. Alleen het certificaat zelf wordt aangeboden, niet de keten.
+A VM that is held for a backup is shut down and locked by VM2Backup until the copy is finished or cancelled.	Een VM die voor een back-up wordt vastgehouden, wordt door VM2Backup uitgeschakeld en vergrendeld totdat de kopie klaar is of wordt geannuleerd.
 A mapped drive letter (Z:) cannot be used: the service does not see it. Choose "Network drive..." to use its UNC path, or enter the UNC path.	Een gekoppelde stationsletter (Z:) kan niet worden gebruikt: de service ziet die niet. Kies "Netwerkstation..." om het UNC-pad te gebruiken, of voer het UNC-pad in.
 A new certificate was created. Your browser will ask you to trust it again.	Er is een nieuw certificaat gemaakt. Uw browser vraagt opnieuw om het te vertrouwen.
 A new user needs a password.	Een nieuwe gebruiker heeft een wachtwoord nodig.
 A path on the server computer	Een pad op de servercomputer
 A path on the server computer (the service reads it)	Een pad op de servercomputer (de service leest het)
 A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	Een draaiende ESXi / vCenter-VM wordt gekopieerd vanaf een tijdelijke snapshot, die daarna wordt verwijderd. Zonder VMware Tools mislukt de quiesced snapshot: schakel quiescing uit voor zulke VM's.
+A vCenter locks the VM against power-on and changes for the whole backup. A standalone ESXi host does not allow that (DisableMethods is not supported): there the VM is shut down and marked as held, and another administrator can still power it on or change it; the next run notices that and starts the copy over.	Een vCenter vergrendelt de VM tegen inschakelen en wijzigingen gedurende de hele back-up. Een zelfstandige ESXi-host staat dat niet toe (DisableMethods wordt niet ondersteund): daar wordt de VM uitgeschakeld en als vastgehouden gemarkeerd, en een andere beheerder kan hem nog steeds inschakelen of wijzigen; de volgende run merkt dat op en begint de kopie opnieuw.
 A virtual machine with this name already exists on the server. Enter another name; an existing machine is never overwritten.	Er bestaat al een virtuele machine met deze naam op de server. Voer een andere naam in; een bestaande machine wordt nooit overschreven.
 Abort	Afbreken
 Add Scheduled Task	Geplande taak toevoegen
@@ -37,6 +39,7 @@ At least 10 characters, not containing the user name.	Minstens 10 tekens, zonder
 Audit log	Auditlogboek
 Auto	Automatisch
 Back	Terug
+Back up while the VM is running (hot backup)	Back-up maken terwijl de VM draait (hot back-up)
 Backup Explorer	Back-upverkenner
 Backup of {0}	Back-up van {0}
 Backup started.	Back-up gestart.
@@ -159,9 +162,12 @@ Give the server a name.	Geef de server een naam.
 Give the task a title.	Geef de taak een titel.
 Go	Ga
 HTML report...	HTML-rapport...
+Held for backup	Vastgehouden voor back-up
 History entries kept	Bewaarde geschiedenisitems
 Host	Host
 Host key	Hostsleutel
+Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Hot back-up: de VM blijft draaien tijdens het kopiëren. De kopie is crash-consistent (zoals na een stroomstoring), tenzij VMware Tools het bestandssysteem van de gast kan quiesceren; databases en mailservers hebben na een herstel mogelijk herstel nodig. De VM draait trager zolang de snapshot bestaat, de snapshot groeit op de datastore en niets weerhoudt andere beheerders ervan de VM intussen te wijzigen, uit te schakelen of te verwijderen. Zonder deze optie wordt de VM tijdens de hele back-up uitgeschakeld en vergrendeld en daarna weer gestart.
+If the guest does not shut down, power it off (like pulling the plug)	Als de gast niet afsluit, de VM uitschakelen (alsof de stekker eruit wordt getrokken)
 Imported	Geïmporteerd
 Include the memory of the virtual machine in the snapshot	Het geheugen van de virtuele machine in de snapshot opnemen
 Job "{0}" finished: {1}	Taak "{0}" voltooid: {1}
@@ -241,6 +247,9 @@ Recovery code	Herstelcode
 Recovery codes	Herstelcodes
 Recovery codes left	Resterende herstelcodes
 Refresh	Vernieuwen
+Release the VM "{0}"? The VM2Backup lock is removed and a VM that was running before the backup is powered on. A paused backup of this VM then starts over.	VM "{0}" vrijgeven? De VM2Backup-vergrendeling wordt opgeheven en een VM die voor de back-up draaide, wordt ingeschakeld. Een gepauzeerde back-up van deze VM begint daarna opnieuw.
+Release the VM (unlock and restore power)	VM vrijgeven (ontgrendelen en stroomstatus herstellen)
+Released.	Vrijgegeven.
 Remove	Verwijderen
 Remove window	Tijdvenster verwijderen
 Repeat	Herhalen
@@ -274,6 +283,7 @@ Scheduler	Planner
 Secret	Geheim
 Security	Beveiliging
 Select	Selecteren
+Select a VM that is held for a backup.	Selecteer een VM die voor een back-up wordt vastgehouden.
 Select a drive first.	Selecteer eerst een station.
 Select a row first.	Selecteer eerst een rij.
 Self-signed	Zelfondertekend
@@ -326,6 +336,7 @@ The connection test failed or has not finished. Save the server anyway?	De verbi
 The connection works.	De verbinding werkt.
 The credentials of this server were not rejected.	De aanmeldgegevens van deze server zijn niet geweigerd.
 The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	De datastore "{0}" heeft {1} vrij, de back-up bevat tot {2}. Toch herstellen?
+The default is 300; a longer wait helps a guest that needs minutes to stop its services.	Standaard 300; langer wachten helpt een gast die minuten nodig heeft om zijn services te stoppen.
 The figures are approximate (typical data). More CPU cores make compression faster.	De cijfers zijn bij benadering (typische gegevens). Meer CPU-kernen maken de compressie sneller.
 The file is larger than 1 MB.	Het bestand is groter dan 1 MB.
 The list is cut: only the first entries are shown.	De lijst is ingekort: alleen de eerste items worden getoond.
@@ -378,6 +389,7 @@ Two-factor	Tweestaps
 Type	Type
 Unfinished (resumable)	Onvoltooid (hervatbaar)
 Unit	Eenheid
+Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.	Niet-opgeslagen gegevens van de gast gaan verloren en het bestandssysteem moet bij de volgende start mogelijk worden gecontroleerd. Zonder deze optie mislukt de back-up van een VM waarvan de gast niet afsluit (geen VMware Tools, vastgelopen gast) en wordt de VM ongewijzigd teruggegeven.
 Up	Omhoog
 Upload	Uploaden
 Upload PFX...	PFX uploaden...
@@ -403,11 +415,13 @@ Verify the certificate	Het certificaat verifiëren
 Version	Versie
 Virtual Machine Backup	Back-up van virtuele machines
 Virtual machine	Virtuele machine
+Virtual machine during the backup	Virtuele machine tijdens de back-up
 Virtual machines	Virtuele machines
 Virtual machines...	Virtuele machines...
 Volume size	Volumegrootte
 Volume size, MiB (0 = one volume)	Volumegrootte, MiB (0 = één volume)
 Volumes	Volumes
+Wait for the guest to shut down, seconds	Wachten tot de gast is afgesloten, seconden
 Wait until the choices of the server are loaded.	Wacht tot de keuzes van de server zijn geladen.
 Waiting	Wachtend
 Warning	Waarschuwing
@@ -434,6 +448,7 @@ every {0} {1}	elke {0} {1}
 fixed	vast
 folder	map
 from {0}	van {0}
+held for backup since {0}	vastgehouden voor back-up sinds {0}
 hours	uur
 last	laatste
 limit {0} Mbit/s	limiet {0} Mbit/s

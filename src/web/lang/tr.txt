@@ -3,12 +3,14 @@
 (the default resource pool)	(varsayılan kaynak havuzu)
 (the root VM folder)	(kök VM klasörü)
 A PKCS#12 file (.pfx) with the certificate and its private key, 1 MB at most. Only the certificate itself is served, not the chain.	Sertifikayı ve özel anahtarını içeren bir PKCS#12 dosyası (.pfx), en çok 1 MB. Yalnızca sertifikanın kendisi sunulur, zincir sunulmaz.
+A VM that is held for a backup is shut down and locked by VM2Backup until the copy is finished or cancelled.	Yedekleme için tutulan bir VM, kopya bitene veya iptal edilene kadar VM2Backup tarafından kapatılır ve kilitlenir.
 A mapped drive letter (Z:) cannot be used: the service does not see it. Choose "Network drive..." to use its UNC path, or enter the UNC path.	Eşlenmiş bir sürücü harfi (Z:) kullanılamaz: hizmet onu görmez. UNC yolunu kullanmak için "Ağ sürücüsü..." seçeneğini seçin veya UNC yolunu girin.
 A new certificate was created. Your browser will ask you to trust it again.	Yeni bir sertifika oluşturuldu. Tarayıcınız ona yeniden güvenmenizi isteyecek.
 A new user needs a password.	Yeni kullanıcı için parola gerekir.
 A path on the server computer	Sunucu bilgisayardaki bir yol
 A path on the server computer (the service reads it)	Sunucu bilgisayardaki bir yol (hizmet onu okur)
 A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	Çalışan bir ESXi / vCenter VM'si, sonradan silinen geçici bir anlık görüntüden kopyalanır. VMware Tools olmadan sessize alınmış anlık görüntü başarısız olur: bu tür VM'ler için sessize almayı kapatın.
+A vCenter locks the VM against power-on and changes for the whole backup. A standalone ESXi host does not allow that (DisableMethods is not supported): there the VM is shut down and marked as held, and another administrator can still power it on or change it; the next run notices that and starts the copy over.	vCenter, VM'yi tüm yedekleme boyunca açılmaya ve değişikliklere karşı kilitler. Tek başına bir ESXi ana bilgisayarı buna izin vermez (DisableMethods desteklenmez): orada VM kapatılır ve tutulan olarak işaretlenir, başka bir yönetici yine de onu açabilir veya değiştirebilir; sonraki çalıştırma bunu fark eder ve kopyayı baştan başlatır.
 A virtual machine with this name already exists on the server. Enter another name; an existing machine is never overwritten.	Sunucuda bu adla bir sanal makine zaten var. Başka bir ad girin; mevcut makinenin üzerine asla yazılmaz.
 Abort	İptal et
 Add Scheduled Task	Zamanlanmış görev ekle
@@ -37,6 +39,7 @@ At least 10 characters, not containing the user name.	En az 10 karakter, kullan�
 Audit log	Denetim günlüğü
 Auto	Otomatik
 Back	Geri
+Back up while the VM is running (hot backup)	VM çalışırken yedekle (sıcak yedekleme)
 Backup Explorer	Yedek Gezgini
 Backup of {0}	{0} yedeği
 Backup started.	Yedekleme başlatıldı.
@@ -159,9 +162,12 @@ Give the server a name.	Sunucuya bir ad verin.
 Give the task a title.	Göreve bir başlık verin.
 Go	Git
 HTML report...	HTML raporu...
+Held for backup	Yedekleme için tutuluyor
 History entries kept	Saklanan geçmiş girdileri
 Host	Ana bilgisayar
 Host key	Ana bilgisayar anahtarı
+Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Sıcak yedekleme: VM kopyalama sırasında çalışmaya devam eder. VMware Tools konuk dosya sistemini sessize alamazsa kopya çökme tutarlıdır (güç kesintisi sonrası gibi); veritabanları ve posta sunucuları geri yüklemeden sonra kurtarma gerektirebilir. Anlık görüntü var olduğu sürece VM daha yavaş çalışır, anlık görüntü veri deposunda büyür ve diğer yöneticilerin bu arada VM'yi değiştirmesini, kapatmasını veya silmesini hiçbir şey engellemez. Bu seçenek olmadan VM, tüm yedekleme boyunca kapatılır ve kilitlenir, sonra yeniden başlatılır.
+If the guest does not shut down, power it off (like pulling the plug)	Konuk kapanmazsa VM'nin gücünü kes (fişi çekmek gibi)
 Imported	İçe aktarıldı
 Include the memory of the virtual machine in the snapshot	Sanal makinenin belleğini anlık görüntüye dahil et
 Job "{0}" finished: {1}	"{0}" işi bitti: {1}
@@ -241,6 +247,9 @@ Recovery code	Kurtarma kodu
 Recovery codes	Kurtarma kodları
 Recovery codes left	Kalan kurtarma kodları
 Refresh	Yenile
+Release the VM "{0}"? The VM2Backup lock is removed and a VM that was running before the backup is powered on. A paused backup of this VM then starts over.	"{0}" VM'si serbest bırakılsın mı? VM2Backup kilidi kaldırılır ve yedeklemeden önce çalışan bir VM açılır. Bu VM'nin duraklatılmış yedeklemesi bundan sonra baştan başlar.
+Release the VM (unlock and restore power)	VM'yi serbest bırak (kilidi aç ve gücü geri ver)
+Released.	Serbest bırakıldı.
 Remove	Kaldır
 Remove window	Pencereyi kaldır
 Repeat	Tekrarla
@@ -274,6 +283,7 @@ Scheduler	Zamanlayıcı
 Secret	Gizli anahtar
 Security	Güvenlik
 Select	Seç
+Select a VM that is held for a backup.	Yedekleme için tutulan bir VM seçin.
 Select a drive first.	Önce bir sürücü seçin.
 Select a row first.	Önce bir satır seçin.
 Self-signed	Otomatik imzalı
@@ -326,6 +336,7 @@ The connection test failed or has not finished. Save the server anyway?	Bağlant
 The connection works.	Bağlantı çalışıyor.
 The credentials of this server were not rejected.	Bu sunucunun kimlik bilgileri reddedilmedi.
 The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	"{0}" veri deposunda {1} boş alan var, yedek en çok {2} içeriyor. Yine de geri yüklensin mi?
+The default is 300; a longer wait helps a guest that needs minutes to stop its services.	Varsayılan 300'dür; daha uzun bekleme, hizmetlerini durdurmak için dakikalara ihtiyaç duyan bir konuğa yardımcı olur.
 The figures are approximate (typical data). More CPU cores make compression faster.	Rakamlar yaklaşıktır (tipik veriler). Daha fazla CPU çekirdeği sıkıştırmayı hızlandırır.
 The file is larger than 1 MB.	Dosya 1 MB'tan büyük.
 The list is cut: only the first entries are shown.	Liste kesildi: yalnızca ilk girdiler gösteriliyor.
@@ -378,6 +389,7 @@ Two-factor	İki aşamalı
 Type	Tür
 Unfinished (resumable)	Tamamlanmadı (devam ettirilebilir)
 Unit	Birim
+Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.	Konuğun kaydedilmemiş verileri kaybolur ve dosya sistemi bir sonraki açılışta denetim gerektirebilir. Bu seçenek olmadan, konuğu kapanmayan bir VM'nin (VMware Tools yok, konuk takılı) yedeklemesi başarısız olur ve VM dokunulmadan geri verilir.
 Up	Yukarı
 Upload	Yükle
 Upload PFX...	PFX yükle...
@@ -403,11 +415,13 @@ Verify the certificate	Sertifikayı doğrula
 Version	Sürüm
 Virtual Machine Backup	Sanal makine yedekleme
 Virtual machine	Sanal makine
+Virtual machine during the backup	Yedekleme sırasında sanal makine
 Virtual machines	Sanal makineler
 Virtual machines...	Sanal makineler...
 Volume size	Birim boyutu
 Volume size, MiB (0 = one volume)	Birim boyutu, MiB (0 = tek birim)
 Volumes	Birimler
+Wait for the guest to shut down, seconds	Konuğun kapanmasını bekle, saniye
 Wait until the choices of the server are loaded.	Sunucunun seçenekleri yüklenene kadar bekleyin.
 Waiting	Bekliyor
 Warning	Uyarı
@@ -434,6 +448,7 @@ every {0} {1}	her {0} {1}
 fixed	sabit
 folder	klasör
 from {0}	{0} kaynağından
+held for backup since {0}	yedekleme için tutuluyor: {0} tarihinden beri
 hours	saat
 last	son
 limit {0} Mbit/s	sınır {0} Mbit/s

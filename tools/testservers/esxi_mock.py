@@ -156,6 +156,10 @@ def vmx_text(vm):
         t += 'snapshot.redoNotWithParent = "TRUE"\n'
     for x in vm.vmx_extra:
         t += x + '\n'
+    if getattr(vm, 'annotation', ''):
+        t += 'annotation = "%s"\n' % vm.annotation.replace('\n', '|0A')
+    for k, v in sorted(getattr(vm, 'extra_cfg', {}).items()):
+        t += '%s = "%s"\n' % (k, v)
     return t
 
 
@@ -297,6 +301,11 @@ def power_cycle_effects(vm):
         except OSError:
             pass
     write_vmx(vm)
+    try:                                # every power-on / power-off of a real VM writes vmware.log (the cold backup tells a power cycle between two runs by the log files)
+        with open(vm_path(vm, 'vmware.log'), 'ab') as f:
+            f.write(b'power cycle %d\n' % vm.cycles)
+    except OSError:
+        pass
     nv = vm_path(vm, vm.vmx[:-4] + '.nvram')
     if os.path.exists(nv):
         n = os.path.getsize(nv)
@@ -531,6 +540,9 @@ def vm_prop(vm, path):
         return '<val xsi:type="xsd:string">%s</val>' % x(vm.name)
     if path == 'runtime.powerState':
         return '<val xsi:type="VirtualMachinePowerState">%s</val>' % vm.power
+    if path == 'disabledMethod':
+        ms = sorted(set(m for src in getattr(vm, 'disabled', {}).values() for m in src))
+        return '<val xsi:type="ArrayOfString">%s</val>' % ''.join('<string>%s</string>' % x(m) for m in ms) if ms else None
     if path == 'runtime.connectionState':
         return '<val xsi:type="VirtualMachineConnectionState">%s</val>' % vm.conn
     if path.startswith('config.') or path in ('layoutEx', 'layoutEx.file', 'snapshot'):
@@ -542,6 +554,12 @@ def vm_prop(vm, path):
         if verkey(S.prof['api']) < (6, 5) or (getattr(REQV, 'v', None) and verkey(REQV.v) < (6, 5)):
             raise Fault('InvalidProperty', 'The property config.keyId is not valid for VirtualMachine')
         return '<val xsi:type="CryptoKeyId"><keyId>0e1c3f9a-5b6d-4a44-9c1e-77f6e3a3d001</keyId><providerId><id>mock-kms</id></providerId></val>' if getattr(vm, 'encrypted', False) else None
+    if path == 'guest.toolsRunningStatus':
+        return '<val xsi:type="VirtualMachineToolsRunningStatus">%s</val>' % ('guestToolsRunning' if vm.power == 'poweredOn' and getattr(vm, 'tools', 'running') == 'running' else 'guestToolsNotRunning')
+    if path == 'config.annotation':
+        return '<val xsi:type="xsd:string">%s</val>' % x(getattr(vm, 'annotation', ''))
+    if path == 'config.extraConfig':
+        return '<val xsi:type="ArrayOfOptionValue">%s</val>' % ''.join('<OptionValue xsi:type="OptionValue"><key>%s</key><value xsi:type="xsd:string">%s</value></OptionValue>' % (x(k), x(v)) for k, v in sorted(getattr(vm, 'extra_cfg', {}).items()))
     if path == 'config.template':
         return '<val xsi:type="xsd:boolean">%s</val>' % xbool(vm.template)
     if path == 'config.uuid':
@@ -652,9 +670,10 @@ def service_content():
     return ('<returnval><rootFolder type="Folder">%s</rootFolder><propertyCollector type="PropertyCollector">%s</propertyCollector>%s'
             '<setting type="OptionManager">%s</setting><userDirectory type="UserDirectory">ha-user-directory</userDirectory>'
             '<sessionManager type="SessionManager">%s</sessionManager><fileManager type="FileManager">ha-nfc-file-manager</fileManager><virtualDiskManager type="VirtualDiskManager">%s</virtualDiskManager>'
-            '<viewManager type="ViewManager">ViewManager</viewManager><customFieldsManager type="CustomFieldsManager">ha-customfields-manager</customFieldsManager></returnval>'
+            '<viewManager type="ViewManager">ViewManager</viewManager><customFieldsManager type="CustomFieldsManager">ha-customfields-manager</customFieldsManager>'
+            '<authorizationManager type="AuthorizationManager">%s</authorizationManager></returnval>'
             % (root_ref(), 'ha-property-collector' if esx else 'propertyCollector', about_xml(), 'HostAgentSettings' if esx else 'VpxSettings', 'ha-sessionmgr' if esx else 'SessionManager',
-               'ha-vdiskmanager' if esx else 'virtualDiskManager'))
+               'ha-vdiskmanager' if esx else 'virtualDiskManager', 'ha-authmgr' if esx else 'AuthorizationManager'))
 
 
 def session_alive(sid, touch=True):
@@ -913,6 +932,7 @@ def m_create_snapshot(req, h):
     name, desc = ctext(req, 'name'), ctext(req, 'description')
     memory, quiesce = ctext(req, 'memory') == 'true', ctext(req, 'quiesce') == 'true'
     record('snap', 'CreateSnapshot', json.dumps(dict(vm=vm.name, name=name, quiesce=quiesce, memory=memory)))
+    check_disabled(vm, 'CreateSnapshot_Task')
     lic = fault_get('license_block')
     if lic == 'call':
         raise Fault('RestrictedVersion', 'Current license or ESXi version prohibits execution of the requested operation.')
@@ -1168,18 +1188,160 @@ def m_register_vm(req, h):
     return '<RegisterVM_TaskResponse xmlns="urn:vim25"><returnval type="Task">%s</returnval></RegisterVM_TaskResponse>' % x(t['id'])
 
 
-def m_power_on(req, h):
+def vm_or_fault(req):
     vm = S.vms.get(ctext_ref(req))
     if vm is None:
         raise Fault('ManagedObjectNotFound', 'The object has already been deleted or has not been completely created')
+    return vm
+
+
+def check_disabled(vm, method):
+    """AuthorizationManager.DisableMethods: a disabled method answers MethodDisabled (the real host: the same fault type)"""
+    for src, ms in getattr(vm, 'disabled', {}).items():
+        if method in ms:
+            record('fault', 'method-disabled', '%s %s %s' % (vm.name, method, src))
+            raise Fault('MethodDisabled', 'The method is disabled by \'%s\'' % src)
+
+
+def m_power_on(req, h):
+    vm = vm_or_fault(req)
     record('vm', 'PowerOnVM', vm.name)
+    check_disabled(vm, 'PowerOnVM_Task')
 
     def run():
         if fault_get('poweron_fail'):
             raise Fault('InsufficientResourcesFault', 'Insufficient resources: the VM cannot be powered on.')
+        if vm.power == 'poweredOn':
+            raise Fault('InvalidPowerState', 'The operation is not allowed in the current state.')
+        was = vm.power
         vm.power = 'poweredOn'
+        if getattr(vm, 'tracked', False) and was != 'poweredOn':
+            power_cycle_effects(vm)
+        S.events.append(('poweron', vm.name, was))
     t = new_task('PowerOnVM_Task', vm, run)
     return '<PowerOnVM_TaskResponse xmlns="urn:vim25"><returnval type="Task">%s</returnval></PowerOnVM_TaskResponse>' % x(t['id'])
+
+
+def m_power_off(req, h):
+    vm = vm_or_fault(req)
+    record('vm', 'PowerOffVM', vm.name)
+    check_disabled(vm, 'PowerOffVM_Task')
+
+    def run():
+        if vm.power == 'poweredOff':
+            raise Fault('InvalidPowerState', 'The operation is not allowed in the current state.')
+        was = vm.power
+        vm.power = 'poweredOff'; vm.tracked = True
+        power_cycle_effects(vm)
+        S.events.append(('poweroff', vm.name, was))
+    t = new_task('PowerOffVM_Task', vm, run)
+    return '<PowerOffVM_TaskResponse xmlns="urn:vim25"><returnval type="Task">%s</returnval></PowerOffVM_TaskResponse>' % x(t['id'])
+
+
+def m_simple_denied(name):
+    def fn(req, h):
+        vm = vm_or_fault(req)
+        record('vm', name, vm.name)
+        check_disabled(vm, name)
+        raise Fault('InvalidState', 'The operation is not allowed in the current state.')
+    return fn
+
+
+def m_reconfigure(req, h):
+    """ReconfigVM_Task: only the annotation and extraConfig (key / value; an empty value removes the key) are emulated; the .vmx is rewritten like the real host does"""
+    vm = vm_or_fault(req)
+    record('vm', 'ReconfigVM', vm.name)
+    check_disabled(vm, 'ReconfigVM_Task')
+    spec = child(req, 'spec')
+    ann = ctext(spec, 'annotation', None) if spec is not None and child(spec, 'annotation') is not None else None
+    items = [(ctext(e, 'key'), ctext(e, 'value')) for e in (children(spec, 'extraConfig') if spec is not None else [])]
+
+    def run():
+        if ann is not None:
+            vm.annotation = ann
+        if not hasattr(vm, 'extra_cfg'):
+            vm.extra_cfg = {}
+        for k, v in items:
+            if v == '':
+                vm.extra_cfg.pop(k, None)
+            else:
+                vm.extra_cfg[k] = v
+        write_vmx(vm)
+    t = new_task('ReconfigVM_Task', vm, run)
+    return '<ReconfigVM_TaskResponse xmlns="urn:vim25"><returnval type="Task">%s</returnval></ReconfigVM_TaskResponse>' % x(t['id'])
+
+
+def m_shutdown_guest(req, h):
+    """VirtualMachine.ShutdownGuest: needs VMware Tools (ToolsUnavailable otherwise); the guest goes down after `shutdown_sec` (fault `guest_hang`: never)"""
+    vm = vm_or_fault(req)
+    record('vm', 'ShutdownGuest', vm.name)
+    check_disabled(vm, 'ShutdownGuest')
+    if vm.power != 'poweredOn':
+        raise Fault('InvalidPowerState', 'The operation is not allowed in the current state of the virtual machine.')
+    if getattr(vm, 'tools', 'running') != 'running':
+        raise Fault('ToolsUnavailable', 'Cannot complete the operation because VMware Tools is not running in this virtual machine.')
+    sec = getattr(vm, 'shutdown_sec', 0.3)
+
+    def go():
+        time.sleep(sec)
+        with LOCK:
+            if fault_get('guest_hang') or vm.power != 'poweredOn':
+                return
+            vm.power = 'poweredOff'; vm.tracked = True
+            power_cycle_effects(vm)
+            S.events.append(('shutdown', vm.name, 'guest'))
+    threading.Thread(target=go, daemon=True).start()
+    if fault_get('shutdown_error'):             # the real ESXi 7.0.3: hostd's own wait for the guest ran out, the answer is GenericVmConfigFault, the guest goes down all the same
+        raise Fault('GenericVmConfigFault', 'vim.fault.GenericVmConfigFault')
+    return '<ShutdownGuestResponse xmlns="urn:vim25"></ShutdownGuestResponse>'
+
+
+def m_disable_methods(req, h):
+    src = ctext(req, 'sourceId')
+    ents = [(e.text or '').strip() for e in children(req, 'entity')]
+    methods = [ctext(m, 'method') for m in children(req, 'method')]
+    record('auth', 'DisableMethods', json.dumps(dict(entity=ents, methods=methods, source=src)))
+    if S.kind == 'esxi' and not fault_get('esxi_lock'):          # the real ESXi 7.0.3 (standalone): NotSupported (docs/ESXI.md)
+        raise Fault('NotSupported', 'The operation is not supported on the object.')
+    if fault_get('disable_fail'):
+        raise Fault(fault_get('disable_fail'), 'The operation is not supported on this host.')
+    for e in ents:
+        vm = S.vms.get(e)
+        if vm is None:
+            raise Fault('ManagedObjectNotFound', 'The object has already been deleted or has not been completely created')
+        d = getattr(vm, 'disabled', None)
+        if d is None:
+            d = vm.disabled = {}
+        d.setdefault(src, [])
+        for m in methods:
+            if m not in d[src]:
+                d[src].append(m)
+    return '<DisableMethodsResponse xmlns="urn:vim25"></DisableMethodsResponse>'
+
+
+def m_enable_methods(req, h):
+    src = ctext(req, 'sourceId')
+    ents = [(e.text or '').strip() for e in children(req, 'entity')]
+    record('auth', 'EnableMethods', json.dumps(dict(entity=ents, source=src)))
+    if S.kind == 'esxi' and not fault_get('esxi_lock'):
+        raise Fault('NotSupported', 'The operation is not supported on the object.')
+    for e in ents:
+        vm = S.vms.get(e)
+        if vm is not None:
+            getattr(vm, 'disabled', {}).pop(src, None)
+    return '<EnableMethodsResponse xmlns="urn:vim25"></EnableMethodsResponse>'
+
+
+def m_query_disabled(req, h):
+    vm = S.vms.get(ctext_ref(req) if False else (ctext(req, 'entity') or '').strip())
+    record('auth', 'QueryDisabledMethods', vm.name if vm else '')
+    if vm is None:
+        raise Fault('ManagedObjectNotFound', 'The object has already been deleted or has not been completely created')
+    out = ''
+    for src, ms in getattr(vm, 'disabled', {}).items():
+        for m in ms:
+            out += '<returnval><entity type="VirtualMachine">%s</entity><method>%s</method><source>%s</source></returnval>' % (x(vm.id), x(m), x(src))
+    return '<QueryDisabledMethodsResponse xmlns="urn:vim25">%s</QueryDisabledMethodsResponse>' % out
 
 
 def ctext_ref(req):
@@ -1318,7 +1480,10 @@ def m_refresh(req, h):
 METHODS = {'CreateSnapshot_Task': m_create_snapshot, 'RemoveSnapshot_Task': m_remove_snapshot, 'RetrievePropertiesEx': m_retrieve_ex,
            'ContinueRetrievePropertiesEx': m_continue_ex, 'RetrieveProperties': m_retrieve, 'CreateContainerView': m_create_view, 'DestroyView': m_destroy_view,
            'CancelTask': m_cancel, 'RenameSnapshot': m_rename_snapshot, 'RefreshStorageInfo': m_refresh, 'MakeDirectory': m_make_directory, 'DeleteDatastoreFile_Task': m_delete_ds_file,
-           'RegisterVM_Task': m_register_vm, 'PowerOnVM_Task': m_power_on, 'CopyVirtualDisk_Task': m_copy_virtual_disk}
+           'RegisterVM_Task': m_register_vm, 'PowerOnVM_Task': m_power_on, 'CopyVirtualDisk_Task': m_copy_virtual_disk,
+           'PowerOffVM_Task': m_power_off, 'ShutdownGuest': m_shutdown_guest, 'DisableMethods': m_disable_methods, 'EnableMethods': m_enable_methods, 'QueryDisabledMethods': m_query_disabled,
+           'ResetVM_Task': m_simple_denied('ResetVM_Task'), 'SuspendVM_Task': m_simple_denied('SuspendVM_Task'), 'ReconfigVM_Task': m_reconfigure,
+           'UnregisterVM': m_simple_denied('UnregisterVM'), 'Destroy_Task': m_simple_denied('Destroy_Task')}
 
 
 REQV = threading.local()
@@ -1783,7 +1948,9 @@ def state_json():
     with LOCK:
         vms = {}
         for vm in S.vms.values():
-            vms[vm.name] = dict(id=vm.id, power=vm.power, snapshots=vm_snapshot_names(vm), dir=vm.dir, ds=vm.ds, dc=vm.dc, files=sorted(vm.files))
+            vms[vm.name] = dict(id=vm.id, power=vm.power, snapshots=vm_snapshot_names(vm), dir=vm.dir, ds=vm.ds, dc=vm.dc, files=sorted(vm.files),
+                                disabled={k: list(v) for k, v in getattr(vm, 'disabled', {}).items()}, tools=getattr(vm, 'tools', 'running'),
+                                hold=getattr(vm, 'extra_cfg', {}).get('vm2backup.hold', ''), annotation=getattr(vm, 'annotation', ''))
         leaked = [(v.name, s.name) for v in S.vms.values() for s in v.snaps if s.name.startswith('VM2Backup-')]
         return dict(vms=vms, dead=S.dead, evn=S.evn, sessions=len(S.sessions), leaked=leaked, events=S.events[-200:], counters=S.counters, soap_calls=S.soap_calls, log_len=len(S.log),
                     ranges=S.ranges[-200:], faults={k: v for k, v in S.faults.items()}, profile=S.prof['api'], kind=S.kind)
@@ -1835,6 +2002,30 @@ def control(cmd, a, q):
             if prev != vm.power and not a.get('plain'):
                 power_cycle_effects(vm)
             return dict(ok=True, vmx_size=os.path.getsize(vm_path(vm, vm.vmx)))
+        if cmd == 'vmset':          # VMware Tools state, the guest's shutdown time of a VM: {vm, tools: running|notRunning, shutdown_sec}
+            vm = next(v for v in S.vms.values() if v.name == a['vm'])
+            if 'tools' in a:
+                vm.tools = a['tools']
+            if 'shutdown_sec' in a:
+                vm.shutdown_sec = a['shutdown_sec']
+            return dict(ok=True)
+        if cmd == 'foreign':        # another administrator calls a method on the VM: {vm, method}; the answer says whether it went through (the lock of the backup answers MethodDisabled)
+            vm = next(v for v in S.vms.values() if v.name == a['vm'])
+            try:
+                check_disabled(vm, a['method'])
+            except Fault as f:
+                return dict(ok=False, fault=f.ftype, msg=f.msg)
+            if a['method'] == 'PowerOnVM_Task':
+                was = vm.power; vm.power = 'poweredOn'
+                if was != 'poweredOn':
+                    power_cycle_effects(vm)
+            return dict(ok=True)
+        if cmd == 'lock':           # somebody else's lock: {vm, source, methods}
+            vm = next(v for v in S.vms.values() if v.name == a['vm'])
+            if getattr(vm, 'disabled', None) is None:
+                vm.disabled = {}
+            vm.disabled[a['source']] = list(a['methods'])
+            return dict(ok=True)
         if cmd == 'snapshot':       # an instant snapshot (a user's own, or a leftover of a crashed backup)
             vm = next(v for v in S.vms.values() if v.name == a['vm'])
             sn = make_snapshot(vm, a['name'], a.get('desc', ''), bool(a.get('memory')), False)

@@ -44,7 +44,7 @@ struct Progress {
     virtual bool keepOnAbort() { return false; }           // when it stops: keep the finished volumes so that the backup can go on later (a pause, not a cancel)
 };
 
-struct VmInfo { Str name, state; u64 size; Str extra; VmInfo() : size(0) {} };
+struct VmInfo { Str name, state; u64 size; Str extra; Str held; VmInfo() : size(0) {} };      // held: "" or the unix time (text) since when a VM2Backup cold backup holds the VM
 
 struct VmSource {
     Str err; bool transient;
@@ -60,6 +60,11 @@ struct VmSource {
     // data that lies in the part of the stream that is already stored. kAbortedMessage after an abort.
     virtual bool pack(TarWriter& tar, Progress* pr, Str& warning) = 0;
     virtual void end(bool keepForResume) {}
+    // true: after begin() the source keeps the VM held (ESXi cold backup: powered off and locked). A transient failure of the copy then keeps the journal
+    // (even before the first volume is finished), so that the next run continues; the hold ends with end(false): success, a cancel, a final failure.
+    virtual bool holdsVm() const { return false; }
+    virtual Str endWarning() const { return Str(); }                 // after end(): what went wrong while the VM was given back (a warning for the history)
+    virtual bool downtime(double& from, double& to) const { return false; }   // after end(false): the VM was held from .. to (unix times); false = no downtime to report
     virtual Str restartReason() const { return Str(); }    // after begin() with a resume token: why the interrupted backup cannot go on (empty = no particular reason known)                // releases what begin() took (the snapshot), unless the backup will continue
 protected:
     bool fail(const Str& e, bool temp = false) { err = e; transient = temp; return false; }
@@ -76,7 +81,8 @@ struct Segment { u64 size; u64 raw; Str sha256; Segment() : size(0), raw(0) {} }
 struct Manifest {
     int version; Str vm, archive, source, sha256, stamp; double created; Str codec; int level; bool encrypted;   // codec: the name in the manifest, only "xz" can be restored
     u64 size, rawSize, segmentBytes; u32 kdfIterations; Vec<Segment> segments;
-    Manifest() : version(3), created(0), codec("xz"), level(0), encrypted(false), size(0), rawSize(0), segmentBytes(0), kdfIterations(0) {}
+    double downFrom, downTo;       // not stored: the VM was shut down for the backup from .. to (unix times), 0 = it was not (ESXi cold backup of a running VM)
+    Manifest() : version(3), created(0), codec("xz"), level(0), encrypted(false), size(0), rawSize(0), segmentBytes(0), kdfIterations(0), downFrom(0), downTo(0) {}
     Str volumeName(size_t i) const { return archive + Str::fmt(".%05d", (int)i + 1); }
     Json toJson() const;
     static bool fromJson(const Json& j, Manifest& m);

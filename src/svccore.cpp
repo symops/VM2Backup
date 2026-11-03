@@ -419,6 +419,7 @@ void ServiceCore::backupElement(Job* j, const Json& el, const Str& taskName, Jso
         for (size_t q = 0; q < m_claims.size(); ++q) if (m_claims[q] == claim) { m_claims.erase(q); break; }
         LeaveCriticalSection(&m_cs);
         r["duration"] = UnixNow() - t0;
+        if (Str(src->kind()) == "esxi") { Str li = static_cast<EsxiSource*>(src)->lockInfo(); if (!li.empty()) { r["lock"] = li; if (li.starts_with("not locked")) Log(L"VM \"%s\": %s", Wide(vm).c_str(), Wide(li).c_str()); } }
         if (ok) { authOk(tgtId); authOk(srvId); }
         else {
             int ac = 0;
@@ -428,6 +429,7 @@ void ServiceCore::backupElement(Job* j, const Json& el, const Str& taskName, Jso
         if (ok) {
             r["status"] = warn.empty() ? "Success" : "Warning"; r["archive"] = m.archive; r["size"] = m.size; r["raw"] = m.rawSize; r["volumes"] = (u64)m.segments.size();
             r["codec"] = m.codec; r["encrypted"] = m.encrypted; if (!warn.empty()) r["message"] = warn;
+            if (m.downTo > m.downFrom && m.downFrom > 0) { r["downtime"] = m.downTo - m.downFrom; r["downtime_from"] = m.downFrom; r["downtime_to"] = m.downTo; }
             r["rate"] = (double)m.rawSize / (UnixNow() - t0 > 0.001 ? UnixNow() - t0 : 0.001);
         } else {
             bool paused = (berr == kAbortedMessage) && (j->pauseFlag || m_stop) && !j->abortFlag;
@@ -735,7 +737,7 @@ bool ServiceCore::handle(const Str& cmd, const Json& a, Json& r, Str& err)
             Vec<VmInfo> vms; bool ok = src->list(vms);
             if (!ok) { if (IsAuthTextOfSource(src->err, ac)) authFailedNow(nullptr, tid, tfp, ac, src->err); err = src->err; delete src; return false; }
             authOk(tid);
-            Json arr = Json::array(); for (const VmInfo& v : vms) { Json o = Json::object(); o["name"] = v.name; o["state"] = v.state; o["size"] = v.size; if (!v.extra.empty()) o["extra"] = v.extra; arr.push(o); }
+            Json arr = Json::array(); for (const VmInfo& v : vms) { Json o = Json::object(); o["name"] = v.name; o["state"] = v.state; o["size"] = v.size; if (!v.extra.empty()) o["extra"] = v.extra; if (!v.held.empty()) o["held_since"] = (i64)strtoll(v.held.c_str(), nullptr, 10); arr.push(o); }
             r["vms"] = arr; r["message"] = Str::fmt("%d virtual machine(s) found", (int)vms.size());
             delete src; return true;
         }
@@ -790,6 +792,16 @@ bool ServiceCore::handle(const Str& cmd, const Json& a, Json& r, Str& err)
     if (cmd == "esxi.restore_options") {            // what a restore dialog can offer: datastores, folders, pools, hosts, existing VM names (see esxi.h)
         Json es; if (!m_cfg.server(a.get("server").str(), true, es)) { err = "server not found"; return false; }
         return EsxiRestoreTargets(es, a.get("datacenter").str(), r, err);
+    }
+    if (cmd == "esxi.unlock_vm") {                  // admin: give back a VM that a cold backup holds (shut down and locked): the lock off, the power state as before
+        Json es; if (!m_cfg.server(a.get("server").str(), true, es)) { err = "server not found"; return false; }
+        const Str ty = es.get("type").str(); if (ty != "esxi" && ty != "vcenter") { err = "this is not an ESXi / vCenter server"; return false; }
+        if (a.get("vm").str().empty()) { err = "no VM name"; return false; }
+        VmSource* src = MakeSource(es, err); if (!src) return false;
+        EsxiSource* ex = static_cast<EsxiSource*>(src); Str msg;
+        bool ok = ex->unlockVm(a.get("vm").str(), msg);
+        if (!ok) err = msg.empty() ? ex->err : msg; else { r["message"] = msg; Log(L"VM \"%s\" released by the administrator (%s)", Wide(a.get("vm").str()).c_str(), Wide(msg).c_str()); }
+        delete src; return ok;
     }
     if (cmd == "backups.delete" || cmd == "resumable.discard") {
         Json srv; if (!m_cfg.server(a.get("server").str(), true, srv)) { err = "server not found"; return false; }

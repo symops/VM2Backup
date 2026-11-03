@@ -395,10 +395,16 @@ bool Config::ValidateElement(Json& el, const Config& cfg, Str& err)
     if (el.get("speed_mbit").num(0) < 0) { err = "the speed limit cannot be negative"; return false; }
     if (!(el.get("speed_mbit").num(0) <= 1e7)) { err = "the speed limit is too large"; return false; }
     if (el.has("snapshot") && !el.get("snapshot").is_object()) { err = "the snapshot options must be an object"; return false; }
+    { const Str st = src.get("type").str(); if ((st == "esxi" || st == "vcenter") && !el.has("snapshot")) el["snapshot"] = Json::object(); }     // an ESXi / vCenter task always carries the snapshot options, hot_backup = false included
     if (el.get("snapshot").is_object()) {                              // snapshot.history: also copy the VM's other (existing) snapshots; default true, an old task without the key keeps copying them
         Json sn = el.get("snapshot"); const Json& h = sn.get("history");
         if (sn.has("history") && !h.is_bool() && !h.is_number()) { err = "snapshot.history must be true or false"; return false; }
-        sn["history"] = sn.has("history") ? h.boolean(true) : true; el["snapshot"] = sn;
+        sn["history"] = sn.has("history") ? h.boolean(true) : true;
+        // Cold backup (default): the VM is shut down and locked for the whole copy. hot_backup = true: the VM keeps running (snapshot + disk clones). A missing key means cold.
+        const char* bk[] = { "hot_backup", "force_off" };
+        for (const char* k : bk) { const Json& b = sn.get(k); if (sn.has(k) && !b.is_bool()) { err = Str("snapshot.") + k + " must be true or false"; return false; } sn[k] = sn.has(k) ? b.boolean(false) : false; }
+        if (sn.has("shutdown_timeout")) { const Json& t = sn.get("shutdown_timeout"); if (!t.is_number() || t.integer() < 10 || t.integer() > 86400) { err = "snapshot.shutdown_timeout is 10..86400 seconds"; return false; } sn["shutdown_timeout"] = t.integer(); }
+        el["snapshot"] = sn;
     }
     if (!el.has("verify")) el["verify"] = true;
     if (!el.has("on_error_next")) el["on_error_next"] = true;

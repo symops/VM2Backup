@@ -61,7 +61,7 @@ Str RandomHex(size_t bytes) { Bytes b; b.resize(bytes); RandomBytes(b.data(), by
 
 const char* const kAdminCmds[] = { "state", "scheduler.set", "settings.get", "settings.set", "servers.list", "servers.save", "servers.delete", "servers.unblock", "servers.test", "servers.vms",
     "tasks.list", "tasks.save", "tasks.copy", "tasks.delete", "tasks.run", "tasks.next", "backup.run", "jobs.list", "jobs.abort", "history.list", "history.get", "history.clear",
-    "backups.list", "backups.verify", "backups.restore", "backups.restore_esxi", "esxi.restore_options", "net.drives", "net.browse", "fs.browse", "backups.delete", "resumable.discard",
+    "backups.list", "backups.verify", "backups.restore", "backups.restore_esxi", "esxi.restore_options", "esxi.unlock_vm", "net.drives", "net.browse", "fs.browse", "backups.delete", "resumable.discard",
     "web.status", "web.settings.get", "web.settings.set", "web.interfaces.list", "web.cert.generate", "web.cert.import", "web.users.list", "web.users.save", "web.users.delete",
     "web.users.totp_enroll", "web.users.totp_confirm", "web.users.totp_disable", "web.audit.tail", nullptr };
 const char* const kViewerCmds[] = { "state", "servers.list", "tasks.list", "tasks.next", "jobs.list", "history.list", "history.get", "backups.list", nullptr };

@@ -41,7 +41,12 @@ struct Env {
         Json c = Json::object();
         c["type"] = kind; c["host"] = host; c["port"] = port; c["user"] = user; c["password"] = password; c["fingerprint"] = fp; c["tls_min"] = tlsMin;
         c["task_timeout"] = 60; c["remove_timeout"] = 60; c["poll_ms"] = 20; c["timeout"] = 20;
-        Json s = Json::object(); s["quiesce"] = quiesce; s["memory"] = memory; c["snapshot"] = s;
+        Json s = Json::object(); s["quiesce"] = quiesce; s["memory"] = memory; s["hot_backup"] = true; c["snapshot"] = s;      // the old scenarios test the HOT backup (the default is cold now)
+        return c;
+    }
+    // the default of the product: the VM is shut down and locked for the whole backup (snapshot options without hot_backup)
+    Json coldCfg() const {
+        Json c = cfg(); Json s = Json::object(); s["quiesce"] = true; s["memory"] = false; c["snapshot"] = s; c["shutdown_timeout"] = 20; c["tools_wait"] = 1;
         return c;
     }
 };
@@ -3030,4 +3035,342 @@ VM2B_TEST("esxi", esxi_real_fixtures_parse)
     }
     return true;
 }
+
+// =====================================================================================================================================================================
+// Холодный бэкап (по умолчанию): ВМ выключается и блокируется на всё время копии (docs/ESXI.md, «Холодный (по умолчанию) и горячий бэкап»).
+// Эмулятор: ShutdownGuest / PowerOffVM_Task / PowerOnVM_Task, AuthorizationManager.DisableMethods / EnableMethods / QueryDisabledMethods (отключённый метод отвечает MethodDisabled),
+// состояние VMware Tools (`vmset`), «чужой» администратор (`foreign`, `lock`). Все тесты этого раздела падают на старом коде (там нет холодного режима: ВМ копируется горячо).
+// =====================================================================================================================================================================
+namespace {
+
+struct CallLog { Vec<Str> names; };                                           // "soap:ShutdownGuest", "get:<file>", ... in the order of the emulator
+static void ReadCalls(Ctl& ctl, CallLog& out)
+{
+    out.names.clear(); Json lg; ctl.call("log", Json(), lg);
+    for (size_t i = 0; i < lg.get("log").size(); ++i) { const Json& l = lg.get("log").at(i); out.names.push_back(l.get("kind").str() + ":" + l.get("what").str()); }
+}
+static int FirstIdx(const CallLog& l, const char* what, int from = 0) { for (size_t i = (size_t)from; i < l.names.size(); ++i) if (l.names[i] == what) return (int)i; return -1; }
+static int LastIdx(const CallLog& l, const char* what) { for (size_t i = l.names.size(); i-- > 0;) if (l.names[i] == what) return (int)i; return -1; }
+static int FirstGet(const CallLog& l) { for (size_t i = 0; i < l.names.size(); ++i) if (l.names[i].starts_with("get:") && l.names[i].find("-flat.vmdk") > 0) return (int)i; return -1; }
+static int LastGet(const CallLog& l) { for (size_t i = l.names.size(); i-- > 0;) if (l.names[i].starts_with("get:") && l.names[i].find("-flat.vmdk") > 0) return (int)i; return -1; }
+static Str PowerOf(Ctl& ctl, const Str& vm) { return ctl.vmState(vm).get("power").str(); }
+static int LocksOn(Ctl& ctl, const Str& vm) { return (int)ctl.vmState(vm).get("disabled").size(); }
+// a hold = the marker in the VM (extraConfig vm2backup.hold + the note in the annotation); the LOCK (DisableMethods) exists on vCenter only: a standalone ESXi answers NotSupported (the real 7.0.3 does)
+static bool HasVm2bLock(Ctl& ctl, const Str& vm) { Json v = ctl.vmState(vm); return v.get("hold").str().starts_with("VM2Backup-") && v.get("annotation").str().find("[VM2Backup hold ") >= 0; }
+static bool Locks(const Env& e) { return e.vcenter(); }
+static Json Foreign(Ctl& ctl, const Str& vm, const char* method) { Json a = Json::object(), o; a["vm"] = vm; a["method"] = method; ctl.call("foreign", a, o); return o; }
+static void VmSet(Ctl& ctl, const Str& vm, const char* tools, double sec) { Json a = Json::object(), o; a["vm"] = vm; if (tools) a["tools"] = tools; if (sec >= 0) a["shutdown_sec"] = sec; ctl.call("vmset", a, o); }
+static Json ColdCfg(const Env& e, bool force = false, int timeout = 20, bool history = true)
+{
+    Json c = e.coldCfg(); c["snapshot"]["force_off"] = force; c["snapshot"]["shutdown_timeout"] = timeout; c["snapshot"]["history"] = history; return c;
+}
+struct ColdRun { bool ok; Manifest man; Str warn, err, lock; Pr pr; ColdRun() : ok(false) {} };
+static void RunBackup(Ctx& c, const Env& e, Ctl&, const Json& cfg, const Str& vm, Target& t, const BackupOptions& o, ColdRun& r, Progress* pr = nullptr)
+{
+    Str err; VmSource* src = NewEsxiSource(cfg, err);
+    if (!src) { r.err = err; delete src; return; }
+    r.ok = BackupVm(*src, vm, t, o, pr ? pr : &r.pr, r.man, r.warn, r.err);
+    (void)c; (void)e;
+    r.lock = static_cast<EsxiSource*>(src)->lockInfo();
+    delete src;
+}
+
+} // namespace
+
+// Холодный режим по умолчанию: ВМ включена -> блокировка -> гостевое выключение -> копия на месте БЕЗ снимка и клона -> снятие блокировки -> включение. Журнал вызовов эмулятора.
+VM2B_TEST("esxi", esxi_cold_default_sequence)
+{
+    Vec<Env> all, es; if (!Envs(c_, all)) return true; Normal(all, es);
+    EsTmp tmp(c_, "esxi-cold");
+    for (const Env& e : es) {
+        if (c_.coin(40)) continue;
+        Ctl ctl(e); ctl.reset();
+        Fix f; T_CHECK(MakeFix(c_, ctl, e, f, "CD", c_.range(1, 2), 1500000, "poweredOn", false, 400000)); if (!f.m.ok) return false;
+        VmSet(ctl, f.spec.name, "running", 0.3);
+        BackupOptions o = RandomOpts(c_, c_.coin()); Str store = tmp.sub("store");
+        Target* t = LocalAt(store);
+        ColdRun r; RunBackup(c_, e, ctl, e.coldCfg(), f.spec.name, *t, o, r);
+        if (!r.ok) c_.note("%s: %s", e.name.c_str(), r.err.c_str());
+        T_CHECK(r.ok);
+        CallLog lg; ReadCalls(ctl, lg);
+        int dis = FirstIdx(lg, "soap:DisableMethods"), sd = FirstIdx(lg, "soap:ShutdownGuest"), g0 = FirstGet(lg), g1 = LastGet(lg), en = LastIdx(lg, "soap:EnableMethods"), on = LastIdx(lg, "soap:PowerOnVM_Task");
+        T_CHECK(dis >= 0 && sd > dis && g0 > sd && g1 >= g0 && en > g1 && on > en);                 // lock, shut down, copy, unlock, power on: in this order
+        T_CHECK(ctl.counter("snap:CreateSnapshot") == 0); T_CHECK(ctl.counter("fm:CopyVirtualDisk") == 0);   // no snapshot of ours, no clone
+        T_CHECK(ctl.counter("soap:PowerOffVM_Task") == 0);                                            // the guest went down by itself (VMware Tools)
+        T_CHECK(PowerOf(ctl, f.spec.name) == "poweredOn"); T_CHECK(LocksOn(ctl, f.spec.name) == 0);
+        T_CHECK(ctl.leaked() == 0); T_CHECK(ctl.snapCount(f.spec.name) == 0); T_CHECK(CloneFolders(f.m.dir) == 0);
+        T_CHECK(r.man.downTo > r.man.downFrom && r.man.downFrom > 0);                                  // the downtime is reported
+        T_CHECK(!Contains(r.warn, "could not")); T_CHECK(r.warn.find("not locked") < 0); T_CHECK(Locks(e) ? r.lock == "locked (DisableMethods)" : Contains(r.lock, "not locked"));
+        T_CHECK(!HasVm2bLock(ctl, f.spec.name)); T_CHECK(ctl.vmState(f.spec.name).get("annotation").str().find("VM2Backup") < 0);
+        if (r.ok) {
+            Str dest = tmp.sub("r"), re;
+            if (Restore(c_, *t, r.man, o, dest, re)) {
+                Vec<FI> after; Walk(JoinPath(dest, f.spec.name), "", after);
+                for (const FI& b : f.before) if (b.rel.ends_with("-flat.vmdk")) { const FI* a = FindFi(after, b.rel); T_CHECK(a != nullptr && a->sha == b.sha); }   // the disks are the ones of the (stopped) VM
+                for (const FI& a : after) T_CHECK(!a.rel.starts_with("VM2Backup-"));
+                { const FI* av = FindFi(after, f.spec.name + ".vmx"); T_CHECK(av != nullptr); if (av) { Bytes bv; Str re2; ReadWholeFile(av->full.c_str(), bv, re2); Str vt((const char*)bv.data(), bv.size()); T_CHECK(vt.find("vm2backup") < 0 && vt.find("VM2Backup hold") < 0); } }
+                Bytes mb; Str me; Json mj = HistMeta(dest); T_CHECK(mj.get("cold").boolean()); T_CHECK(mj.get("original_power_state").str() == "poweredOn"); T_CHECK(mj.get("snapshot").str().empty());
+            }
+        }
+        delete t; DeleteVm(ctl, f.spec.name); RemoveTree(store); RemoveTree(tmp.sub("r"));
+    }
+    return true;
+}
+
+// Исходное состояние питания возвращается: выключенная остаётся выключенной (ни ShutdownGuest, ни PowerOn), приостановленная остаётся приостановленной; во время копии стоит блокировка
+// (у выключенной и приостановленной заблокирован и PowerOffVM_Task: он уничтожил бы состояние suspend).
+VM2B_TEST("esxi", esxi_cold_keeps_the_original_power_state)
+{
+    Vec<Env> all, es; if (!Envs(c_, all)) return true; Normal(all, es);
+    EsTmp tmp(c_, "esxi-cold2");
+    int round = (int)c_.rnd(2);
+    for (const Env& e : es) {
+        const char* pw = (round++ % 2) ? "suspended" : "poweredOff";
+        Ctl ctl(e); ctl.reset();
+        Fix f; T_CHECK(MakeFix(c_, ctl, e, f, "CP", 1, 1200000, "poweredOff", false, 300000)); if (!f.m.ok) return false;
+        { Json a = Json::object(), o; a["vm"] = f.spec.name; a["state"] = pw; a["plain"] = true; ctl.call("power", a, o); }
+        BackupOptions o = RandomOpts(c_, true); o.segmentBytes = (u64)512 * (u64)c_.range(300, 900); Str store = tmp.sub("store");
+        Target* t = LocalAt(store);
+        // a foreign PowerOn / PowerOff while the backup is paused: refused
+        ColdRun r1; r1.pr.abortAt = true; r1.pr.keep = true; r1.pr.limit = 200000;
+        RunBackup(c_, e, ctl, e.coldCfg(), f.spec.name, *t, o, r1);
+        T_CHECK(!r1.ok); T_CHECK(r1.err == kAbortedMessage);
+        T_CHECK(PowerOf(ctl, f.spec.name) == pw); T_CHECK(HasVm2bLock(ctl, f.spec.name));
+        if (Locks(e)) {
+            T_CHECK(Foreign(ctl, f.spec.name, "PowerOnVM_Task").get("fault").str() == "MethodDisabled");
+            T_CHECK(Foreign(ctl, f.spec.name, "PowerOffVM_Task").get("fault").str() == "MethodDisabled");
+            T_CHECK(Foreign(ctl, f.spec.name, "ReconfigVM_Task").get("fault").str() == "MethodDisabled");
+        } else T_CHECK(Foreign(ctl, f.spec.name, "ReconfigVM_Task").get("fault").str() != "MethodDisabled");      // a standalone host has no lock: said so in the warning
+        T_CHECK(ctl.vmState(f.spec.name).get("annotation").str().find("do not power it on") >= 0);
+        ColdRun r2; RunBackup(c_, e, ctl, e.coldCfg(), f.spec.name, *t, o, r2);
+        if (!r2.ok) c_.note("%s: %s", e.name.c_str(), r2.err.c_str());
+        T_CHECK(r2.ok); T_CHECK(r2.pr.resumes == 1);
+        T_CHECK(PowerOf(ctl, f.spec.name) == pw); T_CHECK(LocksOn(ctl, f.spec.name) == 0);
+        T_CHECK(ctl.counter("soap:ShutdownGuest") == 0); T_CHECK(ctl.counter("vm:PowerOnVM") == 0); T_CHECK(ctl.counter("soap:EnableMethods") == 1);
+        T_CHECK(r2.man.downFrom == 0);                                                              // the VM was not running: no downtime
+        T_CHECK(ctl.counter("snap:CreateSnapshot") == 0);
+        delete t; DeleteVm(ctl, f.spec.name); RemoveTree(store);
+    }
+    return true;
+}
+
+// Нет VMware Tools / гость не выключился за таймаут: ошибка с понятным текстом, ВМ возвращена (включена), блокировка снята, ничего не скопировано. С force_off: PowerOffVM_Task + предупреждение,
+// после копии ВМ снова включена.
+VM2B_TEST("esxi", esxi_cold_no_tools_timeout_and_force_off)
+{
+    Vec<Env> all, es; if (!Envs(c_, all)) return true; Normal(all, es);
+    EsTmp tmp(c_, "esxi-cold3");
+    for (const Env& e : es) {
+        if (c_.coin(40)) continue;
+        Ctl ctl(e); ctl.reset();
+        Fix f; T_CHECK(MakeFix(c_, ctl, e, f, "NT", 1, 400000, "poweredOn", true, 100000)); if (!f.m.ok) return false;
+        BackupOptions o = RandomOpts(c_, false); Str store = tmp.sub("store"); Target* t = LocalAt(store);
+        {   // the real host's answer to ShutdownGuest can be a fault although the guest goes down (GenericVmConfigFault after hostd's own 30 s): the power state decides, no force-off, no error
+            ctl.reset(); { Json a = Json::object(), o2; a["vm"] = f.spec.name; a["state"] = "poweredOn"; a["plain"] = true; ctl.call("power", a, o2); }
+            Json fe = Json::object(); fe["shutdown_error"] = true; ctl.faults(fe); VmSet(ctl, f.spec.name, "running", 0.4);
+            ColdRun r; RunBackup(c_, e, ctl, ColdCfg(e, false, 20), f.spec.name, *t, o, r);
+            if (!r.ok) c_.note("%s shutdown_error: %s", e.name.c_str(), r.err.c_str());
+            T_CHECK(r.ok); T_CHECK(ctl.counter("soap:PowerOffVM_Task") == 0); T_CHECK(PowerOf(ctl, f.spec.name) == "poweredOn"); T_CHECK(LocksOn(ctl, f.spec.name) == 0); T_CHECK(!HasVm2bLock(ctl, f.spec.name));
+            RemoveTree(store);                                                                      // the checks below look for volumes of a backup that must NOT have been made
+        }
+        for (int mode = 0; mode < 4; ++mode) {                                                      // 0 no tools, 1 timeout, 2 no tools + force off, 3 timeout + force off
+            ctl.reset();
+            { Json a = Json::object(), o2; a["vm"] = f.spec.name; a["state"] = "poweredOn"; a["plain"] = true; ctl.call("power", a, o2); }
+            if (mode & 1) { Json f2 = Json::object(); f2["guest_hang"] = true; ctl.faults(f2); }
+            VmSet(ctl, f.spec.name, (mode & 1) ? "running" : "notRunning", 0.2);
+            bool force = mode >= 2;
+            ColdRun r; DWORD t0 = GetTickCount(); RunBackup(c_, e, ctl, ColdCfg(e, force, 2), f.spec.name, *t, o, r); DWORD el = GetTickCount() - t0;
+            T_CHECK(PowerOf(ctl, f.spec.name) == "poweredOn"); T_CHECK(LocksOn(ctl, f.spec.name) == 0); T_CHECK(ctl.snapCount(f.spec.name) == 0);
+            if (!force) {
+                T_CHECK(!r.ok);
+                if (mode == 0) T_CHECK(Contains(r.err, "VMware Tools is not running"));
+                else { T_CHECK(Contains(r.err, "did not shut down within 2 s")); T_CHECK(el >= 1800); }
+                T_CHECK(Contains(r.err, "Back up while the VM is running")); T_CHECK(Contains(r.err, "Power off the VM if the guest does not shut down"));
+                T_CHECK(ctl.counter("soap:PowerOffVM_Task") == 0);
+                Vec<FI> st; Walk(store, "", st); for (const FI& x : st) T_CHECK(!x.rel.ends_with(".00001"));        // nothing was copied
+            } else {
+                if (!r.ok) c_.note("%s mode %d: %s", e.name.c_str(), mode, r.err.c_str());
+                T_CHECK(r.ok); T_CHECK(ctl.counter("soap:PowerOffVM_Task") == 1); T_CHECK(Contains(r.warn, "the VM was powered off (like pulling the plug)"));
+                T_CHECK(r.man.downTo > r.man.downFrom);
+            }
+        }
+        delete t; DeleteVm(ctl, f.spec.name); RemoveTree(store);
+    }
+    return true;
+}
+
+// Пауза и обрыв связи посреди копии: ВМ остаётся выключенной и заблокированной (чужой PowerOn получает MethodDisabled), продолжение (другой объект источника = перезапуск службы) доходит
+// до конца и возвращает питание. Обрыв: сервер перестаёт отвечать (die_after), попытки исчерпаны, ВМ ждёт; после revive копия продолжается.
+VM2B_TEST("esxi", esxi_cold_pause_and_lost_connection_keep_the_hold)
+{
+    Vec<Env> all, es; if (!Envs(c_, all)) return true; Normal(all, es);
+    EsTmp tmp(c_, "esxi-cold4");
+    int round = (int)c_.rnd(2);
+    for (const Env& e : es) {
+        bool drop = (round++ % 2) == 1;
+        Ctl ctl(e); ctl.reset();
+        Fix f; T_CHECK(MakeFix(c_, ctl, e, f, "PL", 1, 3000000, "poweredOn", false, 2000000)); if (!f.m.ok) return false;
+        VmSet(ctl, f.spec.name, "running", 0.2);
+        BackupOptions o = RandomOpts(c_, true); o.segmentBytes = (u64)512 * (u64)c_.range(300, 900); o.retry = Fast(2); o.password.clear(); Str store = tmp.sub("store");
+        Target* t = LocalAt(store);
+        ColdRun r1;
+        if (!drop) { r1.pr.abortAt = true; r1.pr.keep = true; r1.pr.limit = (u64)c_.range(300000, 900000); }
+        else {
+            r1.pr.hook = [](Pr* pr, int idx, const Str&) { Ctl* ctl = (Ctl*)pr->user; if (idx == 3 && pr->retries == 0) { Json s = ctl->state(), a = Json::object(), o2; a["die_after"] = (i64)(s.get("evn").integer() + 4); ctl->faults(a); } };
+            r1.pr.user = &ctl;
+        }
+        RunBackup(c_, e, ctl, e.coldCfg(), f.spec.name, *t, o, r1);
+        if (drop) { T_CHECK(!r1.ok); c_.note("%s drop: %s", e.name.c_str(), r1.err.c_str()); Revive(ctl); }
+        else { T_CHECK(!r1.ok && r1.err == kAbortedMessage); }
+        // the VM stays off and locked, the journal waits
+        T_CHECK(PowerOf(ctl, f.spec.name) == "poweredOff"); T_CHECK(HasVm2bLock(ctl, f.spec.name));
+        if (Locks(e)) T_CHECK(Foreign(ctl, f.spec.name, "PowerOnVM_Task").get("fault").str() == "MethodDisabled");
+        T_CHECK(PowerOf(ctl, f.spec.name) == "poweredOff");
+        { Vec<FI> sf; Walk(store, "", sf); int j = 0; for (const FI& x : sf) if (x.rel.ends_with(".resume")) ++j; T_CHECK(j == 1); }
+        ColdRun r2; RunBackup(c_, e, ctl, e.coldCfg(), f.spec.name, *t, o, r2);
+        if (!r2.ok) c_.note("%s: %s", e.name.c_str(), r2.err.c_str());
+        T_CHECK(r2.ok); T_CHECK(r2.pr.resumes == 1);
+        T_CHECK(Locks(e) ? r2.lock == "locked (DisableMethods)" : Contains(r2.lock, "not locked: the server does not support DisableMethods"));      // a standalone host cannot lock: said in lockInfo() (log + history), not as a warning
+        T_CHECK(ctl.counter("soap:ShutdownGuest") == 1);                                            // the guest was shut down once
+        T_CHECK(Contains(r2.warn, "stayed shut down and locked"));
+        T_CHECK(PowerOf(ctl, f.spec.name) == "poweredOn"); T_CHECK(LocksOn(ctl, f.spec.name) == 0);
+        T_CHECK(r2.man.downTo > r2.man.downFrom);
+        if (r2.ok) {
+            Str dest = tmp.sub("r"), re;
+            if (Restore(c_, *t, r2.man, o, dest, re)) { Vec<FI> after; Walk(JoinPath(dest, f.spec.name), "", after); for (const FI& b : f.before) if (b.rel.ends_with("-flat.vmdk")) { const FI* a = FindFi(after, b.rel); T_CHECK(a != nullptr && a->sha == b.sha); } }
+        }
+        delete t; DeleteVm(ctl, f.spec.name); RemoveTree(store); RemoveTree(tmp.sub("r"));
+    }
+    return true;
+}
+
+// Отмена пользователем (без keepOnAbort) и перманентная ошибка (сервер отказал в чтении файла): блокировка снята и питание возвращено сразу, ничего не осталось.
+VM2B_TEST("esxi", esxi_cold_cancel_and_permanent_error_give_the_vm_back)
+{
+    Vec<Env> all, es; if (!Envs(c_, all)) return true; Normal(all, es);
+    EsTmp tmp(c_, "esxi-cold5");
+    int round = (int)c_.rnd(2);
+    for (const Env& e : es) {
+        bool cancel = (round++ % 2) == 0;
+        Ctl ctl(e); ctl.reset();
+        Fix f; T_CHECK(MakeFix(c_, ctl, e, f, "CX", 1, 3000000, "poweredOn", false, 2000000)); if (!f.m.ok) return false;
+        VmSet(ctl, f.spec.name, "running", 0.2);
+        BackupOptions o = RandomOpts(c_, true); o.segmentBytes = (u64)512 * (u64)c_.range(300, 900); Str store = tmp.sub("store");
+        Target* t = LocalAt(store);
+        ColdRun r;
+        if (cancel) { r.pr.abortAt = true; r.pr.keep = false; r.pr.limit = (u64)c_.range(100000, 700000); }
+        else { Json fa = Json::object(), fs = Json::object(); fs["match"] = "-flat.vmdk"; fs["status"] = 500; fs["count"] = 50; fa["file_status"] = fs; ctl.faults(fa); }
+        RunBackup(c_, e, ctl, e.coldCfg(), f.spec.name, *t, o, r);
+        T_CHECK(!r.ok);
+        if (cancel) T_CHECK(r.err == kAbortedMessage); else T_CHECK(Contains(r.err, "reading"));
+        T_CHECK(PowerOf(ctl, f.spec.name) == "poweredOn"); T_CHECK(LocksOn(ctl, f.spec.name) == 0);
+        T_CHECK(Foreign(ctl, f.spec.name, "ReconfigVM_Task").get("fault").str() != "MethodDisabled");
+        { Vec<FI> sf; Walk(store, "", sf); T_CHECK(sf.empty()); }
+        T_CHECK(ctl.leaked() == 0);
+        delete t; DeleteVm(ctl, f.spec.name); RemoveTree(store);
+    }
+    return true;
+}
+
+// Осиротевшая блокировка (служба погибла, журнала нет) снимается следующим запуском и возвращает питание; чужая блокировка не трогается. unlockVm возвращает ВМ по команде администратора;
+// список ВМ показывает «held».
+VM2B_TEST("esxi", esxi_cold_orphan_foreign_lock_and_unlock_vm)
+{
+    Vec<Env> all, es; if (!Envs(c_, all)) return true; Normal(all, es);
+    EsTmp tmp(c_, "esxi-cold6");
+    for (const Env& e : es) {
+        if (c_.coin(40)) continue;
+        Ctl ctl(e); ctl.reset();
+        Fix f; T_CHECK(MakeFix(c_, ctl, e, f, "OR", 1, 2000000, "poweredOn", false, 1000000)); if (!f.m.ok) return false;
+        VmSet(ctl, f.spec.name, "running", 0.2);
+        { Json a = Json::object(), o2; a["vm"] = f.spec.name; a["source"] = "other-admin-lock"; Json ms = Json::array(); ms.push("UnregisterVM"); a["methods"] = ms; ctl.call("lock", a, o2); }
+        BackupOptions o = RandomOpts(c_, true); o.segmentBytes = (u64)512 * (u64)c_.range(300, 900); Str store = tmp.sub("store"); Target* t = LocalAt(store);
+        { ColdRun r; r.pr.abortAt = true; r.pr.keep = true; r.pr.limit = 150000; RunBackup(c_, e, ctl, e.coldCfg(), f.spec.name, *t, o, r); T_CHECK(!r.ok); }
+        T_CHECK(PowerOf(ctl, f.spec.name) == "poweredOff"); T_CHECK(HasVm2bLock(ctl, f.spec.name));
+        {   // the server list shows the hold
+            Str er; VmSource* src = NewEsxiSource(e.coldCfg(), er); Vec<VmInfo> vms; T_CHECK(src && src->list(vms));
+            bool seen = false; for (const VmInfo& v : vms) if (v.name == f.spec.name) { seen = true; T_CHECK(!v.held.empty()); } T_CHECK(seen); delete src;
+        }
+        if (c_.coin()) {
+            // the administrator releases the VM: our lock goes, the VM runs again, the foreign lock stays
+            Str er, msg; VmSource* src = NewEsxiSource(e.coldCfg(), er); T_CHECK(src != nullptr);
+            T_CHECK(static_cast<EsxiSource*>(src)->unlockVm(f.spec.name, msg)); T_CHECK(Contains(msg, "released 1")); delete src;
+            T_CHECK(PowerOf(ctl, f.spec.name) == "poweredOn"); T_CHECK(!HasVm2bLock(ctl, f.spec.name));
+            Str er2, msg2; VmSource* s2 = NewEsxiSource(e.coldCfg(), er2); T_CHECK(static_cast<EsxiSource*>(s2)->unlockVm(f.spec.name, msg2)); T_CHECK(Contains(msg2, "not held")); delete s2;
+            Vec<FI> sf; Walk(store, "", sf); for (const FI& x : sf) if (x.rel.ends_with(".resume")) RemoveTree(x.full);
+            for (const FI& x : sf) if (x.rel.find(".tar") >= 0) RemoveTree(x.full);
+        } else {
+            // the journal is lost (the service died, the folder was cleaned): the next backup of the VM removes the orphan lock (and starts a new backup)
+            RemoveTree(store); Str me; MakeDirs(store, me);
+        }
+        ColdRun r2; RunBackup(c_, e, ctl, e.coldCfg(), f.spec.name, *t, o, r2);
+        if (!r2.ok) c_.note("%s: %s", e.name.c_str(), r2.err.c_str());
+        T_CHECK(r2.ok); T_CHECK(PowerOf(ctl, f.spec.name) == "poweredOn"); T_CHECK(!HasVm2bLock(ctl, f.spec.name));
+        { Json d = ctl.vmState(f.spec.name).get("disabled"); T_CHECK(d.has("other-admin-lock")); T_CHECK(d.size() == 1); }      // somebody else's lock is never touched
+        delete t; DeleteVm(ctl, f.spec.name); RemoveTree(store);
+    }
+    return true;
+}
+
+// Пока холодная копия приостановлена, кто-то включил и выключил ВМ мимо продукта (на отдельном ESXi блокировки нет): диски могли измениться, а настоящий ESXi не даёт времени изменения
+// диска (HEAD без Last-Modified). Продолжать нельзя: копия начинается заново, об этом предупреждение; результат всё равно побитово верен.
+VM2B_TEST("esxi", esxi_cold_power_cycle_between_runs_starts_over)
+{
+    Vec<Env> all, es; if (!Envs(c_, all)) return true; Normal(all, es);
+    EsTmp tmp(c_, "esxi-cold8");
+    for (const Env& e : es) {
+        if (c_.coin(50)) continue;
+        Ctl ctl(e); ctl.reset();
+        Fix f; T_CHECK(MakeFix(c_, ctl, e, f, "PC", 1, 2500000, "poweredOff", false, 1500000)); if (!f.m.ok) return false;
+        BackupOptions o = RandomOpts(c_, true); o.segmentBytes = (u64)512 * (u64)c_.range(300, 800); o.password.clear(); Str store = tmp.sub("store"); Target* t = LocalAt(store);
+        { ColdRun r; r.pr.abortAt = true; r.pr.keep = true; r.pr.limit = 300000; RunBackup(c_, e, ctl, e.coldCfg(), f.spec.name, *t, o, r); T_CHECK(!r.ok); }
+        { Json a = Json::object(), o2; a["vm"] = f.spec.name; a["state"] = "poweredOn"; ctl.call("power", a, o2); a["state"] = "poweredOff"; ctl.call("power", a, o2); }
+        ColdRun r2; RunBackup(c_, e, ctl, e.coldCfg(), f.spec.name, *t, o, r2);
+        if (!r2.ok) c_.note("%s: %s", e.name.c_str(), r2.err.c_str());
+        if (r2.pr.resumes != 0) c_.note("%s: warn=%s", e.name.c_str(), r2.warn.c_str());
+        T_CHECK(r2.ok); T_CHECK(r2.pr.resumes == 0); T_CHECK(Contains(r2.warn, "could not be continued")); T_CHECK(Contains(r2.warn, "log files changed"));
+        T_CHECK(PowerOf(ctl, f.spec.name) == "poweredOff"); T_CHECK(!HasVm2bLock(ctl, f.spec.name));
+        if (r2.ok) {
+            Str dest = tmp.sub("r"), re;
+            if (Restore(c_, *t, r2.man, o, dest, re)) { Vec<FI> after; Walk(JoinPath(dest, f.spec.name), "", after); for (const FI& b : f.before) if (b.rel.ends_with("-flat.vmdk")) { const FI* a = FindFi(after, b.rel); T_CHECK(a != nullptr && a->sha == b.sha); } }
+        }
+        delete t; DeleteVm(ctl, f.spec.name); RemoveTree(store); RemoveTree(tmp.sub("r"));
+    }
+    return true;
+}
+
+// Холодный режим и `history`: собственные снапшоты ВМ копируются по тем же правилам, что у выключенной ВМ; диски читаются на месте (вся текущая цепочка вместе с точкой работы).
+VM2B_TEST("esxi", esxi_cold_with_own_snapshots_and_history)
+{
+    Vec<Env> all, es; if (!Envs(c_, all)) return true; Normal(all, es);
+    EsTmp tmp(c_, "esxi-cold7");
+    int round = (int)c_.rnd(2);
+    for (const Env& e : es) {
+        bool history = (round++ % 2) == 0;
+        Ctl ctl(e); ctl.reset();
+        Fix f; T_CHECK(MakeFix(c_, ctl, e, f, "HC", 1, 1200000, "poweredOn", false, 400000)); if (!f.m.ok) return false;
+        VmSet(ctl, f.spec.name, "running", 0.2);
+        { Json a = Json::object(), o2; a["vm"] = f.spec.name; a["name"] = "user-snap"; a["desc"] = "mine"; a["memory"] = true; ctl.call("snapshot", a, o2); }
+        { Json a = Json::object(), o2; a["vm"] = f.spec.name; a["disk"] = 0; a["offset"] = 100; a["length"] = 5000; a["seed"] = 3; ctl.call("guestwrite", a, o2); }
+        f.before.clear(); Walk(f.m.dir, "", f.before);
+        BackupOptions o = RandomOpts(c_, false); Str store = tmp.sub("store"); Target* t = LocalAt(store);
+        ColdRun r; RunBackup(c_, e, ctl, ColdCfg(e, false, 20, history), f.spec.name, *t, o, r);
+        if (!r.ok) c_.note("%s: %s", e.name.c_str(), r.err.c_str());
+        T_CHECK(r.ok); T_CHECK(ctl.counter("snap:CreateSnapshot") == 0);                           // the product made no snapshot (the user's own was made by the test through the control port)
+        T_CHECK(PowerOf(ctl, f.spec.name) == "poweredOn"); T_CHECK(LocksOn(ctl, f.spec.name) == 0); T_CHECK(ctl.snapCount(f.spec.name) == 1);
+        if (r.ok) {
+            Str dest = tmp.sub("r"), re;
+            if (Restore(c_, *t, r.man, o, dest, re)) {
+                Vec<FI> after; Walk(JoinPath(dest, f.spec.name), "", after);
+                int vmsn = 0; for (const FI& a : after) if (a.rel.ends_with(".vmsn")) ++vmsn;
+                T_CHECK(history ? vmsn >= 1 : vmsn == 0);
+                // every disk file of the CURRENT chain (base, delta of the running point) is in the copy, byte for byte
+                for (const FI& b : f.before) if (b.rel.ends_with(".vmdk") && !b.rel.starts_with("VM2Backup-")) { const FI* a = FindFi(after, b.rel); T_CHECK(a != nullptr && a->sha == b.sha); }
+            }
+        }
+        delete t; DeleteVm(ctl, f.spec.name); RemoveTree(store); RemoveTree(tmp.sub("r"));
+    }
+    return true;
+}
+
 } // namespace vm2b

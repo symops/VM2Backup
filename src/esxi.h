@@ -12,12 +12,19 @@ struct EsxiSource : VmSource {
     virtual void requestAbort() = 0;
     virtual Str serverInfo() const = 0;      // "VMware ESXi 7.0.3 build-xxx (api 7.0.3.0)" after the first call, "" before
     virtual Str endProblem() const = 0;      // non-empty when end() could not remove the snapshot (its name); the next begin() cleans it up
+    // Cold backup (default; snapshot.hot_backup = false): the VM is shut down and locked (AuthorizationManager.DisableMethods) for the whole copy, see docs/ESXI.md.
+    // Releases every VM2Backup lock of the VM and gives back its power state (esxi.unlock_vm). `message` says what was done. False + err when the server refuses.
+    virtual bool unlockVm(const Str& vm, Str& message) = 0;
+    // After a cold backup began: how the VM was held, "locked (DisableMethods)" or "not locked: <why>" (a standalone ESXi host cannot lock a VM, it is only marked); "" for a hot backup.
+    virtual Str lockInfo() const = 0;
 };
 
 // Server config (a JSON object): type "esxi"|"vcenter", host, port (443), user, password, verify, fingerprint "sha256:..", tls_min "1.0"|"1.2",
 // transport "api" (default; "ssh" is refused: not needed), live_disk "clone" (default: the disks of a powered-on VM are cloned on the host, CopyVirtualDisk) | "direct", clone_timeout (s, one clone), snapshot {quiesce:true, memory:false}, datacenter (vCenter: only this one),
 // and the tuning keys timeout (idle seconds of one network step), task_timeout (s, snapshot creation, default 600), remove_timeout (s, default 3600),
 // poll_ms (first task polling interval).
+// The task element's snapshot options (see docs/ESXI.md): quiesce, memory, history, hot_backup (false = COLD, the default: the VM is shut down and locked for the whole copy; true = hot),
+// force_off (cold: power the VM off when the guest does not shut down), shutdown_timeout (cold: seconds to wait for the guest, 300).
 VmSource* NewEsxiSource(const Json& server, Str& err);
 
 // ---- helpers (pure functions, unit-tested) ---------------------------------------------------------------------

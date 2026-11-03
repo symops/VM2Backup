@@ -118,7 +118,7 @@ VM2B_TEST("web", role_matrix_classifies_every_service_command)
         { "tasks.save", 'A' }, { "tasks.copy", 'A' }, { "tasks.delete", 'A' }, { "servers.save", 'A' }, { "servers.delete", 'A' }, { "servers.unblock", 'A' }, { "servers.test", 'A' }, { "servers.vms", 'A' },
         { "settings.get", 'A' }, { "settings.set", 'A' }, { "scheduler.set", 'A' }, { "history.clear", 'A' }, { "backups.restore", 'A' }, { "backups.delete", 'A' }, { "resumable.discard", 'A' },
         // restore to ESXi / vCenter and the network drive / browse helpers write or connect as SYSTEM: admin only
-        { "backups.restore_esxi", 'A' }, { "esxi.restore_options", 'A' }, { "net.drives", 'A' }, { "net.browse", 'A' }, { "fs.browse", 'A' }, { "service.shutdown", 'F' },
+        { "backups.restore_esxi", 'A' }, { "esxi.restore_options", 'A' }, { "esxi.unlock_vm", 'A' }, { "net.drives", 'A' }, { "net.browse", 'A' }, { "fs.browse", 'A' }, { "service.shutdown", 'F' },
         // the site administers itself: the web.* commands are admin only (with lock-out protections in WebServer::handleAdmin); service.shutdown never
         { "web.status", 'A' }, { "web.settings.get", 'A' }, { "web.settings.set", 'A' }, { "web.interfaces.list", 'A' }, { "web.cert.generate", 'A' }, { "web.cert.import", 'A' },
         { "web.users.list", 'A' }, { "web.users.save", 'A' }, { "web.users.delete", 'A' }, { "web.users.totp_enroll", 'A' }, { "web.users.totp_confirm", 'A' },

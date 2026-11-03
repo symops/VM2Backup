@@ -3,12 +3,14 @@
 (the default resource pool)	(resource pool default)
 (the root VM folder)	(folder VM root)
 A PKCS#12 file (.pfx) with the certificate and its private key, 1 MB at most. Only the certificate itself is served, not the chain.	File PKCS#12 (.pfx) berisi sertifikat dan kunci privatnya, maksimal 1 MB. Hanya sertifikat itu sendiri yang disajikan, bukan rantainya.
+A VM that is held for a backup is shut down and locked by VM2Backup until the copy is finished or cancelled.	VM yang ditahan untuk pencadangan dimatikan dan dikunci oleh VM2Backup sampai penyalinan selesai atau dibatalkan.
 A mapped drive letter (Z:) cannot be used: the service does not see it. Choose "Network drive..." to use its UNC path, or enter the UNC path.	Huruf drive yang dipetakan (Z:) tidak dapat dipakai: layanan tidak melihatnya. Pilih "Drive jaringan..." untuk memakai jalur UNC-nya, atau masukkan jalur UNC.
 A new certificate was created. Your browser will ask you to trust it again.	Sertifikat baru telah dibuat. Browser Anda akan meminta untuk mempercayainya lagi.
 A new user needs a password.	Pengguna baru memerlukan kata sandi.
 A path on the server computer	Jalur di komputer server
 A path on the server computer (the service reads it)	Jalur di komputer server (dibaca oleh layanan)
 A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	VM ESXi / vCenter yang berjalan disalin dari snapshot sementara, yang kemudian dihapus. Tanpa VMware Tools, snapshot quiesced gagal: matikan quiescing untuk VM seperti itu.
+A vCenter locks the VM against power-on and changes for the whole backup. A standalone ESXi host does not allow that (DisableMethods is not supported): there the VM is shut down and marked as held, and another administrator can still power it on or change it; the next run notices that and starts the copy over.	vCenter mengunci VM terhadap penyalaan dan perubahan selama seluruh pencadangan. Host ESXi mandiri tidak mengizinkannya (DisableMethods tidak didukung): di sana VM dimatikan dan ditandai sebagai ditahan, dan administrator lain tetap dapat menyalakan atau mengubahnya; eksekusi berikutnya menyadarinya dan memulai salinan dari awal.
 A virtual machine with this name already exists on the server. Enter another name; an existing machine is never overwritten.	Mesin virtual dengan nama ini sudah ada di server. Masukkan nama lain; mesin yang ada tidak pernah ditimpa.
 Abort	Batalkan
 Add Scheduled Task	Tambah tugas terjadwal
@@ -37,6 +39,7 @@ At least 10 characters, not containing the user name.	Minimal 10 karakter, tidak
 Audit log	Log audit
 Auto	Otomatis
 Back	Kembali
+Back up while the VM is running (hot backup)	Cadangkan saat VM berjalan (pencadangan panas)
 Backup Explorer	Penjelajah Cadangan
 Backup of {0}	Cadangan {0}
 Backup started.	Pencadangan dimulai.
@@ -159,9 +162,12 @@ Give the server a name.	Beri nama pada server.
 Give the task a title.	Beri judul pada tugas.
 Go	Buka
 HTML report...	Laporan HTML...
+Held for backup	Ditahan untuk pencadangan
 History entries kept	Entri riwayat yang disimpan
 Host	Host
 Host key	Kunci host
+Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Pencadangan panas: VM tetap berjalan selama penyalinan. Salinan konsisten terhadap crash (seperti setelah listrik padam) kecuali VMware Tools dapat mengkuiesce sistem berkas tamu; basis data dan server surel mungkin perlu pemulihan setelah restore. VM berjalan lebih lambat selama snapshot ada, snapshot membesar di datastore, dan tidak ada yang mencegah administrator lain mengubah, mematikan, atau menghapus VM selama itu. Tanpa opsi ini VM dimatikan dan dikunci selama seluruh pencadangan, lalu dinyalakan kembali.
+If the guest does not shut down, power it off (like pulling the plug)	Jika tamu tidak mati, matikan daya VM (seperti mencabut kabel)
 Imported	Diimpor
 Include the memory of the virtual machine in the snapshot	Sertakan memori mesin virtual dalam snapshot
 Job "{0}" finished: {1}	Tugas "{0}" selesai: {1}
@@ -241,6 +247,9 @@ Recovery code	Kode pemulihan
 Recovery codes	Kode pemulihan
 Recovery codes left	Sisa kode pemulihan
 Refresh	Segarkan
+Release the VM "{0}"? The VM2Backup lock is removed and a VM that was running before the backup is powered on. A paused backup of this VM then starts over.	Lepaskan VM "{0}"? Kunci VM2Backup dihapus dan VM yang berjalan sebelum pencadangan dinyalakan. Pencadangan VM ini yang dijeda lalu dimulai dari awal.
+Release the VM (unlock and restore power)	Lepaskan VM (buka kunci dan pulihkan daya)
+Released.	Dilepaskan.
 Remove	Hapus
 Remove window	Hapus jendela
 Repeat	Ulangi
@@ -274,6 +283,7 @@ Scheduler	Penjadwal
 Secret	Rahasia
 Security	Keamanan
 Select	Pilih
+Select a VM that is held for a backup.	Pilih VM yang ditahan untuk pencadangan.
 Select a drive first.	Pilih drive terlebih dahulu.
 Select a row first.	Pilih baris terlebih dahulu.
 Self-signed	Ditandatangani sendiri
@@ -326,6 +336,7 @@ The connection test failed or has not finished. Save the server anyway?	Uji kone
 The connection works.	Koneksi berfungsi.
 The credentials of this server were not rejected.	Kredensial server ini tidak ditolak.
 The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	Datastore "{0}" memiliki {1} ruang kosong, cadangan berisi hingga {2}. Tetap pulihkan?
+The default is 300; a longer wait helps a guest that needs minutes to stop its services.	Bawaan 300; menunggu lebih lama membantu tamu yang butuh beberapa menit untuk menghentikan layanannya.
 The figures are approximate (typical data). More CPU cores make compression faster.	Angka-angka ini perkiraan (data umum). Lebih banyak inti CPU membuat kompresi lebih cepat.
 The file is larger than 1 MB.	Berkas lebih besar dari 1 MB.
 The list is cut: only the first entries are shown.	Daftar dipotong: hanya entri pertama yang ditampilkan.
@@ -378,6 +389,7 @@ Two-factor	Dua faktor
 Type	Jenis
 Unfinished (resumable)	Belum selesai (dapat dilanjutkan)
 Unit	Satuan
+Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.	Data tamu yang belum disimpan hilang dan sistem berkasnya mungkin perlu diperiksa pada startup berikutnya. Tanpa opsi ini, pencadangan VM yang tamunya tidak mati (tanpa VMware Tools, tamu macet) gagal dan VM dikembalikan tanpa perubahan.
 Up	Naik
 Upload	Unggah
 Upload PFX...	Unggah PFX...
@@ -403,11 +415,13 @@ Verify the certificate	Verifikasi sertifikat
 Version	Versi
 Virtual Machine Backup	Cadangan mesin virtual
 Virtual machine	Mesin virtual
+Virtual machine during the backup	Mesin virtual selama pencadangan
 Virtual machines	Mesin virtual
 Virtual machines...	Mesin virtual...
 Volume size	Ukuran volume
 Volume size, MiB (0 = one volume)	Ukuran volume, MiB (0 = satu volume)
 Volumes	Volume
+Wait for the guest to shut down, seconds	Tunggu tamu mati, detik
 Wait until the choices of the server are loaded.	Tunggu hingga pilihan server selesai dimuat.
 Waiting	Menunggu
 Warning	Peringatan
@@ -434,6 +448,7 @@ every {0} {1}	setiap {0} {1}
 fixed	tetap
 folder	folder
 from {0}	dari {0}
+held for backup since {0}	ditahan untuk pencadangan sejak {0}
 hours	jam
 last	terakhir
 limit {0} Mbit/s	batas {0} Mbit/s

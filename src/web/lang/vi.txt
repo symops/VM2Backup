@@ -3,12 +3,14 @@
 (the default resource pool)	(nhóm tài nguyên mặc định)
 (the root VM folder)	(thư mục VM gốc)
 A PKCS#12 file (.pfx) with the certificate and its private key, 1 MB at most. Only the certificate itself is served, not the chain.	Tệp PKCS#12 (.pfx) chứa chứng chỉ và khóa riêng của nó, tối đa 1 MB. Chỉ chứng chỉ được dùng, không kèm chuỗi chứng chỉ.
+A VM that is held for a backup is shut down and locked by VM2Backup until the copy is finished or cancelled.	VM được giữ để sao lưu bị VM2Backup tắt và khóa cho đến khi bản sao hoàn tất hoặc bị hủy.
 A mapped drive letter (Z:) cannot be used: the service does not see it. Choose "Network drive..." to use its UNC path, or enter the UNC path.	Không thể dùng ký tự ổ đĩa được ánh xạ (Z:): dịch vụ không thấy nó. Chọn "Ổ đĩa mạng..." để dùng đường dẫn UNC của nó, hoặc nhập đường dẫn UNC.
 A new certificate was created. Your browser will ask you to trust it again.	Đã tạo chứng chỉ mới. Trình duyệt sẽ yêu cầu bạn tin cậy lại.
 A new user needs a password.	Người dùng mới cần có mật khẩu.
 A path on the server computer	Đường dẫn trên máy tính máy chủ
 A path on the server computer (the service reads it)	Đường dẫn trên máy tính máy chủ (dịch vụ đọc đường dẫn này)
 A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	VM ESXi / vCenter đang chạy được sao chép từ một snapshot tạm thời, snapshot này sẽ bị xóa sau đó. Nếu không có VMware Tools, snapshot quiesce sẽ thất bại: hãy tắt quiesce cho các VM như vậy.
+A vCenter locks the VM against power-on and changes for the whole backup. A standalone ESXi host does not allow that (DisableMethods is not supported): there the VM is shut down and marked as held, and another administrator can still power it on or change it; the next run notices that and starts the copy over.	vCenter khóa VM không cho bật và thay đổi trong suốt quá trình sao lưu. Máy chủ ESXi độc lập không cho phép điều đó (DisableMethods không được hỗ trợ): ở đó VM được tắt và đánh dấu là đang giữ, và quản trị viên khác vẫn có thể bật hoặc thay đổi nó; lần chạy tiếp theo sẽ nhận ra và bắt đầu lại bản sao.
 A virtual machine with this name already exists on the server. Enter another name; an existing machine is never overwritten.	Máy ảo có tên này đã tồn tại trên máy chủ. Hãy nhập tên khác; máy ảo hiện có không bao giờ bị ghi đè.
 Abort	Hủy bỏ
 Add Scheduled Task	Thêm tác vụ theo lịch
@@ -37,6 +39,7 @@ At least 10 characters, not containing the user name.	Ít nhất 10 ký tự, kh
 Audit log	Nhật ký kiểm tra
 Auto	Tự động
 Back	Quay lại
+Back up while the VM is running (hot backup)	Sao lưu khi VM đang chạy (sao lưu nóng)
 Backup Explorer	Backup Explorer
 Backup of {0}	Sao lưu {0}
 Backup started.	Đã bắt đầu sao lưu.
@@ -159,9 +162,12 @@ Give the server a name.	Đặt tên cho máy chủ.
 Give the task a title.	Đặt tiêu đề cho tác vụ.
 Go	Đi
 HTML report...	Báo cáo HTML...
+Held for backup	Đang giữ để sao lưu
 History entries kept	Số mục lịch sử được giữ
 Host	Máy chủ
 Host key	Khóa máy chủ
+Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Sao lưu nóng: VM tiếp tục chạy trong khi sao chép. Bản sao nhất quán ở mức sự cố (như sau khi mất điện) trừ khi VMware Tools có thể làm tĩnh hệ thống tệp của máy khách; cơ sở dữ liệu và máy chủ thư có thể cần khôi phục sau khi phục hồi. VM chạy chậm hơn khi bản chụp tồn tại, bản chụp lớn dần trên kho dữ liệu và không gì ngăn các quản trị viên khác thay đổi, tắt hoặc xóa VM trong thời gian đó. Không có tùy chọn này, VM được tắt và khóa trong suốt quá trình sao lưu, rồi được bật lại sau đó.
+If the guest does not shut down, power it off (like pulling the plug)	Nếu máy khách không tắt, ngắt nguồn VM (như rút phích cắm)
 Imported	Đã nhập
 Include the memory of the virtual machine in the snapshot	Đưa bộ nhớ của máy ảo vào snapshot
 Job "{0}" finished: {1}	Tác vụ "{0}" đã kết thúc: {1}
@@ -241,6 +247,9 @@ Recovery code	Mã khôi phục
 Recovery codes	Mã khôi phục
 Recovery codes left	Số mã khôi phục còn lại
 Refresh	Làm mới
+Release the VM "{0}"? The VM2Backup lock is removed and a VM that was running before the backup is powered on. A paused backup of this VM then starts over.	Giải phóng VM "{0}"? Khóa VM2Backup được gỡ và VM đã chạy trước khi sao lưu sẽ được bật. Bản sao lưu bị tạm dừng của VM này sau đó sẽ bắt đầu lại.
+Release the VM (unlock and restore power)	Giải phóng VM (mở khóa và khôi phục nguồn)
+Released.	Đã giải phóng.
 Remove	Gỡ bỏ
 Remove window	Xóa khung giờ
 Repeat	Lặp lại
@@ -274,6 +283,7 @@ Scheduler	Bộ lập lịch
 Secret	Khóa bí mật
 Security	Bảo mật
 Select	Chọn
+Select a VM that is held for a backup.	Chọn một VM đang được giữ để sao lưu.
 Select a drive first.	Hãy chọn ổ đĩa trước.
 Select a row first.	Hãy chọn một hàng trước.
 Self-signed	Tự ký
@@ -326,6 +336,7 @@ The connection test failed or has not finished. Save the server anyway?	Kiểm t
 The connection works.	Kết nối hoạt động.
 The credentials of this server were not rejected.	Thông tin đăng nhập của máy chủ này chưa bị từ chối.
 The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	Datastore "{0}" còn trống {1}, bản sao lưu chiếm tối đa {2}. Vẫn khôi phục?
+The default is 300; a longer wait helps a guest that needs minutes to stop its services.	Mặc định là 300; chờ lâu hơn giúp máy khách cần vài phút để dừng các dịch vụ.
 The figures are approximate (typical data). More CPU cores make compression faster.	Các số liệu chỉ là ước tính (dữ liệu điển hình). Nhiều lõi CPU hơn giúp nén nhanh hơn.
 The file is larger than 1 MB.	Tệp lớn hơn 1 MB.
 The list is cut: only the first entries are shown.	Danh sách bị cắt bớt: chỉ hiển thị các mục đầu tiên.
@@ -378,6 +389,7 @@ Two-factor	Xác thực hai yếu tố
 Type	Loại
 Unfinished (resumable)	Chưa hoàn tất (có thể tiếp tục)
 Unit	Đơn vị
+Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.	Dữ liệu chưa lưu của máy khách sẽ mất và hệ thống tệp của nó có thể cần kiểm tra ở lần khởi động tiếp theo. Không có tùy chọn này, bản sao lưu của VM mà máy khách không tắt (không có VMware Tools, máy khách bị treo) sẽ thất bại và VM được trả lại nguyên vẹn.
 Up	Lên
 Upload	Tải lên
 Upload PFX...	Tải lên PFX...
@@ -403,11 +415,13 @@ Verify the certificate	Xác minh chứng chỉ
 Version	Phiên bản
 Virtual Machine Backup	Virtual Machine Backup
 Virtual machine	Máy ảo
+Virtual machine during the backup	Máy ảo trong khi sao lưu
 Virtual machines	Máy ảo
 Virtual machines...	Máy ảo...
 Volume size	Kích thước volume
 Volume size, MiB (0 = one volume)	Kích thước volume, MiB (0 = một volume)
 Volumes	Volume
+Wait for the guest to shut down, seconds	Chờ máy khách tắt, giây
 Wait until the choices of the server are loaded.	Chờ cho đến khi các lựa chọn của máy chủ được tải xong.
 Waiting	Đang chờ
 Warning	Cảnh báo
@@ -434,6 +448,7 @@ every {0} {1}	mỗi {0} {1}
 fixed	cố định
 folder	thư mục
 from {0}	từ {0}
+held for backup since {0}	đang giữ để sao lưu từ {0}
 hours	giờ
 last	gần nhất
 limit {0} Mbit/s	giới hạn {0} Mbit/s

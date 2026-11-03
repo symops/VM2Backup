@@ -3,12 +3,14 @@
 (the default resource pool)	(기본 리소스 풀)
 (the root VM folder)	(루트 VM 폴더)
 A PKCS#12 file (.pfx) with the certificate and its private key, 1 MB at most. Only the certificate itself is served, not the chain.	인증서와 개인 키가 들어 있는 PKCS#12 파일(.pfx), 최대 1 MB. 인증서 자체만 사용되며 체인은 포함되지 않습니다.
+A VM that is held for a backup is shut down and locked by VM2Backup until the copy is finished or cancelled.	백업을 위해 보류된 VM은 복사가 끝나거나 취소될 때까지 VM2Backup이 종료하고 잠급니다.
 A mapped drive letter (Z:) cannot be used: the service does not see it. Choose "Network drive..." to use its UNC path, or enter the UNC path.	매핑된 드라이브 문자(Z:)는 사용할 수 없습니다. 서비스에서 보이지 않기 때문입니다. "네트워크 드라이브..."를 선택해 UNC 경로를 사용하거나 UNC 경로를 입력하십시오.
 A new certificate was created. Your browser will ask you to trust it again.	새 인증서가 생성되었습니다. 브라우저에서 다시 신뢰하도록 요청합니다.
 A new user needs a password.	새 사용자에게는 암호가 필요합니다.
 A path on the server computer	서버 컴퓨터의 경로
 A path on the server computer (the service reads it)	서버 컴퓨터의 경로(서비스가 읽음)
 A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	실행 중인 ESXi / vCenter VM은 임시 스냅숏에서 복사되며, 이후 스냅숏은 삭제됩니다. VMware Tools가 없으면 정지(quiesce) 스냅숏이 실패합니다. 이런 VM은 정지를 끄십시오.
+A vCenter locks the VM against power-on and changes for the whole backup. A standalone ESXi host does not allow that (DisableMethods is not supported): there the VM is shut down and marked as held, and another administrator can still power it on or change it; the next run notices that and starts the copy over.	vCenter는 백업 전체 동안 VM의 전원 켜기와 변경을 잠급니다. 독립형 ESXi 호스트는 이를 허용하지 않습니다(DisableMethods가 지원되지 않음). 그곳에서는 VM이 종료되고 보류 중으로 표시될 뿐이며, 다른 관리자가 전원을 켜거나 변경할 수 있습니다. 다음 실행이 이를 알아채고 복사를 처음부터 다시 시작합니다.
 A virtual machine with this name already exists on the server. Enter another name; an existing machine is never overwritten.	이 이름의 가상 컴퓨터가 서버에 이미 있습니다. 다른 이름을 입력하십시오. 기존 컴퓨터는 덮어쓰지 않습니다.
 Abort	중단
 Add Scheduled Task	예약 작업 추가
@@ -37,6 +39,7 @@ At least 10 characters, not containing the user name.	10자 이상, 사용자 �
 Audit log	감사 로그
 Auto	자동
 Back	뒤로
+Back up while the VM is running (hot backup)	VM이 실행 중일 때 백업(핫 백업)
 Backup Explorer	Backup Explorer
 Backup of {0}	{0} 백업
 Backup started.	백업이 시작되었습니다.
@@ -159,9 +162,12 @@ Give the server a name.	서버 이름을 지정하십시오.
 Give the task a title.	작업 제목을 지정하십시오.
 Go	이동
 HTML report...	HTML 보고서...
+Held for backup	백업을 위해 보류됨
 History entries kept	보관할 기록 항목 수
 Host	호스트
 Host key	호스트 키
+Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	핫 백업: 복사하는 동안 VM이 계속 실행됩니다. VMware Tools가 게스트 파일 시스템을 정지하지 못하면 복사본은 충돌 일관성(정전 후와 같음) 수준입니다. 데이터베이스와 메일 서버는 복원 후 복구가 필요할 수 있습니다. 스냅샷이 있는 동안 VM이 느려지고, 스냅샷이 데이터스토어에서 커지며, 그동안 다른 관리자가 VM을 변경하거나 끄거나 삭제하는 것을 막는 장치는 없습니다. 이 옵션이 없으면 VM은 백업 전체 동안 종료되고 잠기며, 끝난 뒤 다시 시작됩니다.
+If the guest does not shut down, power it off (like pulling the plug)	게스트가 종료되지 않으면 VM 전원을 끔(전원 플러그를 뽑는 것과 같음)
 Imported	가져옴
 Include the memory of the virtual machine in the snapshot	스냅숏에 가상 컴퓨터의 메모리 포함
 Job "{0}" finished: {1}	작업 "{0}" 종료: {1}
@@ -241,6 +247,9 @@ Recovery code	복구 코드
 Recovery codes	복구 코드
 Recovery codes left	남은 복구 코드
 Refresh	새로 고침
+Release the VM "{0}"? The VM2Backup lock is removed and a VM that was running before the backup is powered on. A paused backup of this VM then starts over.	VM "{0}"을(를) 해제할까요? VM2Backup 잠금이 제거되고 백업 전에 실행 중이던 VM은 켜집니다. 이 VM의 일시 중지된 백업은 처음부터 다시 시작됩니다.
+Release the VM (unlock and restore power)	VM 해제(잠금 해제 및 전원 상태 복원)
+Released.	해제되었습니다.
 Remove	제거
 Remove window	시간대 제거
 Repeat	반복
@@ -274,6 +283,7 @@ Scheduler	스케줄러
 Secret	비밀 키
 Security	보안
 Select	선택
+Select a VM that is held for a backup.	백업을 위해 보류된 VM을 선택하세요.
 Select a drive first.	먼저 드라이브를 선택하십시오.
 Select a row first.	먼저 행을 선택하십시오.
 Self-signed	자체 서명
@@ -326,6 +336,7 @@ The connection test failed or has not finished. Save the server anyway?	연결 �
 The connection works.	연결이 정상입니다.
 The credentials of this server were not rejected.	이 서버의 자격 증명은 거부되지 않았습니다.
 The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	데이터스토어 "{0}"의 여유 공간은 {1}이고 백업은 최대 {2}입니다. 그래도 복원할까요?
+The default is 300; a longer wait helps a guest that needs minutes to stop its services.	기본값은 300입니다. 서비스를 멈추는 데 몇 분이 걸리는 게스트에는 더 오래 기다리는 것이 도움이 됩니다.
 The figures are approximate (typical data). More CPU cores make compression faster.	수치는 근사치입니다(일반적인 데이터). CPU 코어가 많을수록 압축이 빨라집니다.
 The file is larger than 1 MB.	파일이 1 MB보다 큽니다.
 The list is cut: only the first entries are shown.	목록이 잘렸습니다. 처음 항목만 표시됩니다.
@@ -378,6 +389,7 @@ Two-factor	2단계 인증
 Type	유형
 Unfinished (resumable)	완료되지 않음(이어받기 가능)
 Unit	단위
+Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.	게스트의 저장되지 않은 데이터는 손실되며 파일 시스템은 다음 시작 때 검사가 필요할 수 있습니다. 이 옵션이 없으면 게스트가 종료되지 않는 VM(VMware Tools 없음, 게스트 멈춤)의 백업은 실패하고 VM은 그대로 돌려집니다.
 Up	위로
 Upload	업로드
 Upload PFX...	PFX 업로드...
@@ -403,11 +415,13 @@ Verify the certificate	인증서 확인
 Version	버전
 Virtual Machine Backup	Virtual Machine Backup
 Virtual machine	가상 컴퓨터
+Virtual machine during the backup	백업 중인 가상 머신
 Virtual machines	가상 컴퓨터
 Virtual machines...	가상 컴퓨터...
 Volume size	볼륨 크기
 Volume size, MiB (0 = one volume)	볼륨 크기, MiB(0 = 볼륨 하나)
 Volumes	볼륨
+Wait for the guest to shut down, seconds	게스트 종료를 기다리는 시간(초)
 Wait until the choices of the server are loaded.	서버의 선택 항목을 불러올 때까지 기다리십시오.
 Waiting	대기 중
 Warning	경고
@@ -434,6 +448,7 @@ every {0} {1}	{0} {1}마다
 fixed	고정
 folder	폴더
 from {0}	{0}부터
+held for backup since {0}	{0}부터 백업을 위해 보류됨
 hours	시간
 last	마지막
 limit {0} Mbit/s	제한 {0} Mbit/s

@@ -3,12 +3,14 @@
 (the default resource pool)	(le pool de ressources par défaut)
 (the root VM folder)	(le dossier racine des machines virtuelles)
 A PKCS#12 file (.pfx) with the certificate and its private key, 1 MB at most. Only the certificate itself is served, not the chain.	Un fichier PKCS#12 (.pfx) contenant le certificat et sa clé privée, 1 Mo au maximum. Seul le certificat lui-même est présenté, pas la chaîne.
+A VM that is held for a backup is shut down and locked by VM2Backup until the copy is finished or cancelled.	Une VM retenue pour une sauvegarde est arrêtée et verrouillée par VM2Backup jusqu'à la fin de la copie ou son annulation.
 A mapped drive letter (Z:) cannot be used: the service does not see it. Choose "Network drive..." to use its UNC path, or enter the UNC path.	Une lettre de lecteur réseau mappé (Z:) ne peut pas être utilisée : le service ne la voit pas. Choisissez « Lecteur réseau... » pour utiliser son chemin UNC, ou saisissez le chemin UNC.
 A new certificate was created. Your browser will ask you to trust it again.	Un nouveau certificat a été créé. Votre navigateur vous demandera de lui faire confiance à nouveau.
 A new user needs a password.	Un nouvel utilisateur a besoin d'un mot de passe.
 A path on the server computer	Un chemin sur l'ordinateur du serveur
 A path on the server computer (the service reads it)	Un chemin sur l'ordinateur du serveur (lu par le service)
 A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	Une machine virtuelle ESXi / vCenter en cours d'exécution est copiée à partir d'un instantané temporaire, supprimé ensuite. Sans VMware Tools, l'instantané avec mise au repos échoue : désactivez la mise au repos pour ces machines.
+A vCenter locks the VM against power-on and changes for the whole backup. A standalone ESXi host does not allow that (DisableMethods is not supported): there the VM is shut down and marked as held, and another administrator can still power it on or change it; the next run notices that and starts the copy over.	Un vCenter verrouille la VM contre le démarrage et les modifications pendant toute la sauvegarde. Un hôte ESXi autonome ne le permet pas (DisableMethods n'est pas pris en charge) : la VM y est arrêtée et marquée comme retenue, et un autre administrateur peut quand même la démarrer ou la modifier ; l'exécution suivante le remarque et reprend la copie à zéro.
 A virtual machine with this name already exists on the server. Enter another name; an existing machine is never overwritten.	Une machine virtuelle portant ce nom existe déjà sur le serveur. Saisissez un autre nom ; une machine existante n'est jamais écrasée.
 Abort	Abandonner
 Add Scheduled Task	Ajouter une tâche planifiée
@@ -37,6 +39,7 @@ At least 10 characters, not containing the user name.	Au moins 10 caractères, s
 Audit log	Journal d'audit
 Auto	Auto
 Back	Retour
+Back up while the VM is running (hot backup)	Sauvegarder pendant que la VM fonctionne (sauvegarde à chaud)
 Backup Explorer	Explorateur de sauvegardes
 Backup of {0}	Sauvegarde de {0}
 Backup started.	Sauvegarde démarrée.
@@ -159,9 +162,12 @@ Give the server a name.	Donnez un nom au serveur.
 Give the task a title.	Donnez un titre à la tâche.
 Go	OK
 HTML report...	Rapport HTML...
+Held for backup	Retenue pour sauvegarde
 History entries kept	Entrées d'historique conservées
 Host	Hôte
 Host key	Clé d'hôte
+Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Sauvegarde à chaud : la VM continue de fonctionner pendant la copie. La copie est cohérente après incident (comme après une coupure de courant), sauf si VMware Tools peut mettre le système de fichiers de l'invité en quiescence ; les bases de données et serveurs de messagerie peuvent nécessiter une récupération après une restauration. La VM est plus lente tant que l'instantané existe, l'instantané grossit sur le datastore et rien n'empêche d'autres administrateurs de modifier, d'éteindre ou de supprimer la VM entre-temps. Sans cette option, la VM est arrêtée et verrouillée pendant toute la sauvegarde, puis redémarrée.
+If the guest does not shut down, power it off (like pulling the plug)	Si l'invité ne s'arrête pas, éteindre la VM (comme débrancher la prise)
 Imported	Importé
 Include the memory of the virtual machine in the snapshot	Inclure la mémoire de la machine virtuelle dans l'instantané
 Job "{0}" finished: {1}	La tâche « {0} » est terminée : {1}
@@ -241,6 +247,9 @@ Recovery code	Code de récupération
 Recovery codes	Codes de récupération
 Recovery codes left	Codes de récupération restants
 Refresh	Actualiser
+Release the VM "{0}"? The VM2Backup lock is removed and a VM that was running before the backup is powered on. A paused backup of this VM then starts over.	Libérer la VM « {0} » ? Le verrou de VM2Backup est retiré et une VM qui fonctionnait avant la sauvegarde est rallumée. Une sauvegarde suspendue de cette VM repart alors de zéro.
+Release the VM (unlock and restore power)	Libérer la VM (déverrouiller et rétablir l'alimentation)
+Released.	Libérée.
 Remove	Retirer
 Remove window	Supprimer la plage
 Repeat	Répéter
@@ -274,6 +283,7 @@ Scheduler	Planificateur
 Secret	Secret
 Security	Sécurité
 Select	Sélectionner
+Select a VM that is held for a backup.	Sélectionnez une VM retenue pour une sauvegarde.
 Select a drive first.	Sélectionnez d'abord un lecteur.
 Select a row first.	Sélectionnez d'abord une ligne.
 Self-signed	Auto-signé
@@ -326,6 +336,7 @@ The connection test failed or has not finished. Save the server anyway?	Le test 
 The connection works.	La connexion fonctionne.
 The credentials of this server were not rejected.	Les identifiants de ce serveur n'ont pas été refusés.
 The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	Le datastore « {0} » dispose de {1} d'espace libre, la sauvegarde en contient jusqu'à {2}. Restaurer quand même ?
+The default is 300; a longer wait helps a guest that needs minutes to stop its services.	Par défaut 300 ; une attente plus longue aide un invité qui met des minutes à arrêter ses services.
 The figures are approximate (typical data). More CPU cores make compression faster.	Les chiffres sont approximatifs (données typiques). Plus de cœurs de processeur accélèrent la compression.
 The file is larger than 1 MB.	Le fichier dépasse 1 Mo.
 The list is cut: only the first entries are shown.	La liste est tronquée : seules les premières entrées sont affichées.
@@ -378,6 +389,7 @@ Two-factor	Deux facteurs
 Type	Type
 Unfinished (resumable)	Inachevée (reprenable)
 Unit	Unité
+Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.	Les données non enregistrées de l'invité sont perdues et son système de fichiers peut nécessiter une vérification au prochain démarrage. Sans cette option, la sauvegarde d'une VM dont l'invité ne s'arrête pas (pas de VMware Tools, invité bloqué) échoue et la VM est rendue intacte.
 Up	Haut
 Upload	Téléverser
 Upload PFX...	Téléverser un PFX...
@@ -403,11 +415,13 @@ Verify the certificate	Vérifier le certificat
 Version	Version
 Virtual Machine Backup	Sauvegarde de machines virtuelles
 Virtual machine	Machine virtuelle
+Virtual machine during the backup	Machine virtuelle pendant la sauvegarde
 Virtual machines	Machines virtuelles
 Virtual machines...	Machines virtuelles...
 Volume size	Taille des volumes
 Volume size, MiB (0 = one volume)	Taille des volumes, MiB (0 = un seul volume)
 Volumes	Volumes
+Wait for the guest to shut down, seconds	Attendre l'arrêt de l'invité, secondes
 Wait until the choices of the server are loaded.	Attendez que les choix du serveur soient chargés.
 Waiting	En attente
 Warning	Avertissement
@@ -434,6 +448,7 @@ every {0} {1}	intervalle de {0} {1}
 fixed	fixe
 folder	dossier
 from {0}	de {0}
+held for backup since {0}	retenue pour sauvegarde depuis {0}
 hours	heures
 last	dernière
 limit {0} Mbit/s	limite de {0} Mbit/s

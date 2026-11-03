@@ -3,12 +3,14 @@
 (the default resource pool)	(пул ресурсів за замовчуванням)
 (the root VM folder)	(кореневий каталог ВМ)
 A PKCS#12 file (.pfx) with the certificate and its private key, 1 MB at most. Only the certificate itself is served, not the chain.	Файл PKCS#12 (.pfx) із сертифікатом і закритим ключем, не більше 1 МБ. Віддається лише сам сертифікат, без ланцюжка.
+A VM that is held for a backup is shut down and locked by VM2Backup until the copy is finished or cancelled.	ВМ, яку утримують для бекапу, вимкнена й заблокована VM2Backup, доки копію не завершено або не скасовано.
 A mapped drive letter (Z:) cannot be used: the service does not see it. Choose "Network drive..." to use its UNC path, or enter the UNC path.	Літеру мережевого диска (Z:) використовувати не можна: служба її не бачить. Виберіть «Мережевий диск...», щоб узяти його UNC-шлях, або введіть UNC-шлях.
 A new certificate was created. Your browser will ask you to trust it again.	Створено новий сертифікат. Браузер знову попросить йому довіряти.
 A new user needs a password.	Новому користувачеві потрібен пароль.
 A path on the server computer	Шлях на комп'ютері сервера
 A path on the server computer (the service reads it)	Шлях на комп'ютері сервера (його читає служба)
 A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	Працююча ВМ ESXi / vCenter копіюється з тимчасового знімка, який потім видаляється. Без VMware Tools знімок із заморожуванням файлової системи не вдається: для таких ВМ вимкніть заморожування.
+A vCenter locks the VM against power-on and changes for the whole backup. A standalone ESXi host does not allow that (DisableMethods is not supported): there the VM is shut down and marked as held, and another administrator can still power it on or change it; the next run notices that and starts the copy over.	vCenter блокує ВМ від вмикання та змін на весь час бекапу. Окремий хост ESXi цього не дозволяє (DisableMethods не підтримується): там ВМ вимикається й позначається як утримувана, а інший адміністратор усе ж може її ввімкнути чи змінити; наступний запуск це помітить і почне копію заново.
 A virtual machine with this name already exists on the server. Enter another name; an existing machine is never overwritten.	Віртуальна машина з такою назвою вже є на сервері. Введіть іншу назву; наявна машина ніколи не перезаписується.
 Abort	Перервати
 Add Scheduled Task	Додати завдання до розкладу
@@ -37,6 +39,7 @@ At least 10 characters, not containing the user name.	Не менше 10 сим�
 Audit log	Журнал аудиту
 Auto	Авто
 Back	Назад
+Back up while the VM is running (hot backup)	Робити бекап на ввімкненій ВМ (гарячий бекап)
 Backup Explorer	Оглядач копій
 Backup of {0}	Копія {0}
 Backup started.	Резервне копіювання запущено.
@@ -159,9 +162,12 @@ Give the server a name.	Дайте серверу назву.
 Give the task a title.	Дайте завданню назву.
 Go	Перейти
 HTML report...	HTML-звіт...
+Held for backup	Утримується для бекапу
 History entries kept	Записів історії зберігати
 Host	Вузол
 Host key	Ключ вузла
+Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Гарячий бекап: ВМ продовжує працювати під час копіювання. Копія узгоджена лише на рівні збою (як після відключення живлення), якщо VMware Tools не можуть заморозити файлову систему гостя; базам даних і поштовим серверам після відновлення може знадобитися відновлення. Поки існує знімок, ВМ працює повільніше, знімок росте на сховищі, і ніщо не заважає іншим адміністраторам змінювати, вимикати чи видаляти ВМ. Без цієї опції ВМ вимикається й блокується на весь час бекапу, а після нього запускається знову.
+If the guest does not shut down, power it off (like pulling the plug)	Якщо гість не вимкнувся, вимкнути ВМ за живленням (як висмикнути шнур)
 Imported	Імпортовано
 Include the memory of the virtual machine in the snapshot	Включити в знімок пам'ять віртуальної машини
 Job "{0}" finished: {1}	Завдання «{0}» завершено: {1}
@@ -241,6 +247,9 @@ Recovery code	Код відновлення
 Recovery codes	Коди відновлення
 Recovery codes left	Залишилось кодів відновлення
 Refresh	Оновити
+Release the VM "{0}"? The VM2Backup lock is removed and a VM that was running before the backup is powered on. A paused backup of this VM then starts over.	Звільнити ВМ «{0}»? Блокування VM2Backup буде знято, а ВМ, яка працювала до бекапу, буде ввімкнено. Призупинений бекап цієї ВМ після цього почнеться заново.
+Release the VM (unlock and restore power)	Звільнити ВМ (зняти блокування й повернути живлення)
+Released.	Звільнено.
 Remove	Прибрати
 Remove window	Прибрати вікно
 Repeat	Повтор
@@ -274,6 +283,7 @@ Scheduler	Планувальник
 Secret	Секрет
 Security	Безпека
 Select	Вибрати
+Select a VM that is held for a backup.	Виберіть ВМ, яку утримують для бекапу.
 Select a drive first.	Спершу виберіть диск.
 Select a row first.	Спершу виберіть рядок.
 Self-signed	Самопідписаний
@@ -326,6 +336,7 @@ The connection test failed or has not finished. Save the server anyway?	Пере
 The connection works.	З'єднання працює.
 The credentials of this server were not rejected.	Облікові дані цього сервера не відхилялися.
 The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	На сховищі даних «{0}» вільно {1}, а копія займає до {2}. Усе одно відновити?
+The default is 300; a longer wait helps a guest that needs minutes to stop its services.	За замовчуванням 300; довше очікування допоможе гостю, якому потрібні хвилини, щоб зупинити служби.
 The figures are approximate (typical data). More CPU cores make compression faster.	Цифри приблизні (типові дані). Чим більше ядер процесора, тим швидше стиснення.
 The file is larger than 1 MB.	Файл більший за 1 МБ.
 The list is cut: only the first entries are shown.	Список обрізано: показано лише перші записи.
@@ -378,6 +389,7 @@ Two-factor	Двофакторна перевірка
 Type	Тип
 Unfinished (resumable)	Не завершено (можна продовжити)
 Unit	Одиниця
+Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.	Незбережені дані гостя буде втрачено, а його файловій системі під час наступного запуску може знадобитися перевірка. Без цієї опції бекап ВМ, гість якої не вимикається (немає VMware Tools, гість завис), завершується помилкою, а ВМ повертається недоторканою.
 Up	Вгору
 Upload	Завантажити
 Upload PFX...	Завантажити PFX...
@@ -403,11 +415,13 @@ Verify the certificate	Перевіряти сертифікат
 Version	Версія
 Virtual Machine Backup	Резервне копіювання віртуальної машини
 Virtual machine	Віртуальна машина
+Virtual machine during the backup	Віртуальна машина під час бекапу
 Virtual machines	Віртуальні машини
 Virtual machines...	Віртуальні машини...
 Volume size	Розмір тому
 Volume size, MiB (0 = one volume)	Розмір тому, MiB (0 = один том)
 Volumes	Томи
+Wait for the guest to shut down, seconds	Чекати вимкнення гостя, секунд
 Wait until the choices of the server are loaded.	Дочекайтеся завантаження варіантів із сервера.
 Waiting	Очікування
 Warning	Попередження
@@ -434,6 +448,7 @@ every {0} {1}	кожні {0} {1}
 fixed	жорсткий
 folder	папка
 from {0}	з {0}
+held for backup since {0}	утримується для бекапу з {0}
 hours	год
 last	останній
 limit {0} Mbit/s	межа {0} Mbit/s

@@ -295,7 +295,7 @@ VM2B_TEST("svcesxi", esxi_through_service_all_profiles)
         bool quiesce = c_.coin(), memory = e.vcenter() ? c_.coin(30) : c_.coin(30);
         Json el = Svc::Element(srv, f.spec.name.c_str(), JoinPath(store, "{VM}"), "xz", c_.range(1, 3), c_.coin(60) ? archPw.c_str() : nullptr);
         bool encrypted = el.get("encrypt").get("enabled").boolean();
-        { Json sn = Obj(); sn["quiesce"] = quiesce; sn["memory"] = memory; el["snapshot"] = sn; }
+        { Json sn = Obj(); sn["quiesce"] = quiesce; sn["memory"] = memory; sn["hot_backup"] = true; el["snapshot"] = sn; }
         if (e.vcenter() && c_.coin(70)) el["source"]["datacenter"] = f.spec.dc;
         el["allow_live"] = true; el["resume"] = true; el["speed_mbit"] = 0; el["on_error_next"] = true; el["segment_mib"] = 1;
         Str taskName = "ESXi " + e.name;
@@ -547,6 +547,51 @@ VM2B_TEST("svcesxi", esxi_task_survives_host_power_loss_and_service_restart)
     if (rec.get("status").str() != "Success" && rec.get("status").str() != "Warning") c_.note("final run: %s %s", rec.get("status").str().c_str(), FirstResultMessage(rec).c_str());
     T_CHECK(rec.get("status").str() == "Success" || rec.get("status").str() == "Warning");
     T_CHECK(ctl.leaked() == 0); T_CHECK(ctl.state().get("vms").get(f.spec.name.c_str()).get("snapshots").size() == 0);
+    ctl.deleteVm(f.spec.name);
+    return true;
+}
+
+// Холодный бэкап через службу: tasks.save без ключа hot_backup = холодный режим (round-trip tasks.list), строгая проверка ключей, задание запускается (VM выключена, копия без снимка,
+// ВМ включена снова), простой попадает в историю; esxi.unlock_vm (admin) возвращает удерживаемую ВМ; servers.vms показывает «held_since».
+VM2B_TEST("svcesxi", esxi_cold_task_defaults_unlock_and_downtime)
+{
+    Vec<Env> all; if (!Envs(c_, all)) return true;
+    Vec<Env> es; for (const Env& e : all) if (e.tlsOnly.empty() && e.cert.empty()) es.push_back(e);
+    const Env& e = es[c_.rnd((u32)es.size())];
+    OpenLogOnce();
+    Svc s(c_, "svcx5"); if (!s.up) return false;
+    Ctl ctl(e); ctl.reset();
+    Fx f; T_CHECK(MakeFx(c_, ctl, e, f, "CS", 1, 600000, 300000, "poweredOn")); if (!f.m.ok) return false;
+    Json sa = Obj(); sa["server"] = e.record(); Str srv = s.ok("servers.save", sa).get("id").str();
+    // 1. no snapshot key: stored as cold (hot_backup false); explicit true stays; wrong types are refused with a clear text
+    Json el = Svc::Element(srv, f.spec.name.c_str(), JoinPath(s.tmp.sub("store"), "{VM}"), "xz", 1); el["verify"] = false; el["segment_mib"] = 1;
+    Str taskId = s.saveTask("Cold", el); T_CHECK(!taskId.empty());
+    { Json tl = s.ok("tasks.list", Obj()); Json sn; for (size_t i = 0; i < tl.size(); ++i) if (tl.at(i).get("id").str() == taskId) sn = tl.at(i).get("elements").at(0).get("snapshot");
+      T_CHECK(sn.is_object() && sn.has("hot_backup") && !sn.get("hot_backup").boolean()); T_CHECK(!sn.get("force_off").boolean()); }
+    { Json el2 = el; Json sn = Obj(); sn["hot_backup"] = true; el2["snapshot"] = sn; Str id2 = s.saveTask("Hot", el2); T_CHECK(!id2.empty());
+      Json tl = s.ok("tasks.list", Obj()); for (size_t i = 0; i < tl.size(); ++i) if (tl.at(i).get("id").str() == id2) T_CHECK(tl.at(i).get("elements").at(0).get("snapshot").get("hot_backup").boolean()); }
+    { Json el3 = el; Json sn = Obj(); sn["hot_backup"] = "yes"; el3["snapshot"] = sn; Json tt = Obj(); tt["name"] = "Bad"; Json els = Json::array(); els.push(el3); tt["elements"] = els; tt["enabled"] = true; Json ta = Obj(); ta["task"] = tt;
+      T_CHECK(!s.call("tasks.save", ta)); T_CHECK(s.lastErr.find("hot_backup must be true or false") >= 0);
+      Json sn2 = Obj(); sn2["shutdown_timeout"] = 3; el3["snapshot"] = sn2; els = Json::array(); els.push(el3); tt["elements"] = els; ta["task"] = tt; T_CHECK(!s.call("tasks.save", ta)); T_CHECK(s.lastErr.find("shutdown_timeout") >= 0); }
+    // 2. the task runs cold: lock, shut down, copy in place (no snapshot), power on; the downtime is in the history
+    Json ra = Obj(); ra["id"] = "Cold"; Str jid = s.ok("tasks.run", ra).get("job").str(); T_CHECK(!jid.empty());
+    Str fin = s.waitJob(jid, 120000); T_CHECK(fin == "Success" || fin == "Warning" || fin == "Gone");
+    Json rec; T_CHECK(HistoryOf(s, jid, rec)); if (c_.failed) return false;
+    T_CHECK(rec.get("status").str() == "Success" || rec.get("status").str() == "Warning");
+    T_CHECK(rec.get("results").at(0).get("downtime").num() > 0); T_CHECK(rec.get("results").at(0).get("downtime_to").num() > rec.get("results").at(0).get("downtime_from").num());
+    T_CHECK(ctl.counter("snap:CreateSnapshot") == 0); T_CHECK(ctl.counter("soap:ShutdownGuest") == 1); T_CHECK(ctl.vmState(f.spec.name).get("power").str() == "poweredOn");
+    // 3. a paused cold backup holds the VM: the server's VM list says so, esxi.unlock_vm gives the VM back (admin command, unknown server / VM refused)
+    { Str er; Json cfg = e.record(); { Json sn = Obj(); sn["quiesce"] = true; cfg["snapshot"] = sn; } VmSource* src = NewEsxiSource(cfg, er); T_CHECK(src != nullptr); if (src) {
+        Target* t = nullptr; { Json tc = Obj(); tc["type"] = "local"; tc["path"] = s.tmp.sub("store2"); Str e2; t = MakeTarget(tc, e2); }
+        struct P : Progress { u64 n = 0; void onBytes(u64 b) override { n += b; } bool aborted() override { return n > 100000; } bool keepOnAbort() override { return true; } } pr;
+        BackupOptions o; o.kdfIterations = 3000; o.verify = false; o.segmentBytes = (u64)512 * 300; Manifest man; Str warn, err;
+        bool ok = BackupVm(*src, f.spec.name, *t, o, &pr, man, warn, err); T_CHECK(!ok); delete t; delete src; } }
+    T_CHECK(ctl.vmState(f.spec.name).get("power").str() == "poweredOff");
+    { Json va = Obj(); va["id"] = srv; Json vl = s.ok("servers.vms", va); bool held = false; for (size_t i = 0; i < vl.get("vms").size(); ++i) if (vl.get("vms").at(i).get("name").str() == f.spec.name) held = vl.get("vms").at(i).get("held_since").integer() > 0; T_CHECK(held); }
+    { Json ua = Obj(); ua["server"] = srv; ua["vm"] = f.spec.name; Json r = s.ok("esxi.unlock_vm", ua); T_CHECK(r.get("message").str().find("released 1") >= 0);
+      T_CHECK(ctl.vmState(f.spec.name).get("power").str() == "poweredOn");
+      Json ua2 = ua; ua2["server"] = "nope"; T_CHECK(!s.call("esxi.unlock_vm", ua2)); T_CHECK(s.lastErr.find("not found") >= 0);
+      Json ua3 = ua; ua3["vm"] = "no-such-vm"; T_CHECK(!s.call("esxi.unlock_vm", ua3)); }
     ctl.deleteVm(f.spec.name);
     return true;
 }

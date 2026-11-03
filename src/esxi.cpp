@@ -314,7 +314,7 @@ static bool SnapshotIsLive(const Str& desc)
     return alive;
 }
 
-struct FileItem { Str name, ds, path, arc, origArc, type; u64 size; i64 mtime; int group; Bytes inl; bool hasInl; bool vol; FileItem() : size(0), mtime(0), group(0), hasInl(false), vol(false) {} };
+struct FileItem { Str name, ds, path, arc, origArc, type; u64 size; i64 mtime; int group; Bytes inl; bool hasInl; bool vol; bool mtimeKnown; FileItem() : size(0), mtime(0), group(0), hasInl(false), vol(false), mtimeKnown(false) {} };      // mtimeKnown: the time came from the server (the real ESXi 7.0.3 sends no Last-Modified for a disk file)
 // Диск включённой ВМ: замороженное снимком звено (и его родители) удерживает процесс ВМ, /folder отдаёт для него HTTP 500 («Failed to lock file»), поэтому
 // копия берётся из КЛОНА (VirtualDiskManager.CopyVirtualDisk_Task, тонкий диск без цепочки родителей), который лежит во временной папке «VM2Backup-<10 hex>»
 // рядом с ВМ и читается обычным /folder (с Range, то есть продолжение внутри диска работает).
@@ -329,15 +329,15 @@ static bool IsVolatileType(const Str& t) { return t == "config" || t == "extende
 static const size_t kMaxSavedFile = (size_t)4 << 20;                           // a configuration file bigger than this is not kept: it is read again and counts as frozen
 static const size_t kMaxSavedTotal = (size_t)6 << 20;                          // all kept files together (the journal is read back whole, 16 MiB at most, base64 of incompressible data included)
 
-struct SavedFile { Str arc, type; u64 size; i64 mtime; bool vol, hasInl; Bytes bytes; SavedFile() : size(0), mtime(0), vol(false), hasInl(false) {} };
-struct SavedState { bool ok, clone; Str meta, power; i64 metaTime; Vec<SavedFile> files; SavedState() : ok(false), clone(false), metaTime(0) {} };
+struct SavedFile { Str arc, type; u64 size; i64 mtime; bool vol, hasInl, known; Bytes bytes; SavedFile() : size(0), mtime(0), vol(false), hasInl(false), known(false) {} };
+struct SavedState { bool ok, clone; Str meta, power, logSig; i64 metaTime; Vec<SavedFile> files; SavedState() : ok(false), clone(false), metaTime(0) {} };
 
 static Str SavedStateEncode(const SavedState& st)
 {
     Json o = Json::object(), fl = Json::array();
-    o["v"] = 1; o["clone"] = st.clone; o["power"] = st.power; o["meta"] = st.meta; o["meta_time"] = st.metaTime;
+    o["v"] = 1; o["clone"] = st.clone; o["power"] = st.power; o["ls"] = st.logSig; o["meta"] = st.meta; o["meta_time"] = st.metaTime;
     for (const SavedFile& f : st.files) {
-        Json e = Json::object(); e["a"] = f.arc; e["t"] = f.type; e["s"] = f.size; e["m"] = f.mtime; e["vol"] = f.vol;
+        Json e = Json::object(); e["a"] = f.arc; e["t"] = f.type; e["s"] = f.size; e["m"] = f.mtime; e["vol"] = f.vol; e["k"] = f.known;
         if (f.hasInl) e["b"] = Base64Encode(f.bytes.data(), f.bytes.size());
         fl.push(e);
     }
@@ -360,11 +360,11 @@ static bool SavedStateDecode(const Str& text, SavedState& st)
     delete ds;
     if (!ok) return false;
     Json o; Str e; if (!Json::parse(js.data(), js.size(), o, e) || !o.is_object() || o.get("v").integer() != 1) return false;
-    st.clone = o.get("clone").boolean(); st.power = o.get("power").str(); st.meta = o.get("meta").str(); st.metaTime = o.get("meta_time").integer();
+    st.clone = o.get("clone").boolean(); st.power = o.get("power").str(); st.logSig = o.get("ls").str(); st.meta = o.get("meta").str(); st.metaTime = o.get("meta_time").integer();
     const Json& fl = o.get("files");
     for (size_t i = 0; i < fl.size(); ++i) {
         const Json& e2 = fl.at(i); SavedFile f;
-        f.arc = e2.get("a").str(); f.type = e2.get("t").str(); f.size = (u64)e2.get("s").integer(); f.mtime = e2.get("m").integer(); f.vol = e2.get("vol").boolean();
+        f.arc = e2.get("a").str(); f.type = e2.get("t").str(); f.size = (u64)e2.get("s").integer(); f.mtime = e2.get("m").integer(); f.vol = e2.get("vol").boolean(); f.known = e2.get("k").boolean();
         if (e2.has("b")) { Str b = e2.get("b").str(); f.hasInl = true; if (!Base64Decode(b.c_str(), b.size(), f.bytes)) return false; if (f.bytes.size() != f.size) return false; }
         if (f.vol && !f.hasInl) return false;
         st.files.push_back(f);
@@ -375,12 +375,43 @@ static bool SavedStateDecode(const Str& text, SavedState& st)
 
 struct VmData {
     Str id, name, power, conn, uuid, instUuid, guest, vmPath, dc;
-    bool isTemplate, haveConfig, encrypted; i64 cpu, mem;
+    bool isTemplate, haveConfig, encrypted; Str holdSource, annotation; i64 cpu, mem;
     Layout lx; Vec<SnapInfo> snaps; Vec<DiskDev> disks;
     VmData() : isTemplate(false), haveConfig(false), encrypted(false), cpu(0), mem(0) {}
 };
 
-// ---- the source -------------------------------------------------------------------------------------------------
+// ---- cold backup: the hold (docs/ESXI.md, "Холодный (по умолчанию) и горячий бэкап") ---------------------------------------
+// The lock of a VM is `AuthorizationManager.DisableMethods(entity = VM, sourceId = <source>)`; the source id itself carries what the next run needs to clean up after a crash:
+// "VM2Backup-<10 hex>-<on|off|sus>-<unix time>": the VM's power state before the backup and the time the hold started.
+struct Hold {
+    bool valid; Str source, id, orig; i64 locked, offAt;     // orig: poweredOn | poweredOff | suspended
+    Hold() : valid(false), locked(0), offAt(0) {}
+};
+static bool ParseHoldSource(const Str& s, Hold& h)
+{
+    if (!s.starts_with("VM2Backup-") || s.size() < 10 + 10 + 1 + 2 + 1 + 1) return false;
+    Str id = s.substr(10, 10);
+    for (size_t i = 0; i < id.size(); ++i) if (!isxdigit((unsigned char)id[i])) return false;
+    if (s[20] != '-') return false;
+    int d = s.find('-', 21); if (d < 0) return false;
+    Str code = s.substr(21, (size_t)d - 21), tm = s.substr((size_t)d + 1);
+    if (code != "on" && code != "off" && code != "sus") return false;
+    if (tm.empty()) return false;
+    for (size_t i = 0; i < tm.size(); ++i) if (tm[i] < '0' || tm[i] > '9') return false;
+    h.valid = true; h.source = s; h.id = id; h.orig = code == "on" ? "poweredOn" : code == "sus" ? "suspended" : "poweredOff"; h.locked = I64(tm); h.offAt = 0;
+    return true;
+}
+static Str MakeHoldSource(const Str& id, const Str& orig, i64 t)
+{
+    return "VM2Backup-" + id + "-" + (orig == "poweredOn" ? "on" : orig == "suspended" ? "sus" : "off") + "-" + Str::fmt("%lld", (long long)t);
+}
+// The methods another administrator (or a script, or a schedule) must not call while the VM is held: everything that powers it on, changes it, moves or removes it.
+// ShutdownGuest and (for a VM that was running) PowerOffVM_Task stay open: the backup itself needs them.
+static const char* const kHoldMethods[] = {
+    "PowerOnVM_Task", "ResetVM_Task", "SuspendVM_Task", "RebootGuest", "StandbyGuest", "ReconfigVM_Task", "CreateSnapshot_Task", "CreateSnapshotEx_Task",
+    "RemoveAllSnapshots_Task", "RevertToCurrentSnapshot_Task", "RelocateVM_Task", "MigrateVM_Task", "CloneVM_Task", "MarkAsTemplate", "UnregisterVM", "Destroy_Task",
+    "CustomizeVM_Task", "UpgradeVM_Task", "ConsolidateVMDisks_Task", "PromoteDisks_Task", "InstantClone_Task", "ExportVm", "Rename_Task", "AcquireTicket" };
+
 class RestoreImpl;
 static size_t TopLink(const VmData& vm, const LxDisk& d);
 
@@ -397,6 +428,10 @@ public:
         m_memory = sn.is_object() ? sn.get("memory").boolean(false) : false;
         m_history = sn.is_object() ? sn.get("history").boolean(true) : true;       // false: the VM's other snapshots (memory, side branches, the list) are not copied
         m_historyCfg = m_history;
+        m_hot = sn.is_object() ? sn.get("hot_backup").boolean(false) : false;           // default: COLD (the VM is shut down and locked for the whole backup)
+        m_forceOff = sn.is_object() ? sn.get("force_off").boolean(false) : false;
+        m_toolsWait = (int)cfg.get("tools_wait").integer(30);
+        m_shutdownTimeout = (int)(sn.is_object() && sn.has("shutdown_timeout") ? sn.get("shutdown_timeout").integer(300) : cfg.get("shutdown_timeout").integer(300)); if (m_shutdownTimeout < 1) m_shutdownTimeout = 300;
         m_liveClone = cfg.get("live_disk").str("clone") != "direct";               // "clone" (default): a running VM's disks are cloned on the host first; "direct": read in place (only for hosts that allow it)
         m_cloneTimeout = (int)cfg.get("clone_timeout").integer(21600);
         m_taskTimeout = (int)cfg.get("task_timeout").integer(600); m_removeTimeout = (int)cfg.get("remove_timeout").integer(3600);
@@ -416,8 +451,7 @@ public:
         Vec<VmData> all;
         bool ok = collectVms(all, true);
         Str e = err; bool t = transient;
-        logout();
-        if (!ok) return fail(e, t);
+        if (!ok) { logout(); return fail(e, t); }
         for (const VmData& v : all) {
             if (v.isTemplate || !v.haveConfig) continue;
             VmInfo i; i.name = v.name;
@@ -429,8 +463,10 @@ public:
             if (v.mem) { if (!i.extra.empty()) i.extra += ", "; i.extra += Str::fmt("%lld MB RAM", (long long)v.mem); }
             if (!ds.empty()) { if (!i.extra.empty()) i.extra += ", "; i.extra += "datastore " + ds; }
             if (m_vcenter && !v.dc.empty()) { if (!i.extra.empty()) i.extra += ", "; i.extra += "datacenter " + v.dc; }
+            { Hold h; if (!v.holdSource.empty() && ParseHoldSource(v.holdSource, h)) i.held = Str::fmt("%lld", (long long)h.locked); }      // a cold backup holds the VM (the marker)
             vms.push_back(i);
         }
+        logout();
         return true;
     }
 
@@ -438,6 +474,11 @@ public:
     bool pack(TarWriter& tar, Progress* pr, Str& warning) override;
     void end(bool keepForResume) override;
     Str restartReason() const override { return m_restartWhy; }
+    bool holdsVm() const override { return m_cold && m_hold.valid; }
+    Str endWarning() const override { return m_endWarn; }
+    bool downtime(double& from, double& to) const override { if (m_downFrom <= 0 || m_downTo <= 0) return false; from = m_downFrom; to = m_downTo; return true; }
+    bool unlockVm(const Str& vm, Str& message) override;
+    Str lockInfo() const override { return m_lockInfo; }
 
 private:
     // ---- plumbing ------------------------------------------------------------------------------------------------
@@ -509,7 +550,7 @@ private:
                 const XmlNode* rv = r->child("returnval");
                 if (!rv) return fail("RetrieveServiceContent returned nothing");
                 m_rootFolder = rv->childText("rootFolder").trim(); m_pc = rv->childText("propertyCollector").trim();
-                m_viewMgr = rv->childText("viewManager").trim(); m_sessMgr = rv->childText("sessionManager").trim(); m_fileMgr = rv->childText("fileManager").trim(); m_vdm = rv->childText("virtualDiskManager").trim();
+                m_viewMgr = rv->childText("viewManager").trim(); m_sessMgr = rv->childText("sessionManager").trim(); m_fileMgr = rv->childText("fileManager").trim(); m_vdm = rv->childText("virtualDiskManager").trim(); m_authMgr = rv->childText("authorizationManager").trim();
                 const XmlNode* ab = rv->child("about");
                 if (ab) { m_fullName = ab->childText("fullName"); m_apiVersion = ab->childText("apiVersion").trim(); m_apiType = ab->childText("apiType").trim(); m_product = ab->childText("productLineId").trim(); }
                 if (m_rootFolder.empty() || m_pc.empty() || m_viewMgr.empty() || m_sessMgr.empty()) return fail("unexpected ServiceContent (no inventory managers)");
@@ -672,6 +713,8 @@ private:
             n = o.get("layoutEx.file");
             if (n) { for (const XmlNode& f : n->kids) { LxFile lf; ParseFileInfo(f, lf); v.lx.files.push_back(lf); } v.lx.have = true; }
         }
+        v.annotation = o.text("config.annotation");
+        n = o.get("config.extraConfig"); if (n) for (const XmlNode& k : n->kids) if (k.childText("key").trim() == "vm2backup.hold") v.holdSource = k.childText("value").trim();
         n = o.get("snapshot"); if (n) ParseSnapshotInfo(*n, v.snaps);
         n = o.get("config.hardware.device"); if (n) ParseDevices(*n, v.disks);
     }
@@ -680,7 +723,7 @@ private:
     bool hasKeyId() const { int a = atoi(m_apiVersion.c_str()), b = 0; int d = m_apiVersion.find('.'); if (d > 0) b = atoi(m_apiVersion.c_str() + d + 1); return (a > 6 || (a == 6 && b >= 5)) && EsxiCompareVersion(m_ver, "6.5") >= 0; }   // VirtualMachineConfigInfo.keyId exists since 6.5
     Str VmPropSet(bool forList) const {
         static const char* common[] = { "name", "runtime.powerState", "runtime.connectionState", "config.template", "config.uuid", "config.instanceUuid", "config.guestFullName",
-                                        "config.files.vmPathName" };
+                                        "config.files.vmPathName", "config.extraConfig", "config.annotation" };
         static const char* listOnly[] = { "config.hardware.numCPU", "config.hardware.memoryMB", "layoutEx.file" };
         static const char* backupOnly[] = { "layoutEx", "snapshot", "config.hardware.device" };
         Vec<const char*> p;
@@ -857,6 +900,231 @@ private:
         }
         if (!all) { err = firstErr; transient = tr; }
         return all;
+    }
+
+    void logoutKeepHold() { LiveRegister(m_hold.id, false); m_begun = false; m_list.clear(); logout(); }      // the hold stays in m_hold (holdsVm()), it is released by the next end(false) / by the next run
+
+    // ---- cold backup: mark, lock, shut down, give back ------------------------------------------------------------------------
+    // Facts of the real ESXi 7.0.3 (docs/ESXI.md): AuthorizationManager.DisableMethods / EnableMethods / QueryDisabledMethods answer NotSupported on a standalone host (they work on vCenter),
+    // and root cannot be denied access to a VM. So a hold has TWO parts: (1) the MARKER, which always works: the extraConfig key `vm2backup.hold` = the hold's source id (the next run finds
+    // an orphan hold by it) and a visible note in the VM's annotation; (2) the LOCK, DisableMethods with that source id, where the server supports it (vCenter).
+    static Str HoldNote(const Hold& h) { return "[VM2Backup hold " + h.source + ": this VM is shut down for a backup, do not power it on or change it]"; }
+    // removes our note (and the line break before it) from a text: an annotation, or the vmx line with the annotation (a line break is |0A there)
+    static Str StripHoldNote(const Str& s) {
+        int a = s.find("[VM2Backup hold "); if (a < 0) return s;
+        int e = s.find(']', (size_t)a); if (e < 0) return s;
+        size_t from = (size_t)a;
+        if (from >= 3 && s.substr(from - 3, 3) == "|0A") from -= 3; else if (from >= 1 && s[from - 1] == '\n') from -= 1;
+        return s.substr(0, from) + s.substr((size_t)e + 1);
+    }
+    // the vmx text of a held VM without the marker: the archive and a restored VM must not carry it
+    static Str StripHoldFromVmx(const Str& vmx) {
+        Str out; size_t pos = 0;
+        while (pos <= vmx.size()) {
+            int nl = vmx.find('\n', pos); size_t end = nl < 0 ? vmx.size() : (size_t)nl;
+            Str line = vmx.substr(pos, end - pos);
+            Str t = line.trim();
+            if (!t.starts_with("vm2backup.hold")) { if (t.starts_with("annotation") && line.find("[VM2Backup hold ") >= 0) line = StripHoldNote(line); out += line; if (nl >= 0) out += "\n"; }
+            if (nl < 0) break;
+            pos = end + 1;
+        }
+        return out;
+    }
+    bool reconfigure(const Str& vmRef, const Str& specInner) {
+        TaskResult tr;
+        if (!runTask("ReconfigVM_Task", Ref("_this", "VirtualMachine", vmRef) + "<spec>" + specInner + "</spec>", m_taskTimeout, tr, false)) return false;
+        if (!tr.ok) return fail(tr.faultMsg);
+        return true;
+    }
+    bool setMarker(const VmData& v, const Hold& h) {
+        Str ann = StripHoldNote(v.annotation); if (!ann.empty()) ann += "\n"; ann += HoldNote(h);
+        return reconfigure(v.id, Tag("annotation", ann) + "<extraConfig xsi:type=\"OptionValue\"><key>vm2backup.hold</key><value xsi:type=\"xsd:string\">" + XmlEscape(h.source) + "</value></extraConfig>");
+    }
+    bool clearMarker(const Str& vmRef) {
+        VmData v; if (!readVm(vmRef, m_dc, v)) return false;
+        if (v.holdSource.empty() && v.annotation.find("[VM2Backup hold ") < 0) return true;
+        return reconfigure(vmRef, Tag("annotation", StripHoldNote(v.annotation)) + "<extraConfig xsi:type=\"OptionValue\"><key>vm2backup.hold</key><value xsi:type=\"xsd:string\"></value></extraConfig>");
+    }
+    bool lockMethods(const Str& vmRef, const Str& source, bool withPowerOff, Str& why) {
+        const XmlNode* r;
+        if (m_authMgr.empty()) { why = "the server has no authorization manager"; return false; }
+        Str in = Ref("_this", "AuthorizationManager", m_authMgr) + Ref("entity", "VirtualMachine", vmRef);
+        for (const char* m : kHoldMethods) in += "<method>" + Tag("method", m) + Tag("reasonId", "VM2Backup: the VM is held for a backup") + "</method>";
+        if (withPowerOff) in += "<method>" + Tag("method", "PowerOffVM_Task") + Tag("reasonId", "VM2Backup: the VM is held for a backup") + "</method>";
+        in += Tag("sourceId", source);
+        if (call("DisableMethods", in, r)) return true;
+        why = m_faultType == "NotSupported" ? Str("the server does not support DisableMethods (a standalone ESXi host)") : err; return false;
+    }
+    bool unlockMethods(const Str& vmRef, const Str& source) {
+        const XmlNode* r;
+        Str in = Ref("_this", "AuthorizationManager", m_authMgr) + Ref("entity", "VirtualMachine", vmRef);
+        for (const char* m : kHoldMethods) in += Tag("method", m);
+        in += Tag("method", "PowerOffVM_Task") + Tag("sourceId", source);
+        return call("EnableMethods", in, r);
+    }
+    bool powerState(const Str& vmRef, Str& state) {
+        static const char* p[] = { "runtime.powerState" };
+        Vec<ObjData> objs;
+        if (!retrieve(PropSet("VirtualMachine", p, 1), ObjSelect("VirtualMachine", vmRef), objs)) return false;
+        if (objs.empty()) return fail("the VM disappeared from the inventory");
+        state = objs[0].text("runtime.powerState");
+        return true;
+    }
+    bool powerOnVm(const Str& vmRef, Str& why) {
+        TaskResult tr;
+        if (!runTask("PowerOnVM_Task", Ref("_this", "VirtualMachine", vmRef), m_taskTimeout, tr, false)) { why = err; return false; }
+        if (!tr.ok) { why = tr.faultMsg; return false; }
+        return true;
+    }
+    // Gives a VM back: the lock off (where there is one), the marker off, the power state as before the backup (a VM that was running is started). Best effort; `w` collects what failed.
+    // `powered` = the VM was started again. Never changes err.
+    bool giveBack(const Str& vmRef, const Hold& h, bool tryUnlock, Str& w, bool* powered = nullptr) {
+        Str e = err; bool t = transient; bool allOk = true;
+        if (powered) *powered = false;
+        if (tryUnlock && !m_authMgr.empty() && !unlockMethods(vmRef, h.source) && m_faultType != "NotSupported" && !(m_hasFault && m_faultMsg.find("not found") >= 0)) {
+            if (!w.empty()) w += "; "; w += "the lock \"" + h.source + "\" could not be removed (" + err + ")"; allOk = false;
+        }
+        m_hasFault = false;
+        if (!clearMarker(vmRef)) { if (!w.empty()) w += "; "; w += "the hold marker of VM2Backup could not be removed from the VM (" + err + ")"; allOk = false; }
+        if (h.orig == "poweredOn") {
+            Str ps;
+            if (powerState(vmRef, ps) && ps != "poweredOn") {
+                Str why;
+                if (powerOnVm(vmRef, why)) { if (powered) *powered = true; }
+                else { if (!w.empty()) w += "; "; w += "the VM could not be powered on again: " + why + " (it was running before the backup)"; allOk = false; }
+            }
+        }
+        err = e; transient = t; m_hasFault = false;
+        return allOk;
+    }
+    // A VM2Backup hold (marker) that belongs to no running or resumable backup (`keep` = the source of the one that does): given back. A hold of a backup that works in this process
+    // is left alone. Anything else on the VM (a lock of somebody else, a text of the user) is never touched.
+    int sweepHold(const VmData& v, const Str& keep, Str& warning) {
+        Hold h; if (v.holdSource.empty() || !ParseHoldSource(v.holdSource, h) || v.holdSource == keep || LiveRegistered(h.id)) return 0;
+        Str w; bool powered = false;
+        giveBack(v.id, h, true, w, &powered);
+        if (powered) m_justStarted = true;                                      // the VM was just started: its guest needs time before VMware Tools answers
+        Str m = "removed an old VM2Backup hold of this VM (left by a backup that was interrupted)";
+        if (powered) m += ", the VM was powered on again";
+        if (!w.empty()) m += "; " + w;
+        if (!warning.empty()) warning += "; ";
+        warning += m;
+        return 1;
+    }
+
+    // Shuts the guest down (VMware Tools) and waits; false + err when that did not work (the caller gives the VM back).
+    bool toolsRunning(const Str& vmRef) {
+        static const char* p[] = { "guest.toolsRunningStatus" };
+        Vec<ObjData> objs; Str e = err; bool t = transient;
+        bool ok = retrieve(PropSet("VirtualMachine", p, 1), ObjSelect("VirtualMachine", vmRef), objs) && !objs.empty() && objs[0].text("guest.toolsRunningStatus") == "guestToolsRunning";
+        err = e; transient = t; m_hasFault = false;
+        return ok;
+    }
+    bool coldShutdown(Str& warning) {
+        const XmlNode* r;
+        if (m_justStarted) {                                                    // an old hold was given back a moment ago (the VM was started): wait for the guest's Tools instead of failing at once
+            DWORD t0 = GetTickCount();
+            while (!toolsRunning(m_vmRef) && (int)((GetTickCount() - t0) / 1000) < m_shutdownTimeout) { if (aborted()) return fail(kAbortedMessage); Sleep(m_pollMs > 1000 ? 1000 : 200); }
+        }
+        Str hint = "install VMware Tools, shut the VM down yourself, tick \"Back up while the VM is running\" or tick \"Power off the VM if the guest does not shut down\"";
+        bool toolsMissing = false, already = false;
+        // a guest whose Tools just started (or whose heartbeat is late: a loaded host) answers ToolsUnavailable for a moment: ask again for up to `tools_wait` seconds before believing it
+        DWORD tw0 = GetTickCount(); bool called;
+        for (;;) {
+            called = call("ShutdownGuest", Ref("_this", "VirtualMachine", m_vmRef), r);
+            if (called || !m_hasFault || m_faultType != "ToolsUnavailable" || (int)((GetTickCount() - tw0) / 1000) >= m_toolsWait || aborted()) break;
+            Sleep(2000);
+        }
+        if (!called) {
+            if (!m_hasFault) return false;                                         // a lost connection: the caller decides
+            Str m = m_faultMsg.lower();
+            if (m_faultType == "InvalidPowerState") already = true;
+            else if (m_faultType == "ToolsUnavailable" || m.find("tools") >= 0) toolsMissing = true;
+            else if (m_faultType == "NoPermission" || m_faultType == "RestrictedVersion" || m_faultType == "NotSupported" || m_faultType == "NotAuthenticated") return fail("the guest cannot be shut down (" + m_faultMsg + ")");
+            // any other fault: a real ESXi 7.0.3 answers GenericVmConfigFault when ITS wait (about 30 s) for the guest to power off ran out, although the guest was halting: the power state decides
+            err.clear(); m_hasFault = false;
+        }
+        bool off = already;
+        if (!toolsMissing && !off) {
+            DWORD t0 = GetTickCount();
+            for (;;) {
+                Str ps; if (!powerState(m_vmRef, ps)) return false;
+                if (ps == "poweredOff") { off = true; break; }
+                if (aborted()) return fail(kAbortedMessage);
+                if ((int)((GetTickCount() - t0) / 1000) >= m_shutdownTimeout) break;
+                Sleep(m_pollMs > 1000 ? 1000 : 200);
+            }
+        }
+        if (off) return true;
+        Str why = toolsMissing ? Str("VMware Tools is not running in the guest, so it cannot be shut down") : Str::fmt("the guest did not shut down within %d s", m_shutdownTimeout);
+        if (!m_forceOff) return fail(why + "; " + hint);
+        TaskResult tr;
+        if (!runTask("PowerOffVM_Task", Ref("_this", "VirtualMachine", m_vmRef), m_taskTimeout, tr, false)) return false;
+        if (!tr.ok && tr.faultType != "InvalidPowerState") return fail("powering the VM off failed: " + tr.faultMsg);
+        if (!warning.empty()) warning += "; ";
+        warning += why + ": the VM was powered off (like pulling the plug), unsaved data of the guest is lost";
+        return true;
+    }
+
+    // Starts or continues the hold of the VM `v`. `th`: the hold of the interrupted run (from the resume token). On success m_hold is valid and `v` is read again (powered off / suspended).
+    bool coldAcquire(VmData& v, const Hold& th, bool haveTh, Str& warning, Str& restartWhy) {
+        int freed = sweepHold(v, haveTh ? th.source : Str(), warning);
+        if (freed && !readVm(m_vmRef, m_dc, v)) return false;
+        m_hold = Hold(); m_holdResumed = false;
+        if (haveTh) {
+            m_hold = th; m_holdResumed = true;
+            if (v.power == "poweredOn") {                                          // somebody started the VM (no lock on a standalone host; on vCenter the lock was lost): the part already copied is of no use
+                restartWhy = "the VM was powered on while the backup was paused";
+                m_hold.offAt = 0;
+            }
+        } else {
+            unsigned char rb[5]; RandomBytes(rb, 5);
+            m_hold.id = HexEncode(rb, 5); m_hold.orig = v.power; m_hold.locked = (i64)UnixNow(); m_hold.source = MakeHoldSource(m_hold.id, m_hold.orig, m_hold.locked); m_hold.valid = true;
+            // a snapshot of an earlier hot run that is still there must go BEFORE the lock (RemoveSnapshot is one of the locked methods)
+            int n = 0;
+            if (!removeLeftovers(v, Str(), n)) { Str e = err; bool t = transient; m_hold = Hold(); return fail("cannot remove an old VM2Backup snapshot: " + e, t); }
+            if (n) { if (!warning.empty()) warning += "; "; warning += Str::fmt("removed %d old VM2Backup snapshot(s) left by an earlier run", n); }
+            int o = removeOrphanCloneDirs(v, m_keptNames); (void)o;
+        }
+        LiveRegister(m_hold.id, true);
+        // the marker (always), then the lock (where the server has it). Both are set again on a continuation: a restarted host service forgets a lock, somebody may have edited the VM.
+        if (v.holdSource != m_hold.source) {
+            if (!setMarker(v, m_hold)) { Str e = err; bool t = transient; if (!(t && haveTh)) { LiveRegister(m_hold.id, false); m_hold = Hold(); } err = e; transient = t; return fail("the VM could not be marked as held for the backup: " + e, t); }
+        }
+        {
+            Str why;
+            if (!lockMethods(v.id, m_hold.source, v.power != "poweredOn" && m_hold.orig != "poweredOn", why)) {
+                // a standing limit of the host, not a problem of this run: no warning (every scheduled backup would end as "Warning"); the service logs it and keeps it in the history record
+                m_lockInfo = "not locked: " + why + "; the VM stays powered off during the backup and is marked as held, but another administrator can still power it on or change it";
+                m_hasFault = false; err.clear();
+            } else m_lockInfo = "locked (DisableMethods)";
+        }
+        if (m_hold.offAt == 0) {
+            if (v.power == "poweredOn") {
+                if (!coldShutdown(warning)) { Str e = err; bool t = transient; releaseHold(); err = e; transient = t; return false; }
+            }
+            m_hold.offAt = (i64)UnixNow();
+        }
+        if (!readVm(m_vmRef, m_dc, v, true)) { Str e = err; bool t = transient; if (!(t && haveTh)) releaseHold(); err = e; transient = t; return false; }
+        m_vmOn = false;
+        return true;
+    }
+
+    // Gives the VM back at the end of a cold backup; what went wrong goes to m_endWarn.
+    void releaseHold() {
+        if (!m_hold.valid) return;
+        long a = m_abort; m_abort = 0;
+        Str e = err; bool t = transient;
+        Hold h = m_hold; m_hold = Hold();
+        LiveRegister(h.id, false);
+        Str w; bool powered = false, ok = false;
+        for (int attempt = 0; attempt < 3 && !ok; ++attempt) {
+            if (attempt) { Sleep(1000); w.clear(); }
+            if (ensureSession()) ok = giveBack(m_vmRef, h, true, w, &powered);
+        }
+        if (!w.empty()) { if (!m_endWarn.empty()) m_endWarn += "; "; m_endWarn += w; m_leaked = "hold " + h.source; }
+        if (powered && h.orig == "poweredOn") { m_downFrom = (double)h.locked; m_downTo = UnixNow(); }
+        err = e; transient = t; m_hasFault = false; m_abort = a;
     }
 
     // (un)marks our snapshot as being worked on; best effort, never changes err
@@ -1090,7 +1358,7 @@ private:
                     f.size = (u64)r.contentLength;
                 }
                 const Str* lm = r.headers.get("Last-Modified");
-                if (lm) { i64 t = EsxiParseHttpDate(*lm); if (t > 0) f.mtime = t; }
+                if (lm) { i64 t = EsxiParseHttpDate(*lm); if (t > 0) { f.mtime = t; f.mtimeKnown = true; } }
             }
             return true;                                        // HEAD not supported (405, 501...): the layout's size stays
         }
@@ -1103,6 +1371,7 @@ private:
     Json m_cfg;
     Str m_host, m_user, m_password, m_dcCfg, m_ver; int m_port;
     bool m_vcenter, m_quiesce, m_memory, m_history = true, m_historyCfg = true; int m_skippedSnaps = 0;
+    bool m_hot = false, m_forceOff = false, m_cold = false, m_holdResumed = false; int m_shutdownTimeout = 300, m_toolsWait = 30; bool m_justStarted = false; Str m_authMgr, m_endWarn, m_lockInfo; Hold m_hold; double m_downFrom = 0, m_downTo = 0;
     bool m_cloning = false, m_liveClone = true; int m_cloneTimeout = 21600; Str m_vdm, m_dcRef; Vec<CloneInfo> m_clones; Vec<Str> m_keptNames; Vec<Str> m_cloneDirs;   // m_cloneDirs: "ds|path" of the clone folders of this run
     int m_taskTimeout, m_removeTimeout, m_pollMs;
     HttpClient* m_soap; HttpClient* m_files;
@@ -1139,17 +1408,17 @@ bool Impl::buildFiles(const VmData& vm, const Str& snapRef, Vec<FileItem>& out, 
     Str vmDs, vmPath; EsxiParseDsPath(vm.vmPath, vmDs, vmPath);
     Str vmDir; { int c = vmPath.rfind('/'); if (c >= 0) vmDir = vmPath.substr(0, (size_t)c); }
     const LxSnap* snap = nullptr;
-    for (const LxSnap& s : vm.lx.snaps) if (s.key == snapRef) snap = &s;
-    if (!snap) return fail("the server's file layout does not list the new snapshot (cannot tell which files it froze)");
+    for (const LxSnap& s : vm.lx.snaps) if (!m_cold && s.key == snapRef) snap = &s;
+    if (!snap && !m_cold) return fail("the server's file layout does not list the new snapshot (cannot tell which files it froze)");
 
-    m_skippedSnaps = m_history || vm.lx.snaps.empty() ? 0 : (int)vm.lx.snaps.size() - 1;
+    m_skippedSnaps = m_history || vm.lx.snaps.empty() ? 0 : (int)vm.lx.snaps.size() - (m_cold ? 0 : 1);
     Vec<i64> keys; Vec<int> groups;
     auto add = [&](i64 k, int g) { for (size_t i = 0; i < keys.size(); ++i) if (keys[i] == k) return; keys.push_back(k); groups.push_back(g); };
     // configuration and snapshot description files
     for (const LxFile& f : vm.lx.files) {
         const Str& t = f.type;
         if (t == "config" || t == "extendedConfig" || t == "nvram" || t == "snapshotList" || t == "namespaceData") add(f.key, 0);
-        else if (t == "snapshotData" || t == "snapshotMemory") { if (m_history || f.key == snap->dataKey || f.key == snap->memoryKey) add(f.key, 1); }      // other snapshots' state: only with history
+        else if (t == "snapshotData" || t == "snapshotMemory") { if (m_history || (snap && (f.key == snap->dataKey || f.key == snap->memoryKey))) add(f.key, 1); }      // other snapshots' state: only with history
         else if (t == "suspend" || t == "suspendMemory") add(f.key, 1);
         else if (t == "diskDescriptor" || t == "diskExtent") {}                    // decided through the chains below
         else if (t == "swap" || t == "uwswap" || t == "log" || t == "stat" || t == "core" || t == "screenshot" || t == "digestDescriptor" || t == "digestExtent" ||
@@ -1158,8 +1427,11 @@ bool Impl::buildFiles(const VmData& vm, const Str& snapRef, Vec<FileItem>& out, 
     }
     // disk chains of every snapshot: the files the snapshots froze (the running point's new delta is in none of them)
     // (without history only the new snapshot's chains: its disks hold every ancestor of the current state, other branches of the tree are left out)
+    if (m_cold) {                                                           // the VM is off: its current chains (every link, the running point included) are read in place
+        for (const LxDisk& d : vm.lx.disks) for (const Vec<i64>& link : d.chain) for (i64 k : link) add(k, 2);
+    }
     for (const LxSnap& s : vm.lx.snaps) {
-        if (!m_history && &s != snap) continue;
+        if (!m_history && (m_cold || &s != snap)) continue;
         for (const LxDisk& d : s.disks) {
             if (&s == snap && cloneByKey(d.key) && !d.chain.empty()) {              // a running VM: the disk comes from its clone, the descriptor stands for the whole chain
                 const CloneInfo* ci = cloneByKey(d.key);
@@ -1173,6 +1445,7 @@ bool Impl::buildFiles(const VmData& vm, const Str& snapRef, Vec<FileItem>& out, 
     }
     // disks the snapshot does not cover (independent disks): copied as they are, live
     for (const LxDisk& d : vm.lx.disks) {
+        if (m_cold) break;
         bool covered = false;
         for (const LxDisk& sd : snap->disks) if (sd.key == d.key) covered = true;
         if (covered) continue;
@@ -1237,7 +1510,7 @@ bool Impl::buildFiles(const VmData& vm, const Str& snapRef, Vec<FileItem>& out, 
         out[j] = x;
     }
     // the files that describe the new snapshot itself (a restore does not upload them: the VM comes back without it)
-    i64 snapKeys[2] = { snap->dataKey, snap->memoryKey };
+    i64 snapKeys[2] = { snap ? snap->dataKey : -1, snap ? snap->memoryKey : -1 };
     for (i64 k : snapKeys) {
         const LxFile* lf = k >= 0 ? vm.lx.file(k) : nullptr;
         if (lf) for (const FileItem& f : out) if (f.name == lf->name) snapFiles.push(f.arc);
@@ -1247,8 +1520,16 @@ bool Impl::buildFiles(const VmData& vm, const Str& snapRef, Vec<FileItem>& out, 
         Json o = Json::object(); o["key"] = (i64)dd.key; o["label"] = dd.label; o["capacity_bytes"] = (u64)dd.capacity; o["thin"] = dd.thin; o["mode"] = dd.mode;
         o["running_point"] = dd.backing; if (cloneByKey(dd.key)) o["cloned"] = true;
         bool covered = false;
-        for (const LxDisk& sd : snap->disks) if (sd.key == dd.key) covered = true;
-        if (!covered) {                                                      // an independent disk (copied live): its own descriptor stands for it, so that a restore points the .vmx at the copy
+        if (snap) for (const LxDisk& sd : snap->disks) if (sd.key == dd.key) covered = true;
+        if (m_cold) {                                                        // the VM is off: its current top link is what a restored .vmx points at
+            for (const LxDisk& ld : vm.lx.disks) {
+                if (ld.key != dd.key || ld.chain.empty()) continue;
+                for (i64 k : ld.chain[TopLink(vm, ld)]) {
+                    const LxFile* lf = vm.lx.file(k);
+                    if (lf && lf->type == "diskDescriptor") for (const FileItem& f : out) if (f.name == lf->name) o["snapshot_descriptor"] = f.arc;
+                }
+            }
+        } else if (!covered) {                                               // an independent disk (copied live): its own descriptor stands for it, so that a restore points the .vmx at the copy
             for (const LxDisk& ld : vm.lx.disks) {
                 if (ld.key != dd.key || ld.chain.empty()) continue;
                 for (i64 k : ld.chain[0]) {
@@ -1257,7 +1538,7 @@ bool Impl::buildFiles(const VmData& vm, const Str& snapRef, Vec<FileItem>& out, 
                 }
             }
         }
-        for (const LxDisk& sd : snap->disks) {
+        if (snap) for (const LxDisk& sd : snap->disks) {
             if (sd.key != dd.key || sd.chain.empty()) continue;
             const CloneInfo* ci = cloneByKey(dd.key);
             if (ci) { for (const FileItem& f : out) if (f.name == ci->baseDesc) o["snapshot_descriptor"] = f.arc; continue; }
@@ -1277,6 +1558,7 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
     m_begun = false; m_reused = false; m_list.clear(); m_snapRef.clear(); m_snapName.clear(); m_meta.clear(); token.clear(); warning.clear(); m_restartWhy.clear();
     { unsigned char tb[4]; RandomBytes(tb, 4); LiveRegister(m_runToken, false); m_runToken = HexEncode(tb, 4); LiveRegister(m_runToken, true); }
     m_leaked.clear(); m_history = m_historyCfg; m_clones.clear(); m_cloneDirs.clear(); m_cloning = false;
+    m_endWarn.clear(); m_lockInfo.clear(); m_justStarted = false; m_downFrom = m_downTo = 0; m_hold = Hold(); m_holdResumed = false; m_cold = !m_hot;
     if (vm.empty()) return fail("no VM name");
     if (!ensureSession()) return false;
     if (m_vcenter && !m_apiType.empty() && m_apiType != "VirtualCenter") warning = "the server is not a vCenter (it is a standalone host): the server type is set wrongly, the copy works the same";
@@ -1294,8 +1576,9 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
     }
     if (!v.haveConfig) return fail("the VM \"" + vm + "\" is not accessible (state: " + (v.conn.empty() ? Str("unknown") : v.conn) + ")");
     if (!v.conn.empty() && v.conn != "connected") return fail("the VM \"" + vm + "\" is not accessible (state: " + v.conn + ")");
+    const bool cold = m_cold;
     bool poweredOn = v.power == "poweredOn"; m_vmOn = poweredOn;
-    bool cloneMode = poweredOn && m_liveClone;
+    bool cloneMode = poweredOn && m_liveClone && !cold;
     // The state of the interrupted run (the third part of the token): the way its disks were read is kept, whatever the power state of the VM is now.
     Str resumeRef, resumeName; SavedState st; bool haveState = false; Str restartWhy;
     if (!resumeToken.empty()) {
@@ -1307,11 +1590,25 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
             else { resumeName = rest.substr(0, (size_t)b2); haveState = SavedStateDecode(rest.substr((size_t)b2 + 1), st); }
         }
     }
-    if (haveState) {
+    Hold th; bool haveTh = false;
+    if (cold) {
+        if (resumeRef == "cold") {                                          // the hold of the interrupted run: "cold|<source>/<time the VM was off>|<state>"
+            Str nm = resumeName; int sl = nm.find('/');
+            if (sl > 0 && ParseHoldSource(nm.substr(0, (size_t)sl), th)) { th.offAt = I64(nm.substr((size_t)sl + 1)); haveTh = true; }
+        }
+        if (!resumeToken.empty() && !haveTh) { haveState = false; restartWhy = "the interrupted backup was made in the other mode (hot backup)"; }
+    } else if (resumeRef == "cold") { haveState = false; restartWhy = "the interrupted backup was a cold backup, this one is a hot backup"; }
+    if (cold) {
+        Str w0;
+        if (!coldAcquire(v, th, haveTh, warning, restartWhy)) { return false; }
+        poweredOn = false;
+        if (!restartWhy.empty()) haveState = false;
+    }
+    if (haveState && !cold) {
         if (st.clone) cloneMode = true;                                     // the stream of the interrupted run is made of clones (the VM may be powered off now: the clone of the frozen state is still the right source)
         else if (cloneMode) { haveState = false; restartWhy = "the VM was powered on while the backup was paused: the part of the disks already copied was read in place, which a running VM does not allow"; }
     }
-    if (cloneMode) {
+    if (cloneMode && !cold) {
         // the chain of a running VM is consolidated into one clone per disk: the VM's earlier snapshots (their disks, .vmsn, .vmem, the tree) cannot be kept consistently
         int own = 0; for (const SnapInfo& s : v.snaps) if (!IsOurSnapshotName(s.name)) ++own;
         if (own && m_history) { if (!warning.empty()) warning += "; "; warning += Str::fmt("the VM is running: its disks are copied as one consolidated clone each, the %d earlier snapshot(s) of the VM are not copied", own); }
@@ -1320,20 +1617,22 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
 
     // 1. the snapshot: re-attach to the one of the interrupted run, or start over (leftovers of earlier runs are removed)
     Str keepRef, keepName; bool reuse = false;
-    if (!resumeToken.empty() && restartWhy.empty()) {
+    if (!cold && !resumeToken.empty() && restartWhy.empty()) {
         for (const SnapInfo& s : v.snaps) if (s.ref == resumeRef && s.name == resumeName && IsOurSnapshotName(resumeName)) { reuse = true; keepRef = resumeRef; keepName = resumeName; }
         if (!reuse) restartWhy = "the snapshot of the interrupted backup does not exist any more (it was removed or merged)";
     }
-    if (!reuse) haveState = false;
-    {
+    if (!reuse && !cold) haveState = false;
+    if (!cold) {
         int n = 0;
         if (!removeLeftovers(v, keepRef, n)) { Str e = err; bool t = transient; return fail("cannot remove an old VM2Backup snapshot: " + e, t); }
         if (n) { if (!warning.empty()) warning += "; "; warning += Str::fmt("removed %d old VM2Backup snapshot(s) left by an earlier run", n); }
     }
 
-    { Vec<Str> protect = m_keptNames; if (!keepName.empty()) protect.push_back(keepName); int o = removeOrphanCloneDirs(v, protect); (void)o; }
-    if (m_skippedLive) { if (!warning.empty()) warning += "; "; warning += Str::fmt("%d VM2Backup snapshot(s) of another run that is working on this VM were left alone", m_skippedLive); }
-    if (reuse) {
+    if (!cold) { Vec<Str> protect = m_keptNames; if (!keepName.empty()) protect.push_back(keepName); int o = removeOrphanCloneDirs(v, protect); (void)o; }
+    if (!cold && m_skippedLive) { if (!warning.empty()) warning += "; "; warning += Str::fmt("%d VM2Backup snapshot(s) of another run that is working on this VM were left alone", m_skippedLive); }
+    if (cold) {
+        // no snapshot, no clones: the VM is off and locked, its disks are read in place
+    } else if (reuse) {
         m_snapRef = keepRef; m_snapName = keepName; m_reused = true; markSnapshot(true);
         if (!cloneMode) deleteCloneDirsFor(v, m_snapName);                  // a run that read in place has no clones: whatever is there is not ours to keep
     } else {
@@ -1365,17 +1664,20 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
     }
 
     // From here on a failure removes a snapshot this run made (a re-attached one only when the failure is final).
-    auto abandon = [&](bool final_) { if (!m_reused || final_) { Str e = err; bool t = transient; deleteCloneDirs(); cleanupByName(m_snapName, m_snapRef); err = e; transient = t; } m_snapRef.clear(); m_snapName.clear(); };
+    auto abandon = [&](bool final_) {
+        if (cold) { Str e = err; bool t = transient; if (final_ || !m_holdResumed) releaseHold(); err = e; transient = t; return; }
+        if (!m_reused || final_) { Str e = err; bool t = transient; deleteCloneDirs(); cleanupByName(m_snapName, m_snapRef); err = e; transient = t; } m_snapRef.clear(); m_snapName.clear(); };
 
     // 2. what the snapshot froze (read after the snapshot: the layout lists its files)
-    VmData after; bool found = false;
+    VmData after; bool found = cold;
+    if (cold) { after = v; }                                                 // (read again by coldAcquire: the VM is off, the layout is current)
     for (int i = 0; i < 12 && !found; ++i) {
         if (!readVm(m_vmRef, m_dc, after, i > 0)) { abandon(!transient); return false; }
         for (const LxSnap& s : after.lx.snaps) if (s.key == m_snapRef) found = true;
         if (!found) Sleep(250);
     }
     if (!found) { fail("the server did not report the snapshot's files"); abandon(true); return false; }
-    if (cloneMode) {
+    if (cloneMode && !cold) {
         const LxSnap* sn = nullptr; for (const LxSnap& s : after.lx.snaps) if (s.key == m_snapRef) sn = &s;
         if (!sn || !makeClones(after, *sn, warning)) { if (!sn) fail("the server did not report the snapshot's files"); abandon(!transient); return false; }
     }
@@ -1383,7 +1685,7 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
     for (int pass = 0; pass < 5 && !built; ++pass) {                       // a layout that names a disk file it has no entry for yet: the host is still writing it up, ask again
         if (pass) { Sleep(400); if (!readVm(m_vmRef, m_dc, after, true)) { abandon(!transient); return false; } }
         w2.clear(); ignored = Json::array(); disksMeta = Json::array(); snapFiles = Json::array();
-        built = buildFiles(after, m_snapRef, m_list, w2, ignored, disksMeta, snapFiles);
+        built = buildFiles(after, cold ? Str() : m_snapRef, m_list, w2, ignored, disksMeta, snapFiles);
         if (!built && !transient) break;
     }
     if (!built) { abandon(!transient); return false; }
@@ -1401,38 +1703,47 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
     for (FileItem& f : m_list) f.vol = IsVolatileType(f.type);
 
     // 3a. the configuration files: a continuation uses the bytes of the FIRST run, a first run reads them now (once) and keeps them
+    // cold: the "snapshot" of the fingerprint is the hold (its source and the time the VM went off) and a disk file's time stands for its content: a VM that ran meanwhile changed it
+    // cold: a VM that was powered on and off again while the backup was paused changed its disks, but ESXi gives no modification time for a disk file (docs/ESXI.md): its LOG files tell
+    // (every power-on writes vmware.log and rotates the older ones; a VM that is off writes nothing)
+    Str logSig;
+    if (cold) { Vec<Str> ls; for (const LxFile& lf : after.lx.files) if (lf.type == "log") ls.push_back(lf.name + "|" + Str::fmt("%llu", (unsigned long long)lf.size)); for (size_t a = 1; a < ls.size(); ++a) { Str x = ls[a]; size_t b = a; while (b > 0 && strcmp(ls[b - 1].c_str(), x.c_str()) > 0) { ls[b] = ls[b - 1]; --b; } ls[b] = x; } for (const Str& l : ls) logSig += l + ";"; }
+    const Str snapId = cold ? Str("cold|") + m_hold.source + "/" + Str::fmt("%lld", (long long)m_hold.offAt) : m_snapRef + "|" + m_snapName;
+    auto fileKey = [&](const Str& arc, u64 size, const Str& type, i64 mtime, bool known) { return arc + "|" + Str::fmt("%llu", (unsigned long long)size) + (cold && known && type == "diskExtent" ? Str::fmt("|%lld", (long long)mtime) : Str()) + "\n"; };
     auto frozenKey = [&](const Vec<FileItem>& l) {
-        Str k = Str("esxi2|") + after.uuid + "|" + after.instUuid + "|" + m_snapRef + "|" + m_snapName + (cloneMode ? "|clone\n" : "|direct\n");
-        for (const FileItem& f : l) if (!(f.vol && (f.hasInl || f.size <= kMaxSavedFile))) k += f.arc + "|" + Str::fmt("%llu", (unsigned long long)f.size) + "\n";
+        Str k = Str("esxi2|") + after.uuid + "|" + after.instUuid + "|" + snapId + (cloneMode ? "|clone\n" : "|direct\n") + (cold ? "logs|" + logSig + "\n" : Str());
+        for (const FileItem& f : l) if (!(f.vol && (f.hasInl || f.size <= kMaxSavedFile))) k += fileKey(f.arc, f.size, f.type, f.mtime, f.mtimeKnown);
         return k;
     };
     bool merged = false, cfgChanged = false, nvChanged = false;
     if (haveState) {
         Str want;                                                           // the frozen files of the interrupted run, in its order
-        want = Str("esxi2|") + after.uuid + "|" + after.instUuid + "|" + m_snapRef + "|" + m_snapName + (cloneMode ? "|clone\n" : "|direct\n");
-        for (const SavedFile& sf : st.files) if (!sf.vol) want += sf.arc + "|" + Str::fmt("%llu", (unsigned long long)sf.size) + "\n";
+        want = Str("esxi2|") + after.uuid + "|" + after.instUuid + "|" + snapId + (cloneMode ? "|clone\n" : "|direct\n");
+        for (const SavedFile& sf : st.files) if (!sf.vol) want += fileKey(sf.arc, sf.size, sf.type, sf.mtime, sf.known);
         // the frozen files of this run, in the same order as the saved ones
         bool all = true;
-        Str have = Str("esxi2|") + after.uuid + "|" + after.instUuid + "|" + m_snapRef + "|" + m_snapName + (cloneMode ? "|clone\n" : "|direct\n");
+        Str have = Str("esxi2|") + after.uuid + "|" + after.instUuid + "|" + snapId + (cloneMode ? "|clone\n" : "|direct\n");
         for (const FileItem& f : m_list) {                                  // a file is "live" if the interrupted run kept it (it did not, when it was too big)
             bool live = false; for (const SavedFile& sf : st.files) if (sf.arc == f.arc && sf.vol) live = true;
-            if (!live) have += f.arc + "|" + Str::fmt("%llu", (unsigned long long)f.size) + "\n";
+            if (!live) have += fileKey(f.arc, f.size, f.type, f.mtime, f.mtimeKnown);
         }
+        if (cold) { want += "logs|" + st.logSig + "\n"; have += "logs|" + logSig + "\n"; }
         if (want == have) {
             Vec<FileItem> out;
             for (const SavedFile& sf : st.files) {
                 const FileItem* fr = nullptr; for (const FileItem& f : m_list) if (f.arc == sf.arc && f.type == sf.type) { fr = &f; break; }
                 FileItem it; if (fr) it = *fr;
                 if (!fr && !sf.vol) { all = false; break; }
-                it.arc = sf.arc; it.type = sf.type; it.size = sf.size; it.mtime = sf.mtime; it.vol = sf.vol;
+                it.arc = sf.arc; it.type = sf.type; it.size = sf.size; it.mtime = sf.mtime; it.vol = sf.vol; it.mtimeKnown = sf.known;
                 if (sf.hasInl) { it.hasInl = true; it.inl = sf.bytes; }
-                if (sf.vol && (!fr || fr->size != sf.size || fr->mtime != sf.mtime)) { cfgChanged = true; if (sf.type == "nvram") nvChanged = true; }
+                if (sf.vol && (!fr || (fr->size != sf.size && !(cold && sf.type == "config")) || (fr->mtimeKnown && sf.known && fr->mtime != sf.mtime))) { cfgChanged = true;   // (cold: the saved .vmx has no hold marker, the live one has: their sizes differ by design)
+                if (sf.type == "nvram") nvChanged = true; }
                 out.push_back(it);
             }
             for (const FileItem& f : m_list) if (f.vol) { bool known = false; for (const SavedFile& sf : st.files) if (sf.arc == f.arc) known = true; if (!known) cfgChanged = true; }
             if (all) { m_list = out; merged = true; }
         }
-        if (!merged) restartWhy = "the frozen state of the VM (the snapshot, its disks, the list of the disks) is not what the interrupted backup copied";
+        if (!merged) restartWhy = cold && st.logSig != logSig ? Str("the VM was powered on while the backup was paused (its log files changed)") : Str("the frozen state of the VM (the snapshot, its disks, the list of the disks) is not what the interrupted backup copied");
     }
     if (!merged) {
         size_t budget = kMaxSavedTotal;
@@ -1442,7 +1753,9 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
             bool got = false;
             for (int attempt = 0; attempt < 3 && !got; ++attempt) {
                 Bytes b;
-                if (readSmall(f.ds, f.path, b, false, kMaxSavedFile)) { if (b.size() > kMaxSavedFile || b.size() > budget) { m_files->close(); break; } budget -= b.size(); f.inl = b; f.size = b.size(); f.hasInl = true; got = true; err.clear(); transient = false; break; }
+                if (readSmall(f.ds, f.path, b, false, kMaxSavedFile)) {
+                    if (cold && f.type == "config") { Str t0((const char*)b.data(), b.size()); Str t1 = StripHoldFromVmx(t0); if (t1.size() != t0.size()) { b.clear(); for (size_t q = 0; q < t1.size(); ++q) b.push_back((u8)t1[q]); } }       // the archive and a restored VM do not carry the hold marker
+                    if (b.size() > kMaxSavedFile || b.size() > budget) { m_files->close(); break; } budget -= b.size(); f.inl = b; f.size = b.size(); f.hasInl = true; got = true; err.clear(); transient = false; break; }
                 if (!transient || attempt == 2) { abandon(!transient); return false; }
                 Sleep(300);
             }
@@ -1460,6 +1773,8 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
       meta["datastore"] = dsx; meta["vm_dir"] = sl >= 0 ? px.substr(0, (size_t)sl) : Str(); meta["vmx_name"] = sl >= 0 ? px.substr((size_t)sl + 1) : px; }
     meta["snapshot_files"] = snapFiles;
     meta["live_clone"] = cloneMode && !m_clones.empty(); meta["snapshot_history"] = m_history; meta["snapshots_not_copied"] = m_skippedSnaps; meta["snapshot"] = m_snapName; meta["snapshot_quiesce"] = m_quiesce && poweredOn; meta["reused_snapshot"] = m_reused;
+    meta["cold"] = cold;
+    if (cold) { meta["original_power_state"] = m_hold.orig; meta["held_since"] = (i64)m_hold.locked; meta["powered_off_at"] = (i64)m_hold.offAt; meta["power_state"] = after.power; }
     Json fl = Json::array();
     for (const FileItem& f : m_list) { Json o = Json::object(); o["name"] = f.name; o["path"] = f.arc; if (f.origArc != f.arc) o["orig_path"] = f.origArc; o["size"] = f.size; o["type"] = f.type; fl.push(o); }
     meta["files"] = fl; meta["disks"] = disksMeta; meta["ignored_files"] = ignored;
@@ -1470,22 +1785,43 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
     Str fp = frozenKey(m_list);                                             // the fingerprint covers the frozen state only: the live configuration files do not change it
     u8 h[32]; Sha256(fp.data(), fp.size(), h);
     fingerprint = "esxi:" + HexEncode(h, 32);
-    token = m_snapRef + "|" + m_snapName;
+    token = cold ? Str("cold|") + m_hold.source + "/" + Str::fmt("%lld", (long long)m_hold.offAt) : m_snapRef + "|" + m_snapName;
     if (merged) token = resumeToken;
     else {
-        SavedState ns; ns.clone = cloneMode; ns.power = after.power; ns.meta = m_meta; ns.metaTime = m_metaTime;
-        for (const FileItem& f : m_list) { SavedFile sf; sf.arc = f.arc; sf.type = f.type; sf.size = f.size; sf.mtime = f.mtime; sf.vol = f.vol; if (f.hasInl) { sf.hasInl = true; sf.bytes = f.inl; } ns.files.push_back(sf); }
+        SavedState ns; ns.clone = cloneMode; ns.power = after.power; ns.logSig = logSig; ns.meta = m_meta; ns.metaTime = m_metaTime;
+        for (const FileItem& f : m_list) { SavedFile sf; sf.arc = f.arc; sf.type = f.type; sf.size = f.size; sf.mtime = f.mtime; sf.vol = f.vol; sf.known = f.mtimeKnown; if (f.hasInl) { sf.hasInl = true; sf.bytes = f.inl; } ns.files.push_back(sf); }
         Str enc = SavedStateEncode(ns);
         if (!enc.empty()) token += "|" + enc;
     }
     m_restartWhy = merged ? Str() : restartWhy;
     if (m_reused) { if (!warning.empty()) warning += "; "; warning += "continued with the snapshot of the interrupted run"; }
+    if (cold && merged && haveTh) { if (!warning.empty()) warning += "; "; warning += "continued: the VM stayed shut down and locked since the interrupted run"; }
     if (merged && (cfgChanged || st.power != after.power)) {
         if (!warning.empty()) warning += "; ";
         warning += (st.power != after.power || nvChanged) ? "the VM was powered off/on and its configuration files changed while the backup was paused: the archive keeps the configuration from the start of the backup"
                                            : "the VM's configuration files changed while the backup was paused: the archive keeps the configuration from the start of the backup";
     }
     m_begun = true;
+    return true;
+}
+
+// esxi.unlock_vm: every VM2Backup lock of the VM goes, the power state it had before the backup comes back (a VM that was running is started)
+bool Impl::unlockVm(const Str& vm, Str& message)
+{
+    message.clear(); m_endWarn.clear();
+    if (vm.empty()) return fail("no VM name");
+    if (!ensureSession()) return false;
+    VmData v;
+    if (!findVm(vm, v)) { Str e = err; bool t = transient; logout(); return fail(e, t); }
+    m_vmRef = v.id; m_vmName = v.name; m_dc = v.dc;
+    int n = 0; Str w; { Hold h; if (ParseHoldSource(v.holdSource, h)) n = 1; }
+    if (!n) { logout(); message = "the VM \"" + vm + "\" is not held by VM2Backup (no lock of ours); nothing was changed"; return true; }
+    // a hold of a backup that works in this process (a running job) is released too: the administrator asked for it explicitly, the job then fails when it needs the VM
+    { Hold h; if (ParseHoldSource(v.holdSource, h)) LiveRegister(h.id, false); }
+    int freed = sweepHold(v, Str(), w);
+    logout();
+    message = Str::fmt("released %d VM2Backup lock(s) of \"%s\"", freed, vm.c_str()); if (!w.empty()) message += "; " + w;
+    if (freed < n) return fail(message);
     return true;
 }
 
@@ -1599,6 +1935,12 @@ bool Impl::pack(TarWriter& tar, Progress* pr, Str& warning)
 void Impl::end(bool keepForResume)
 {
     InterlockedExchange(&m_abort, 0);                                          // the run is over: nothing below is skipped because of an abort
+    if (m_cold && m_hold.valid && m_soap) {
+        if (keepForResume) { logoutKeepHold(); return; }                       // paused / connection lost: the VM stays off and locked, the next run goes on
+        releaseHold();                                                         // done, cancelled or failed for good: the lock off, the power state back
+        m_begun = false; m_list.clear(); logout();
+        return;
+    }
     if (!m_snapRef.empty() && m_soap) markSnapshot(false);                     // done or paused: no longer "live" (a later run may remove it at once)
     if (!keepForResume && !m_snapRef.empty() && m_soap) {
         InterlockedExchange(&m_abort, 0);                                      // a removal is never skipped because of an abort

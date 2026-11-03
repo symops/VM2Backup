@@ -3,12 +3,14 @@
 (the default resource pool)	(der Standard-Ressourcenpool)
 (the root VM folder)	(der VM-Stammordner)
 A PKCS#12 file (.pfx) with the certificate and its private key, 1 MB at most. Only the certificate itself is served, not the chain.	Eine PKCS#12-Datei (.pfx) mit dem Zertifikat und seinem privaten Schlüssel, höchstens 1 MB. Es wird nur das Zertifikat selbst ausgeliefert, nicht die Kette.
+A VM that is held for a backup is shut down and locked by VM2Backup until the copy is finished or cancelled.	Eine für ein Backup gehaltene VM wird von VM2Backup heruntergefahren und gesperrt, bis die Kopie fertig ist oder abgebrochen wird.
 A mapped drive letter (Z:) cannot be used: the service does not see it. Choose "Network drive..." to use its UNC path, or enter the UNC path.	Ein zugeordneter Laufwerkbuchstabe (Z:) kann nicht verwendet werden: Der Dienst sieht ihn nicht. Wählen Sie „Netzlaufwerk...“, um seinen UNC-Pfad zu übernehmen, oder geben Sie den UNC-Pfad ein.
 A new certificate was created. Your browser will ask you to trust it again.	Ein neues Zertifikat wurde erstellt. Ihr Browser wird Sie erneut bitten, ihm zu vertrauen.
 A new user needs a password.	Ein neuer Benutzer benötigt ein Kennwort.
 A path on the server computer	Ein Pfad auf dem Servercomputer
 A path on the server computer (the service reads it)	Ein Pfad auf dem Servercomputer (der Dienst liest ihn)
 A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	Eine laufende ESXi-/vCenter-VM wird von einem temporären Snapshot kopiert, der danach entfernt wird. Ohne VMware Tools schlägt der Snapshot mit stillgelegtem Dateisystem fehl: Schalten Sie das Stilllegen für solche VMs aus.
+A vCenter locks the VM against power-on and changes for the whole backup. A standalone ESXi host does not allow that (DisableMethods is not supported): there the VM is shut down and marked as held, and another administrator can still power it on or change it; the next run notices that and starts the copy over.	Ein vCenter sperrt die VM für die gesamte Dauer des Backups gegen Einschalten und Änderungen. Ein eigenständiger ESXi-Host erlaubt das nicht (DisableMethods wird nicht unterstützt): dort wird die VM heruntergefahren und als gehalten markiert, und ein anderer Administrator kann sie trotzdem einschalten oder ändern; der nächste Lauf bemerkt das und beginnt die Kopie von vorn.
 A virtual machine with this name already exists on the server. Enter another name; an existing machine is never overwritten.	Auf dem Server gibt es bereits eine virtuelle Maschine mit diesem Namen. Geben Sie einen anderen Namen ein; eine vorhandene Maschine wird nie überschrieben.
 Abort	Abbruch
 Add Scheduled Task	Geplante Aufgabe hinzufügen
@@ -37,6 +39,7 @@ At least 10 characters, not containing the user name.	Mindestens 10 Zeichen, ohn
 Audit log	Überwachungsprotokoll
 Auto	Auto
 Back	Zurück
+Back up while the VM is running (hot backup)	Backup bei laufender VM (Hot-Backup)
 Backup Explorer	Sicherungs-Explorer
 Backup of {0}	Sicherung von {0}
 Backup started.	Die Sicherung wurde gestartet.
@@ -159,9 +162,12 @@ Give the server a name.	Geben Sie dem Server einen Namen.
 Give the task a title.	Geben Sie der Aufgabe einen Titel.
 Go	Los
 HTML report...	HTML-Bericht...
+Held for backup	Für Backup gehalten
 History entries kept	Aufbewahrte Verlaufseinträge
 Host	Host
 Host key	Hostschlüssel
+Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Hot-Backup: Die VM läuft während des Kopierens weiter. Die Kopie ist absturzkonsistent (wie nach einem Stromausfall), sofern VMware Tools das Gastdateisystem nicht stilllegen können; Datenbanken und Mailserver benötigen nach einer Wiederherstellung eventuell eine Wiederherstellung der Konsistenz. Solange der Snapshot existiert, läuft die VM langsamer, der Snapshot wächst auf dem Datastore, und nichts hindert andere Administratoren daran, die VM zwischenzeitlich zu ändern, auszuschalten oder zu löschen. Ohne diese Option wird die VM für die gesamte Dauer des Backups heruntergefahren und gesperrt und danach wieder gestartet.
+If the guest does not shut down, power it off (like pulling the plug)	Wenn der Gast nicht herunterfährt, die VM ausschalten (wie Netzstecker ziehen)
 Imported	Importiert
 Include the memory of the virtual machine in the snapshot	Den Arbeitsspeicher der virtuellen Maschine in den Snapshot aufnehmen
 Job "{0}" finished: {1}	Auftrag „{0}“ beendet: {1}
@@ -241,6 +247,9 @@ Recovery code	Wiederherstellungscode
 Recovery codes	Wiederherstellungscodes
 Recovery codes left	Verbleibende Wiederherstellungscodes
 Refresh	Aktualisieren
+Release the VM "{0}"? The VM2Backup lock is removed and a VM that was running before the backup is powered on. A paused backup of this VM then starts over.	VM „{0}“ freigeben? Die VM2Backup-Sperre wird aufgehoben, und eine VM, die vor dem Backup lief, wird eingeschaltet. Ein pausiertes Backup dieser VM beginnt danach von vorn.
+Release the VM (unlock and restore power)	VM freigeben (entsperren und Stromzustand wiederherstellen)
+Released.	Freigegeben.
 Remove	Entfernen
 Remove window	Zeitfenster entfernen
 Repeat	Wiederholung
@@ -274,6 +283,7 @@ Scheduler	Scheduler
 Secret	Geheimnis
 Security	Sicherheit
 Select	Auswählen
+Select a VM that is held for a backup.	Wählen Sie eine für ein Backup gehaltene VM.
 Select a drive first.	Wählen Sie zuerst ein Laufwerk aus.
 Select a row first.	Wählen Sie zuerst eine Zeile aus.
 Self-signed	Selbstsigniert
@@ -326,6 +336,7 @@ The connection test failed or has not finished. Save the server anyway?	Der Verb
 The connection works.	Die Verbindung funktioniert.
 The credentials of this server were not rejected.	Die Anmeldedaten dieses Servers wurden nicht abgelehnt.
 The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	Auf dem Datastore „{0}“ sind {1} frei, die Sicherung belegt bis zu {2}. Trotzdem wiederherstellen?
+The default is 300; a longer wait helps a guest that needs minutes to stop its services.	Standard ist 300; ein längeres Warten hilft einem Gast, der Minuten braucht, um seine Dienste zu beenden.
 The figures are approximate (typical data). More CPU cores make compression faster.	Die Zahlen sind ungefähre Werte (typische Daten). Mit mehr CPU-Kernen wird die Komprimierung schneller.
 The file is larger than 1 MB.	Die Datei ist größer als 1 MB.
 The list is cut: only the first entries are shown.	Die Liste ist gekürzt: Es werden nur die ersten Einträge angezeigt.
@@ -378,6 +389,7 @@ Two-factor	Zwei-Faktor
 Type	Typ
 Unfinished (resumable)	Unvollständig (fortsetzbar)
 Unit	Einheit
+Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.	Nicht gespeicherte Daten des Gastes gehen verloren, und sein Dateisystem muss beim nächsten Start eventuell geprüft werden. Ohne diese Option schlägt das Backup einer VM fehl, deren Gast nicht herunterfährt (kein VMware Tools, hängender Gast), und die VM wird unverändert zurückgegeben.
 Up	Nach oben
 Upload	Hochladen
 Upload PFX...	PFX hochladen...
@@ -403,11 +415,13 @@ Verify the certificate	Zertifikat überprüfen
 Version	Version
 Virtual Machine Backup	Sicherung virtueller Maschinen
 Virtual machine	Virtuelle Maschine
+Virtual machine during the backup	Virtuelle Maschine während des Backups
 Virtual machines	Virtuelle Maschinen
 Virtual machines...	Virtuelle Maschinen...
 Volume size	Volumegröße
 Volume size, MiB (0 = one volume)	Volumegröße, MiB (0 = ein Volume)
 Volumes	Volumes
+Wait for the guest to shut down, seconds	Auf das Herunterfahren des Gastes warten, Sekunden
 Wait until the choices of the server are loaded.	Warten Sie, bis die Auswahlmöglichkeiten des Servers geladen sind.
 Waiting	Wartend
 Warning	Warnung
@@ -434,6 +448,7 @@ every {0} {1}	alle {0} {1}
 fixed	fest
 folder	Ordner
 from {0}	ab {0}
+held for backup since {0}	für Backup gehalten seit {0}
 hours	Stunden
 last	letzte
 limit {0} Mbit/s	Limit {0} Mbit/s

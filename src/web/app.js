@@ -45,7 +45,7 @@ function createApp(env) {
     // ---------- permissions (the service enforces them; this only hides what would be refused) ----------
     var VIEWER = ['state', 'servers.list', 'tasks.list', 'tasks.next', 'jobs.list', 'history.list', 'history.get', 'backups.list'];
     var OPERATOR = VIEWER.concat(['tasks.run', 'jobs.abort', 'backup.run', 'backups.verify']);
-    var ADMIN = OPERATOR.concat(['scheduler.set', 'settings.get', 'settings.set', 'servers.save', 'servers.delete', 'servers.unblock', 'servers.test', 'servers.vms', 'tasks.save', 'tasks.copy', 'tasks.delete', 'history.clear', 'backups.restore', 'backups.restore_esxi', 'esxi.restore_options', 'net.drives', 'net.browse', 'fs.browse', 'backups.delete', 'resumable.discard',
+    var ADMIN = OPERATOR.concat(['scheduler.set', 'settings.get', 'settings.set', 'servers.save', 'servers.delete', 'servers.unblock', 'servers.test', 'servers.vms', 'tasks.save', 'tasks.copy', 'tasks.delete', 'history.clear', 'backups.restore', 'backups.restore_esxi', 'esxi.restore_options', 'esxi.unlock_vm', 'net.drives', 'net.browse', 'fs.browse', 'backups.delete', 'resumable.discard',
         'web.status', 'web.settings.get', 'web.settings.set', 'web.interfaces.list', 'web.cert.generate', 'web.cert.import', 'web.users.list', 'web.users.save', 'web.users.delete', 'web.users.totp_enroll', 'web.users.totp_confirm', 'web.users.totp_disable', 'web.audit.tail']);
     function can(cmd) {
         if (S.role === 'admin') return ADMIN.indexOf(cmd) >= 0;
@@ -268,12 +268,24 @@ function createApp(env) {
     function needSel(fn) { return function () { if (!S.sel.row) { toast(T('Select a row first.')); return; } fn(S.sel.row); }; }
 
     // ---------- Datacenter ----------
-    function vmTable(vms) { return grid([{ title: 'Virtual machine', get: function (v) { return v.name; } }, { title: 'State', get: function (v) { return v.state || ''; } }, { title: 'Size', get: function (v) { return v.size ? fmtSize(v.size) : ''; } }], vms, function (v) { return v.name; }, null, null); }
+    function vmTable(vms) {
+        var cols = [{ title: 'Virtual machine', get: function (v) { return v.name; } }, { title: 'State', get: function (v) { return v.state || ''; } }, { title: 'Size', get: function (v) { return v.size ? fmtSize(v.size) : ''; } }];
+        if (vms.some(function (v) { return v.held_since; })) cols.push({ title: 'Held for backup', get: function (v) { return v.held_since ? h('span', { class: 'bad', text: T('held for backup since {0}', fmtTime(v.held_since)) }) : ''; } });
+        return grid(cols, vms, function (v) { return v.name; }, null, null);
+    }
     function testResultDialog(srv, x) {
         var keep = { k: S.sel.k, row: S.sel.row };
         var body = h('div', null, h('div', { class: 'msg info', text: x.message || T('The connection works.') }));
         if ((x.vms || []).length) body.appendChild(vmTable(x.vms));
         S.sel.k = keep.k; S.sel.row = keep.row;
+        if ((x.vms || []).some(function (v) { return v.held_since; }) && can('esxi.unlock_vm')) {          // a cold backup holds a VM (shut down and locked): the administrator can give it back
+            body.appendChild(h('div', { class: 'note', text: T('A VM that is held for a backup is shut down and locked by VM2Backup until the copy is finished or cancelled.') }));
+            body.appendChild(h('button', { text: T('Release the VM (unlock and restore power)'), on: { click: function () {
+                var r = S.sel.row; if (!r || !r.held_since) { toast(T('Select a VM that is held for a backup.')); return; }
+                if (!env.confirm(T('Release the VM "{0}"? The VM2Backup lock is removed and a VM that was running before the backup is powered on. A paused backup of this VM then starts over.', r.name))) return;
+                api('esxi.unlock_vm', { server: srv.id, vm: r.name }).then(function (res) { toast(res.message || T('Released.')); }, fail);
+            } } }));
+        }
         return dialog({ title: 'Test connection', width: 560, body: h('div', null, h('div', { class: 'note', text: srv.name }), body), buttons: [{ label: 'Close', primary: true }] });
     }
     function loadServers() { return api('servers.list').then(function (l) { S.servers = l; return l; }); }
@@ -660,9 +672,15 @@ function createApp(env) {
         var verify = chk('Verify the backup after it is made', el.verify !== false);
         var transport = h('div', { class: 'note' });
         var snap = el.snapshot || {};
+        var hot = chk('Back up while the VM is running (hot backup)', snap.hot_backup === true), forceOff = chk('If the guest does not shut down, power it off (like pulling the plug)', snap.force_off === true), shutTimeout = num(snap.shutdown_timeout || 300, 10);
         var quiesce = chk('Quiesce the guest file system (needs VMware Tools in the VM)', snap.quiesce !== false), memory = chk('Include the memory of the virtual machine in the snapshot', !!snap.memory), history = chk('Also back up the existing snapshots of the VM', snap.history !== false), snapDc = txt(el.source.datacenter || '');
         var snapNote = h('div', { class: 'note' }), liveRow = h('div', { class: 'f' }, live);
-        var snapBox = h('div', null, h('fieldset', null, h('legend', { text: T('Snapshot') }), h('div', { class: 'f' }, quiesce), h('div', { class: 'f' }, memory), h('div', { class: 'f' }, history),
+        var hotNote = h('div', { class: 'note bad', text: T('Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.') });
+        var forceNote = h('div', { class: 'note bad', text: T('Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.') });
+        var lockNote = h('div', { class: 'note', text: T('A vCenter locks the VM against power-on and changes for the whole backup. A standalone ESXi host does not allow that (DisableMethods is not supported): there the VM is shut down and marked as held, and another administrator can still power it on or change it; the next run notices that and starts the copy over.') });
+        var snapBox = h('div', null, h('fieldset', null, h('legend', { text: T('Virtual machine during the backup') }), h('div', { class: 'f' }, hot), hotNote, lockNote,
+            h('div', { class: 'f' }, forceOff), forceNote, field('Wait for the guest to shut down, seconds', shutTimeout, 'The default is 300; a longer wait helps a guest that needs minutes to stop its services.')),
+            h('fieldset', null, h('legend', { text: T('Snapshot') }), h('div', { class: 'f' }, quiesce), h('div', { class: 'f' }, memory), h('div', { class: 'f' }, history),
             h('div', { class: 'note', text: T('Without it, the memory files of the other snapshots, the side branches of the snapshot tree and the snapshot list are left out; the disks the current state depends on are always copied.') }),
             h('div', { class: 'note', text: T('A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.') })), field('Datacenter', snapDc, 'vCenter only; empty = the one of the server'));
         function srvOf(id) { for (var i = 0; i < S.servers.length; i++) if (S.servers[i].id === id) return S.servers[i]; return null; }
@@ -673,9 +691,16 @@ function createApp(env) {
             });
             updateTarget(); updateSource(); loadVms();
         }
+        function updateHot(vm) {                                                         // quiesce / memory belong to the hot backup; shutdown options to the cold one
+            var isHot = hot.input.checked;
+            quiesce.input.disabled = !vm || !isHot; memory.input.disabled = !vm || !isHot;
+            forceOff.input.disabled = !vm || isHot; shutTimeout.disabled = !vm || isHot;
+        }
+        hot.input.addEventListener('change', function () { var sv = srvOf(srcSel.value), ty = sv ? sv.type : ''; updateHot(ty === 'esxi' || ty === 'vcenter'); });
         function updateSource() {
             var sv = srvOf(srcSel.value), ty = sv ? sv.type : '', vm = ty === 'esxi' || ty === 'vcenter';
-            quiesce.input.disabled = !vm; memory.input.disabled = !vm; history.input.disabled = !vm; snapDc.disabled = ty !== 'vcenter'; liveRow.style.display = vm ? 'none' : '';
+            hot.input.disabled = !vm; updateHot(vm);
+            history.input.disabled = !vm; snapDc.disabled = ty !== 'vcenter'; liveRow.style.display = vm ? 'none' : '';
             snapNote.textContent = vm ? '' : T('The snapshot settings apply to ESXi and vCenter sources only.');
         }
         function updateTarget() {
@@ -716,7 +741,7 @@ function createApp(env) {
             out.verify = verify.input.checked; out.allow_live = live.input.checked; out.resume = resume.input.checked; out.on_error_next = nextTask.input.checked;
             out.segment_mib = parseInt(seg.value, 10); out.speed_mbit = parseFloat(speed.value) || 0;
             var sv = srvOf(srcSel.value), ty = sv ? sv.type : '';
-            if (ty === 'esxi' || ty === 'vcenter') { out.snapshot = { quiesce: quiesce.input.checked, memory: memory.input.checked, history: history.input.checked }; out.allow_live = true; } else delete out.snapshot;
+            if (ty === 'esxi' || ty === 'vcenter') { out.snapshot = { hot_backup: hot.input.checked, force_off: forceOff.input.checked, shutdown_timeout: Math.max(10, parseInt(shutTimeout.value, 10) || 300), quiesce: quiesce.input.checked, memory: memory.input.checked, history: history.input.checked }; out.allow_live = true; } else delete out.snapshot;
             if (ty === 'vcenter' && snapDc.value.trim()) out.source.datacenter = snapDc.value.trim(); else delete out.source.datacenter;
             if (enc.input.checked) out.encrypt.password = pw.value;
             return out;

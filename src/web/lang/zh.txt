@@ -3,12 +3,14 @@
 (the default resource pool)	(默认资源池)
 (the root VM folder)	(根虚拟机文件夹)
 A PKCS#12 file (.pfx) with the certificate and its private key, 1 MB at most. Only the certificate itself is served, not the chain.	包含证书及其私钥的 PKCS#12 文件 (.pfx),最大 1 MB。仅使用证书本身,不包含证书链。
+A VM that is held for a backup is shut down and locked by VM2Backup until the copy is finished or cancelled.	为备份而保留的虚拟机会被 VM2Backup 关机并锁定，直到复制完成或被取消。
 A mapped drive letter (Z:) cannot be used: the service does not see it. Choose "Network drive..." to use its UNC path, or enter the UNC path.	无法使用映射的驱动器号 (Z:): 服务看不到它。请选择"网络驱动器..."以使用其 UNC 路径,或直接输入 UNC 路径。
 A new certificate was created. Your browser will ask you to trust it again.	已创建新证书。浏览器将要求您重新信任它。
 A new user needs a password.	新用户需要设置密码。
 A path on the server computer	服务器计算机上的路径
 A path on the server computer (the service reads it)	服务器计算机上的路径(由服务读取)
 A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	正在运行的 ESXi / vCenter 虚拟机将从临时快照复制,随后该快照会被删除。没有 VMware Tools 时,静默快照会失败: 请对此类虚拟机关闭静默。
+A vCenter locks the VM against power-on and changes for the whole backup. A standalone ESXi host does not allow that (DisableMethods is not supported): there the VM is shut down and marked as held, and another administrator can still power it on or change it; the next run notices that and starts the copy over.	vCenter 会在整个备份期间锁定虚拟机，禁止开机和更改。独立的 ESXi 主机不允许这样做（不支持 DisableMethods）：在那里虚拟机会被关机并标记为已保留，其他管理员仍然可以将其开机或更改；下一次运行会发现这一点并重新开始复制。
 A virtual machine with this name already exists on the server. Enter another name; an existing machine is never overwritten.	服务器上已存在同名虚拟机。请输入其他名称; 现有虚拟机绝不会被覆盖。
 Abort	中止
 Add Scheduled Task	添加计划任务
@@ -37,6 +39,7 @@ At least 10 characters, not containing the user name.	至少 10 个字符,且不
 Audit log	审计日志
 Auto	自动
 Back	返回
+Back up while the VM is running (hot backup)	虚拟机运行时备份（热备份）
 Backup Explorer	Backup Explorer
 Backup of {0}	{0} 的备份
 Backup started.	备份已开始。
@@ -159,9 +162,12 @@ Give the server a name.	请为服务器命名。
 Give the task a title.	请为任务设置标题。
 Go	前往
 HTML report...	HTML 报告...
+Held for backup	为备份而保留
 History entries kept	保留的历史记录条数
 Host	主机
 Host key	主机密钥
+Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	热备份：复制期间虚拟机继续运行。除非 VMware Tools 能够静默客户机文件系统，否则副本只是崩溃一致的（如同断电之后）；数据库和邮件服务器在还原后可能需要恢复。快照存在期间虚拟机运行较慢，快照会在数据存储上增长，并且没有任何机制阻止其他管理员在此期间更改、关闭或删除虚拟机。不勾选此选项时，虚拟机在整个备份期间保持关机并被锁定，备份结束后再次启动。
+If the guest does not shut down, power it off (like pulling the plug)	如果客户机无法关机，则对虚拟机断电（如同拔掉电源）
 Imported	已导入
 Include the memory of the virtual machine in the snapshot	在快照中包含虚拟机的内存
 Job "{0}" finished: {1}	任务"{0}"已结束: {1}
@@ -241,6 +247,9 @@ Recovery code	恢复代码
 Recovery codes	恢复代码
 Recovery codes left	剩余恢复代码数
 Refresh	刷新
+Release the VM "{0}"? The VM2Backup lock is removed and a VM that was running before the backup is powered on. A paused backup of this VM then starts over.	释放虚拟机“{0}”？VM2Backup 的锁将被移除，备份前处于运行状态的虚拟机会被开机。此虚拟机已暂停的备份随后将重新开始。
+Release the VM (unlock and restore power)	释放虚拟机（解锁并恢复电源状态）
+Released.	已释放。
 Remove	移除
 Remove window	移除时间窗口
 Repeat	重复
@@ -274,6 +283,7 @@ Scheduler	计划程序
 Secret	密钥
 Security	安全
 Select	选择
+Select a VM that is held for a backup.	请选择一台为备份而保留的虚拟机。
 Select a drive first.	请先选择驱动器。
 Select a row first.	请先选择一行。
 Self-signed	自签名
@@ -326,6 +336,7 @@ The connection test failed or has not finished. Save the server anyway?	连接�
 The connection works.	连接正常。
 The credentials of this server were not rejected.	此服务器的凭据未被拒绝。
 The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	数据存储"{0}"有 {1} 可用空间,备份最多占用 {2}。仍要还原吗?
+The default is 300; a longer wait helps a guest that needs minutes to stop its services.	默认为 300；更长的等待有助于需要数分钟才能停止服务的客户机。
 The figures are approximate (typical data). More CPU cores make compression faster.	数字为近似值(典型数据)。更多 CPU 核心可使压缩更快。
 The file is larger than 1 MB.	文件大于 1 MB。
 The list is cut: only the first entries are shown.	列表已截断: 仅显示前几项。
@@ -378,6 +389,7 @@ Two-factor	双因素认证
 Type	类型
 Unfinished (resumable)	未完成(可续传)
 Unit	单位
+Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.	客户机中未保存的数据将丢失，其文件系统在下次启动时可能需要检查。不勾选此选项时，若虚拟机的客户机无法关机（没有 VMware Tools，或客户机卡死），备份会失败，虚拟机原样归还。
 Up	上移
 Upload	上传
 Upload PFX...	上传 PFX...
@@ -403,11 +415,13 @@ Verify the certificate	验证证书
 Version	版本
 Virtual Machine Backup	Virtual Machine Backup
 Virtual machine	虚拟机
+Virtual machine during the backup	备份期间的虚拟机
 Virtual machines	虚拟机
 Virtual machines...	虚拟机...
 Volume size	卷大小
 Volume size, MiB (0 = one volume)	卷大小,MiB(0 = 单个卷)
 Volumes	卷
+Wait for the guest to shut down, seconds	等待客户机关机，秒
 Wait until the choices of the server are loaded.	请等待服务器的选项加载完成。
 Waiting	等待中
 Warning	警告
@@ -434,6 +448,7 @@ every {0} {1}	每 {0} {1}
 fixed	固定
 folder	文件夹
 from {0}	自 {0}
+held for backup since {0}	自 {0} 起为备份而保留
 hours	小时
 last	最近
 limit {0} Mbit/s	限速 {0} Mbit/s

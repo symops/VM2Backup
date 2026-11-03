@@ -432,7 +432,7 @@ bool BackupVm(VmSource& src, const Str& vm, Target& target, const BackupOptions&
         sw.abort();
         failure = cause;
         if (cause == kAbortedMessage) { keepOnFailure = pr && pr->keepOnAbort(); break; }
-        keepOnFailure = !fromSource;                                          // a target problem keeps the volumes for a later run
+        keepOnFailure = !fromSource || (tmp && src.holdsVm());                 // a target problem keeps the volumes for a later run; so does a lost connection to a VM that is held for the backup (it stays off until the copy is done or cancelled)
         if (!tmp || attempt >= rp.attempts) break;
         int d = DelayFor(rp, attempt + 1);
         if (pr) pr->onRetry("backup", attempt + 1, rp.attempts, d, cause);
@@ -442,8 +442,9 @@ bool BackupVm(VmSource& src, const Str& vm, Target& target, const BackupOptions&
     }
     if (!ok) {
         err = failure;
-        bool keep = keepOnFailure && o.resume && o.segmentBytes != 0 && !done.empty();   // resume off: nobody will continue the partial copy, so it must not stay on the target
+        bool keep = keepOnFailure && o.resume && o.segmentBytes != 0 && (!done.empty() || src.holdsVm());   // resume off: nobody will continue the partial copy, so it must not stay on the target
         src.end(keep);
+        { Str ew = src.endWarning(); if (!ew.empty()) err += " (" + ew + ")"; }
         if (keep) { Str e3; bool t3 = false; if (!wc.writeJournal(e3, t3) && target.reconnect()) wc.writeJournal(e3, t3); }       // without a journal the volumes would be orphans nobody can continue or discard
         else { Str e3; if (target.reconnect()) RemoveAllOf(target, mf.archive, e3); }
         return false;
@@ -464,6 +465,8 @@ bool BackupVm(VmSource& src, const Str& vm, Target& target, const BackupOptions&
     }
     if (!target.remove(mf.archive + ".resume")) { target.reconnect(); target.remove(mf.archive + ".resume"); }       // a journal that stays behind is garbage for ever
     src.end(false);
+    { Str ew = src.endWarning(); if (!ew.empty()) { if (!warning.empty()) warning += "; "; warning += ew; } }
+    mf.downFrom = mf.downTo = 0; { double a = 0, b = 0; if (src.downtime(a, b)) { mf.downFrom = a; mf.downTo = b; } }
     out = mf;
     if (o.verify) {
         bool lostLink = false;
