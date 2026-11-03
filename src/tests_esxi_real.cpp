@@ -27,7 +27,7 @@ struct Real {
         c["type"] = vc ? "vcenter" : "esxi"; c["host"] = host; c["port"] = port; c["user"] = user; c["password"] = pw.empty() ? password : pw;
         if (!fp.empty()) c["fingerprint"] = fp; else c["verify"] = false;
         c["task_timeout"] = 300; c["remove_timeout"] = 600; c["timeout"] = 120;
-        Json s = Json::object(); s["quiesce"] = quiesce; s["memory"] = false; c["snapshot"] = s;
+        Json s = Json::object(); s["quiesce"] = quiesce; s["memory"] = false; s["hot_backup"] = true; c["snapshot"] = s;      // the old scenarios test the HOT backup; the cold one: coldCfg()
         return c;
     }
 };
@@ -570,6 +570,167 @@ VM2B_TEST("esxireal", esxireal_guest_stage_resume)
     }
     delete t; RemoveTree(store);
     T_CHECK(NoLeftovers(c_, r, g.vm));
+    return true;
+}
+
+
+// ================= Холодный бэкап на настоящем ESXi 7 (docs/ESXI.md, «Холодный (по умолчанию) и горячий бэкап») =================
+// Этапы идут по одному; между ними tools/esxi7/cold-scenario.sh по SSH смотрит на ВМ мимо продукта (vim-cmd, файлы датастора) и пробует её включить под «блокировкой».
+//   "esxi_cold": { "vm": "vm2b-guest", "store": "<папка копии, путь Windows>", "restore": "<папка восстановления>", "ref": "<файл с sha256 диска, снятый на хосте при ВЫКЛЮЧЕННОЙ ВМ>",
+//                  "force_off": false, "shutdown_timeout": 240, "pause_mb": 20 }
+struct ColdCfg { Str vm, store, restore, ref; bool forceOff = false; int timeout = 240, pauseMB = 20; };
+static bool LoadCold(Ctx& c, Real& r, ColdCfg& k)
+{
+    if (!Load(c, r)) return false;
+    if (!c.servers.has("esxi_cold")) { c.skip("нет ключа \"esxi_cold\" (tools/esxi7/cold-scenario.sh)"); return false; }
+    const Json& j = c.servers.get("esxi_cold");
+    k.vm = j.get("vm").str("vm2b-guest"); k.store = j.get("store").str(); k.restore = j.get("restore").str(); k.ref = j.get("ref").str();
+    k.forceOff = j.get("force_off").boolean(); k.timeout = (int)j.get("shutdown_timeout").integer(240); k.pauseMB = (int)j.get("pause_mb").integer(20); if (k.pauseMB <= 0) k.pauseMB = 20;
+    return !k.store.empty();
+}
+static Json ColdCfgJson(const Real& r, const ColdCfg& k)
+{
+    Json c = r.cfg(); Json s = Json::object(); s["quiesce"] = false; s["memory"] = false; s["history"] = true; s["force_off"] = k.forceOff; s["shutdown_timeout"] = k.timeout; c["snapshot"] = s; c["tools_wait"] = 300;   // hot_backup: absent = cold; a loaded nested host: the guest's Tools heartbeat is late
+    return c;
+}
+static BackupOptions ColdOpts() { BackupOptions o; o.kdfIterations = 3000; o.verify = false; o.codec.level = 1; o.segmentBytes = (u64)512 * 2000; return o; }
+static Str ListState(const Json& cfg, const Str& vm)
+{
+    Str e; VmSource* src = NewEsxiSource(cfg, e); if (!src) return "?";
+    Vec<VmInfo> v; Str out = "not listed";
+    if (src->list(v)) for (const VmInfo& i : v) if (i.name == vm) out = i.state + (i.held.empty() ? Str() : Str(", HELD since ") + i.held);
+    delete src; return out;
+}
+
+VM2B_TEST("esxireal", esxireal_cold_stage_pause)
+{
+    Real r; ColdCfg k; if (!LoadCold(c_, r, k)) return true;
+    RemoveTree(k.store);
+    Str err; Json cfg = ColdCfgJson(r, k); VmSource* src = NewEsxiSource(cfg, err); T_CHECK(src != nullptr); if (!src) return false;
+    Target* t = LocalAtR(k.store); Manifest man; Str warn; Pr pr; pr.abortAt = true; pr.keep = true; pr.limit = (u64)k.pauseMB << 20;
+    DWORD t0 = GetTickCount();
+    bool ok = BackupVm(*src, k.vm, *t, ColdOpts(), &pr, man, warn, err);
+    c_.note("этап «пауза»: %s (%s) за %lu с; предупреждения: %s", ok ? "готов" : "приостановлен", err.c_str(), (unsigned long)((GetTickCount() - t0) / 1000), warn.c_str());
+    T_CHECK(!ok); T_CHECK(err == kAbortedMessage);
+    Vec<ResumeInfo> ri; Str le; ListResumable(*t, &k.vm, ri, le); T_CHECK(ri.size() == 1);
+    c_.note("после паузы список ВМ: %s", ListState(cfg, k.vm).c_str());
+    delete t; delete src;
+    return true;
+}
+
+VM2B_TEST("esxireal", esxireal_cold_stage_resume)
+{
+    Real r; ColdCfg k; if (!LoadCold(c_, r, k)) return true;
+    Str err; Json cfg = ColdCfgJson(r, k); VmSource* src = NewEsxiSource(cfg, err); T_CHECK(src != nullptr); if (!src) return false;
+    Target* t = LocalAtR(k.store); Manifest man; Str warn; Pr pr;
+    bool ok = BackupVm(*src, k.vm, *t, ColdOpts(), &pr, man, warn, err);
+    c_.note("этап «продолжение»: %s; возобновлений %d; ошибка: %s; предупреждение: %s", ok ? "копия готова" : "копия не удалась", pr.resumes, err.c_str(), warn.c_str());
+    T_CHECK(ok); if (!k.ref.empty()) T_CHECK(pr.resumes >= 1);         // без эталона (сценарий «пределы»): ВМ включили мимо продукта, копия честно началась заново
+    c_.note("простой ВМ: с %.0f по %.0f (%.0f с)", man.downFrom, man.downTo, man.downTo - man.downFrom);
+    if (k.vm == "vm2b-guest") T_CHECK(man.downTo > man.downFrom);          // она работала до копии: простой есть; у выключенной ВМ его нет
+    if (ok) {
+        Str re; Manifest rm; RemoveTree(k.restore);
+        T_CHECK(RestoreBackup(*t, man.archive, k.restore, Str(), nullptr, &rm, re)); if (!re.empty()) c_.note("восстановление: %s", re.c_str());
+        Bytes rb; Str rerr; Str want;
+        if (!k.ref.empty() && ReadWholeFile(k.ref.c_str(), rb, rerr)) { want = Str((const char*)rb.data(), rb.size()).trim(); }
+        u64 sz = 0; Str got = HashFileReal(JoinPath(JoinPath(k.restore, k.vm), k.vm + "-flat.vmdk"), sz);
+        c_.note("sha256 диска в копии: %s (эталон с хоста при выключенной ВМ: %s)", got.c_str(), want.empty() ? "нет: копия началась заново" : want.c_str());
+        if (!k.ref.empty()) T_CHECK(!want.empty() && got == want);
+    }
+    c_.note("после копии список ВМ: %s", ListState(cfg, k.vm).c_str());
+    delete t; delete src;
+    return true;
+}
+
+VM2B_TEST("esxireal", esxireal_cold_stage_cancel)
+{
+    Real r; ColdCfg k; if (!LoadCold(c_, r, k)) return true;
+    RemoveTree(k.store);
+    Str err; Json cfg = ColdCfgJson(r, k); VmSource* src = NewEsxiSource(cfg, err); T_CHECK(src != nullptr); if (!src) return false;
+    Target* t = LocalAtR(k.store); Manifest man; Str warn; BackupOptions o = ColdOpts();
+    { Pr pr; pr.abortAt = true; pr.keep = true; pr.limit = (u64)k.pauseMB << 20; bool ok = BackupVm(*src, k.vm, *t, o, &pr, man, warn, err); T_CHECK(!ok); }
+    c_.note("перед отменой список ВМ: %s", ListState(cfg, k.vm).c_str());
+    delete src; src = NewEsxiSource(cfg, err);
+    { Pr pr; pr.abortAt = true; pr.keep = false; pr.limit = 1; bool ok = BackupVm(*src, k.vm, *t, o, &pr, man, warn, err); c_.note("этап «отмена»: %s (%s)", ok ? "готов" : "отменён", err.c_str()); T_CHECK(!ok); }
+    Vec<ResumeInfo> ri; Str le; ListResumable(*t, &k.vm, ri, le); c_.note("после отмены возобновляемых копий: %d; список ВМ: %s", (int)ri.size(), ListState(cfg, k.vm).c_str());
+    delete t; delete src; RemoveTree(k.store);
+    return true;
+}
+
+// «Служба погибла»: копия приостановлена (ВМ выключена, помечена), журнал потерян
+VM2B_TEST("esxireal", esxireal_cold_stage_crash)
+{
+    Real r; ColdCfg k; if (!LoadCold(c_, r, k)) return true;
+    RemoveTree(k.store);
+    Str err; Json cfg = ColdCfgJson(r, k); VmSource* src = NewEsxiSource(cfg, err); T_CHECK(src != nullptr); if (!src) return false;
+    Target* t = LocalAtR(k.store); Manifest man; Str warn; Pr pr; pr.abortAt = true; pr.keep = true; pr.limit = (u64)k.pauseMB << 20;
+    bool ok = BackupVm(*src, k.vm, *t, ColdOpts(), &pr, man, warn, err); T_CHECK(!ok);
+    delete t; delete src; RemoveTree(k.store);                              // журнала нет: метка на ВМ осиротела
+    c_.note("этап «служба погибла»: журнал удалён; список ВМ: %s", ListState(cfg, k.vm).c_str());
+    return true;
+}
+
+// Следующий запуск: сирота снимается, питание возвращается, копия делается заново и доходит до конца
+VM2B_TEST("esxireal", esxireal_cold_stage_after_crash)
+{
+    Real r; ColdCfg k; if (!LoadCold(c_, r, k)) return true;
+    RemoveTree(k.store);
+    Str err; Json cfg = ColdCfgJson(r, k); VmSource* src = NewEsxiSource(cfg, err); T_CHECK(src != nullptr); if (!src) return false;
+    Target* t = LocalAtR(k.store); Manifest man; Str warn; Pr pr;
+    bool ok = BackupVm(*src, k.vm, *t, ColdOpts(), &pr, man, warn, err);
+    c_.note("этап «после гибели службы»: %s; ошибка: %s; предупреждение: %s", ok ? "копия готова" : "не удалась", err.c_str(), warn.c_str());
+    T_CHECK(ok); T_CHECK(Has(warn, "removed an old VM2Backup hold"));
+    c_.note("простой ВМ: %.0f с; список ВМ: %s", man.downTo - man.downFrom, ListState(cfg, k.vm).c_str());
+    delete t; delete src; RemoveTree(k.store);
+    return true;
+}
+
+VM2B_TEST("esxireal", esxireal_cold_stage_unlock)
+{
+    Real r; ColdCfg k; if (!LoadCold(c_, r, k)) return true;
+    Str err; Json cfg = ColdCfgJson(r, k); VmSource* src = NewEsxiSource(cfg, err); T_CHECK(src != nullptr); if (!src) return false;
+    Str msg; bool ok = static_cast<EsxiSource*>(src)->unlockVm(k.vm, msg);
+    c_.note("этап «esxi.unlock_vm»: %s: %s%s", ok ? "ok" : "ошибка", msg.c_str(), ok ? "" : (" / " + src->err).c_str());
+    T_CHECK(ok);
+    c_.note("после снятия список ВМ: %s", ListState(cfg, k.vm).c_str());
+    delete src; return true;
+}
+
+// ВМ без VMware Tools (vm2b-on, включена): ошибка с понятным текстом, ВМ осталась включённой; с force_off: PowerOffVM_Task, копия, ВМ снова включена
+VM2B_TEST("esxireal", esxireal_cold_stage_no_tools)
+{
+    Real r; ColdCfg k; if (!LoadCold(c_, r, k)) return true;
+    Str vm = "vm2b-on"; RemoveTree(k.store);
+    Str err; Json cfg = ColdCfgJson(r, k); VmSource* src = NewEsxiSource(cfg, err); T_CHECK(src != nullptr); if (!src) return false;
+    Target* t = LocalAtR(k.store); Manifest man; Str warn; Pr pr;
+    DWORD t0 = GetTickCount();
+    bool ok = BackupVm(*src, vm, *t, ColdOpts(), &pr, man, warn, err);
+    c_.note("этап «без Tools» (force_off=%d): %s за %lu с; ошибка: %s; предупреждение: %s", k.forceOff ? 1 : 0, ok ? "копия готова" : "отказ", (unsigned long)((GetTickCount() - t0) / 1000), err.c_str(), warn.c_str());
+    if (k.forceOff) { T_CHECK(ok); T_CHECK(Has(warn, "powered off (like pulling the plug)")); }
+    else { T_CHECK(!ok); T_CHECK(Has(err, "VMware Tools is not running")); }
+    c_.note("список ВМ после: %s", ListState(cfg, vm).c_str());
+    delete t; delete src; RemoveTree(k.store);
+    return true;
+}
+
+// восстановление холодной копии на хост (включается ВМ с именем из "restore_name"); sha256 восстановленного диска сверяет скрипт
+VM2B_TEST("esxireal", esxireal_cold_stage_restore_host)
+{
+    Real r; ColdCfg k; if (!LoadCold(c_, r, k)) return true;
+    Vec<Manifest> ms; Str le; Target* t = LocalAtR(k.store); T_CHECK(ListBackups(*t, &k.vm, ms, le)); T_CHECK(ms.size() >= 1);
+    if (ms.empty()) { delete t; return false; }
+    EsxiRestoreOptions ro; ro.vmName = c_.servers.get("esxi_cold").get("restore_name").str("vm2b-cold-rt"); ro.powerOn = true; ro.datacenter = r.dc;
+    EsxiRestoreResult res; Str err; ReadOptions rd; rd.stateDir = JoinPath(k.restore, "state"); MakeDirs(rd.stateDir, err);
+    bool ok = RestoreToEsxi(*t, ms.back().archive, r.cfg(), ro, Str(), rd, nullptr, &res, err);
+    c_.note("этап «восстановление на хост»: %s; ВМ %s; %s %s", ok ? "готово" : "ошибка", res.vmName.c_str(), err.c_str(), res.warning.c_str());
+    T_CHECK(ok); delete t; return true;
+}
+
+VM2B_TEST("esxireal", esxireal_cold_stage_status)
+{
+    Real r; ColdCfg k; if (!LoadCold(c_, r, k)) return true;
+    Json cfg = ColdCfgJson(r, k);
+    c_.note("состояние %s: %s", k.vm.c_str(), ListState(cfg, k.vm).c_str());
     return true;
 }
 

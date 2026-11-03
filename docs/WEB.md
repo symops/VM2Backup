@@ -192,7 +192,7 @@ A browser cannot list the network or the drive letters of a user; the service ca
 
 ## Other service commands used by the site
 
-`tasks.copy {id|name, name?}` (admin) copies a task with new ids and the stored encryption passwords; `tasks.next {id}` or `{schedule}` (a schedule that is being edited) gives the next start; `backups.restore_esxi` / `esxi.restore_options` (admin) restore to ESXi / vCenter - see `docs/ESXI.md`.  The history page builds the HTML report of an entry in the browser (every value escaped) and saves it as a file.
+`tasks.copy {id|name, name?}` (admin) copies a task with new ids and the stored encryption passwords; `tasks.next {id}` or `{schedule}` (a schedule that is being edited) gives the next start; `backups.restore_esxi` / `esxi.restore_options` (admin) restore to ESXi / vCenter - see `docs/ESXI.md`.  `esxi.unlock_vm {server, vm}` (admin only; also not in the operator role) gives back a VM that a cold backup holds (see below): the VM2Backup lock and marker are removed and a VM that was running before the backup is powered on; the answer is `{message}` ("released 1 VM2Backup lock(s) of ..." or "... is not held by VM2Backup ..."); a missing server / VM is an error. The web site offers it on the Datacenter page: "Virtual machines..." of an ESXi / vCenter server shows "held for backup since <time>" next to a held VM and the button "Release the VM (unlock and restore power)" (with a confirmation).  The history page builds the HTML report of an entry in the browser (every value escaped) and saves it as a file.
 
 ## Защита от блокировки учётной записи (`servers.unblock`, пометка на сервере)
 
@@ -220,3 +220,20 @@ The page offers 17 languages (login page and header).  `src/web/lang/<code>.txt`
 ## Опция снимков ESXi / vCenter (блок Snapshot элемента задачи)
 
 `snapshot.quiesce`, `snapshot.memory` и `snapshot.history` (флажок «Also back up the existing snapshots of the VM», по умолчанию включён и для старых задач без ключа; см. docs/ESXI.md, «Снимки самой ВМ»).
+
+## Холодный и горячий бэкап: ключи задачи и интерфейс
+
+Элемент задачи с источником ESXi / vCenter хранит в `snapshot` (round-trip `tasks.save` -> `tasks.list` / `tasks.get`):
+
+| ключ | тип | по умолчанию | смысл |
+|---|---|---|---|
+| `hot_backup` | bool | **false** (холодный режим) | false: ВМ выключается и блокируется на всё время копии, потом включается снова; true: горячий бэкап (снимок VM2Backup, клоны дисков), ВМ работает |
+| `force_off` | bool | false | только холодный: если гость не выключился, выключить ВМ по питанию (как выдернуть шнур) |
+| `shutdown_timeout` | целое 10..86400 | 300 (или ключ сервера `shutdown_timeout`) | только холодный: сколько секунд ждать гостевого выключения |
+| `quiesce`, `memory` | bool | true / false | только горячий режим |
+| `history` | bool | true | оба режима |
+
+Отсутствие ключа `hot_backup` везде (старый конфиг, `tasks.save` без ключа, новая задача в интерфейсе) = **холодный режим**; для задачи с источником ESXi / vCenter `tasks.save` всегда записывает объект `snapshot` с `hot_backup`. Нелогические значения `hot_backup` / `force_off` и `shutdown_timeout` вне 10..86400 отвергаются
+с понятным текстом. Миграции нет: продукт не выпущен, сохранённых боевых задач нет. На странице «Virtual Machine Backup», вкладка Snapshot, стоит флажок «Back up while the VM is running (hot backup)» с предупреждением под ним (текст — в docs/ESXI.md);
+пока он снят, «Quiesce...» и «Include the memory...» недоступны, а видны «If the guest does not shut down, power it off (like pulling the plug)» (с предупреждением) и «Wait for the guest to shut down, seconds». «Also back up the existing snapshots of the VM» действует в обоих режимах.
+В записи истории результат элемента несёт `downtime` (секунды), `downtime_from`, `downtime_to` (unix-время), если ВМ была выключена для копии.

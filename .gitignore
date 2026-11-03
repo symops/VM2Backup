@@ -43,3 +43,4 @@ __pycache__/
 keys.log
 cap.pcap*
 /.winvm/esxi/
+/.winvm/guest-images/vmtools-apks/
