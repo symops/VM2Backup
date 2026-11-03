@@ -385,8 +385,8 @@ void ServiceCore::backupElement(Job* j, const Json& el, const Str& taskName, Jso
         }
         { Json tj0; m_cfg.server(el.get("target").get("server").str(), false, tj0); remember(el.get("target").get("server").str(), expandDirectory(tj0, el.get("target").get("directory").str(), vm, t0)); }
         BackupOptions o;
-        o.codec = CodecOptions((int)el.get("compress").get("level").integer(0), (int)settings.get("threads").integer(0));
-        if (el.get("compress").get("level").integer(0) == 0) o.codec.level = (int)settings.get("level").integer(0);
+        { const Json& lj = el.get("compress").get("level");      // a level of the task (0..9, 0 is the real fastest one) or, when the key is absent / null, the one of the Settings
+          o.codec = CodecOptions(lj.is_number() ? (int)lj.integer() : (int)settings.get("level").integer(kCodecDefaultLevel), (int)settings.get("threads").integer(0)); }
         if (el.get("encrypt").get("enabled").boolean()) o.password = el.get("encrypt").get("password").str();
         o.resume = el.get("resume").boolean(true); o.keep = (int)el.get("keep").integer(0); o.verify = el.get("verify").boolean(true); o.allowLive = el.get("allow_live").boolean(false);
         o.kdfIterations = (u32)settings.get("kdf_iterations").integer(kEncIterationsDefault);

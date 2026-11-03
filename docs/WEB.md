@@ -237,3 +237,33 @@ The page offers 17 languages (login page and header).  `src/web/lang/<code>.txt`
 с понятным текстом. Миграции нет: продукт не выпущен, сохранённых боевых задач нет. На странице «Virtual Machine Backup», вкладка Snapshot, стоит флажок «Back up while the VM is running (hot backup)» с предупреждением под ним (текст — в docs/ESXI.md);
 пока он снят, «Quiesce...» и «Include the memory...» недоступны, а видны «If the guest does not shut down, power it off (like pulling the plug)» (с предупреждением) и «Wait for the guest to shut down, seconds». «Also back up the existing snapshots of the VM» действует в обоих режимах.
 В записи истории результат элемента несёт `downtime` (секунды), `downtime_from`, `downtime_to` (unix-время), если ВМ была выключена для копии.
+
+## Compression levels (xz 0-9)
+
+The levels are the REAL xz presets (`lzma_lzma_preset`, no "extreme" flag: `xz -0` .. `xz -9`; LZMA2 dictionary 256 KiB, 1, 2, 4, 4, 8, 8, 16, 32, 64 MiB; lc/lp/pb 3/0/2; the match finder, nice length, depth and mode of the preset, checked against liblzma 5.8.4). **5 is the default** everywhere: the Settings (`settings.level`), the manifest,
+`CodecOptions`. Level 0 is a real level (the fastest), not "inherit". The dictionary of an archive is written into every block header, so every `.xz` tool reads it and the older archives (made with other dictionaries) are read as before; `level` in the manifest is informational.
+The blocks (compressed in parallel) are 3 x the dictionary, at least 1 MiB (like `xz -T`): the stream depends on the data and the level only, never on the number of threads. A 32-bit process lowers the dictionary of presets 8 and 9 so that one thread fits in about 900 MiB (the stream stays readable everywhere).
+
+* `settings.set {level}` and `tasks.save` (`elements[].compress.level`): an integer 0..9, anything else (-1, 10, 5.5, "5") is refused with the one text **the compression level is 0..9**; the same check reads `config.json` (a bad level makes the service refuse that file).
+* `elements[].compress.level` ABSENT (or `null`) = the level of the Settings at the moment of the run; present (0..9) = the task's own level. The web page offers "Use the global setting (N)" and the levels 0-9 with a hint (speed, size against level 5, dictionary, memory per thread); a new task does not pin a level.
+* The table of the dictionaries / memory in `src/web/app.js` is checked against the codec by the autotest `web_level_table_matches_the_codec`; the dictionary and parameters of every level are read back from the compressed stream by `tests/native/t_xz.cpp` and `rpc_compression_levels_strict_and_inherited` / `every_xz_level_backs_up_resumes_and_restores` cover the service and the engine.
+
+Measured (03.11.2026, this program's own `t_xz`, one compression thread = CPU seconds; "Auto" = wall seconds with all 32 threads on a host that was busy with other jobs, so the times are noisy; memory is the formula of the program: encoder + 2 x block + block / 4 per thread):
+corpus A = a tar of the project sources / docs / headers (10,516,480 bytes of text), corpus B = a tar of the project's Windows executables of both architectures, sources and docs (38,850,560 bytes, mixed: code, text, near-duplicate x86 / x64 builds).
+
+| level | dictionary | memory per thread, MiB | A: size (share) | A: CPU s | B: size (share) | B: CPU s, 1 thread | B: wall s, Auto |
+|---|---|---|---|---|---|---|---|
+| 0 | 256 KiB | 5 | 2,653,236 (25.2%) | 1.2 | 13,394,204 (34.5%) | 16.2 | 3.4 |
+| 1 | 1 MiB | 15 | 2,377,368 (22.6%) | 1.6 | 12,601,456 (32.4%) | 15.1 | 2.9 |
+| 2 | 2 MiB | 30 | 2,257,280 (21.5%) | 2.6 | 12,271,540 (31.6%) | 17.3 | 3.5 |
+| 3 | 4 MiB | 58 | 2,184,220 (20.8%) | 3.6 | 11,936,164 (30.7%) | 20.7 | 7.7 |
+| 4 | 4 MiB | 74 | 2,053,012 (19.5%) | 6.5 | 11,333,560 (29.2%) | 29.0 | 10.6 |
+| 5 | 8 MiB | 147 | 1,925,032 (18.3%) | 9.8 | 10,454,492 (26.9%) | 34.8 | 23.5 |
+| 6 | 8 MiB | 147 | 1,888,548 (18.0%) | 11.8 | 10,388,200 (26.7%) | 40.9 | 26.5 |
+| 7 | 16 MiB | 293 | 1,888,560 (18.0%) | 12.1 | 7,066,100 (18.2%) | 45.0 | 44.2 |
+| 8 | 32 MiB | 585 | 1,888,560 (18.0%) | 14.2 | 6,975,100 (18.0%) | 48.9 | 45.8 |
+| 9 | 64 MiB | 1105 | 1,888,560 (18.0%) | 13.1 | 6,974,980 (18.0%) | 51.3 | 44.2 |
+
+Reading the table: on text the levels 6-9 give the same size (the data is smaller than what a bigger dictionary can use) and cost more time; on corpus B the jump at level 7 is the 16 MiB dictionary finding the near-identical x86 / x64 builds (a VM disk with repeated data far apart behaves like that, a VM disk of unique data does not). Executable code spends extra time in the per-block x86 BCJ trial (that is why level 0 is not faster than 1 on corpus B). The data of corpus B is cut into blocks of 3 x dictionary: at levels 7-9 the whole corpus is ONE block (48 / 96 / 192 MiB), so "Auto" cannot use more than one thread there; a bigger VM disk uses all of them.
+**Incompressible data (random, already compressed, encrypted) gets nothing from any level**: it is stored as uncompressed LZMA2 chunks at about the same size and speed whatever the level; choose a low level for such disks.
+**What changed against the earlier table of this program** (its own dictionaries 1/2/4/8/16/16/32/64/64 MiB from level 1 on): level 5 used 16 MiB, the preset 5 has 8 MiB; on the same corpora the old level 5 gave 1,924,916 bytes (A) and 7,138,112 (B) in 10.3 s / 44.0 s CPU against 1,925,032 (A, 9.8 s) and 10,454,492 (B, 34.8 s) now; old 4: 2,037,552 / 10,697,580 (A / B), now 2,053,012 / 11,333,560; old 6 and 9: 1,888,560 / 7,066,100 and 1,888,560 / 6,974,980, now level 7: 1,888,560 / 7,066,100 and level 9: 1,888,560 / 6,974,980 (the old "6" is the preset 7, the old "9" the preset 9). So level 5 compresses large VM disks with distant repeats a little worse than before and uses half of the memory; levels 7-9 keep the old strongest results.

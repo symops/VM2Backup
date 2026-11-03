@@ -107,6 +107,7 @@ Delete task "{0}"?	タスク "{0}" を削除しますか?
 Delete the backup "{0}"?	バックアップ "{0}" を削除しますか?
 Delete user "{0}"?	ユーザー "{0}" を削除しますか?
 Details	詳細
+Dictionary {0}, about {1} MiB of memory per compression thread.	辞書 {0}、圧縮スレッドあたり約 {1} MiB のメモリ。
 Disable two-factor	二要素認証を無効にする
 Disable two-factor authentication of "{0}"?	"{0}" の二要素認証を無効にしますか?
 Disabled	無効
@@ -197,7 +198,6 @@ Mon	月
 Monthly	毎月
 Name	名前
 Names	名前
-Needs about {0} GiB of memory per CPU core.	CPU コアあたり約 {0} GiB のメモリが必要です。
 Network	ネットワーク
 Network drive	ネットワークドライブ
 Network drive...	ネットワークドライブ...
@@ -397,6 +397,7 @@ Upload a certificate (PFX)	証明書 (PFX) をアップロード
 Use	使用
 Use a recovery code	回復コードを使用
 Use the authenticator code	認証アプリのコードを使用
+Use the global setting ({0})	全体設定を使う（{0}）
 Use {VM} for the VM name	VM 名には {VM} を使用
 User	ユーザー
 User name	ユーザー名
@@ -491,4 +492,4 @@ viewer	閲覧者
 {0} volume(s)	ボリューム {0} 個
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: CPU コアあたり約 {1} MB/s。バックアップはレベル 5 より約 {2}% 大きくなります。
 {0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: CPU コアあたり約 {1} MB/s。バックアップはレベル 5 より約 {2}% 小さくなります。
-{0}: about {1} MB/s per CPU core; the baseline size (levels 1-4 are larger, 6-9 smaller).	{0}: CPU コアあたり約 {1} MB/s。基準サイズ (レベル 1-4 は大きく、6-9 は小さくなります)。
+{0}: about {1} MB/s per CPU core; the baseline size (levels 0-4 are larger, 6-9 smaller).	{0}：CPU コアあたり約 {1} MB/s；基準サイズ（レベル 0-4 は大きく、6-9 は小さくなります）。

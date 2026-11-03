@@ -3,6 +3,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include "autotest.h"
+#include "xz.h"
 #include "webserver.h"
 #include "webauth.h"
 #include "webtls.h"
@@ -109,6 +110,34 @@ VM2B_TEST("web", policy_roles_bind_entries)
 
 // Every command the service understands (found in svccore.cpp / webserver.cpp at run time) must be classified here, so that adding a command
 // without deciding who may call it over the web fails this test.  A=admin+, O=operator+, V=viewer+, F=never over the web.
+// The table of the levels in the web page (dictionary, memory per thread) is the one of the codec: both are read from the same source of truth, the test compares them. The page offers
+// 10 levels (0..9) and "Use the global setting" for a task.
+VM2B_TEST("web", web_level_table_matches_the_codec)
+{
+    wchar_t env[MAX_PATH]; DWORD n = GetEnvironmentVariableW(L"VM2B_SRC_DIR", env, MAX_PATH);
+    if (!n || n >= MAX_PATH) { c_.skip("set VM2B_SRC_DIR to src/ (tools/run-web-tests.sh does)"); return true; }
+    Bytes b; Str err; T_CHECK(ReadWholeFile(JoinPath(FromWide(env), "web\\app.js").c_str(), b, err)); if (b.empty()) return false;
+    Str js((const char*)b.data(), b.size());
+    auto arr = [&](const char* name, Vec<u64>& out) {
+        int a = js.find((Str(name) + " = [").c_str()); if (a < 0) return false;
+        size_t p = (size_t)a + strlen(name) + 4, e = (size_t)js.find(']', p);
+        while (p < e) { while (p < e && (js[p] < '0' || js[p] > '9')) ++p; if (p >= e) break; u64 v = 0; while (p < e && js[p] >= '0' && js[p] <= '9') v = v * 10 + (u64)(js[p++] - '0'); out.push_back(v); }
+        return true;
+    };
+    Vec<u64> dict, mem;
+    T_CHECK(arr("LV_DICT_KIB", dict)); T_CHECK(arr("LV_MEM_MIB", mem));
+    T_CHECK(dict.size() == 10 && mem.size() == 10);
+    for (int lv = 0; lv < 10 && (size_t)lv < dict.size() && (size_t)lv < mem.size(); ++lv) {
+        XzLevelParams p; T_CHECK(XzLevelInfo(lv, p));
+        T_CHECK(dict[(size_t)lv] == (u64)p.dictBytes / 1024);
+        T_CHECK(mem[(size_t)lv] == (p.memPerThread + ((u64)1 << 19)) >> 20);
+    }
+    T_CHECK(js.find("[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(function (l) { return [l, l + ' - ' + levelName(l)]; })") >= 0);
+    T_CHECK(js.find("Use the global setting ({0})") >= 0);
+    T_CHECK(js.find("level: 5 }") < 0);                                                // a new task does not pin the level any more
+    return true;
+}
+
 VM2B_TEST("web", role_matrix_classifies_every_service_command)
 {
     struct Cl { const char* cmd; char cls; };

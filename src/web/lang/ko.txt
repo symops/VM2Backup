@@ -107,6 +107,7 @@ Delete task "{0}"?	작업 "{0}"을(를) 삭제할까요?
 Delete the backup "{0}"?	백업 "{0}"을(를) 삭제할까요?
 Delete user "{0}"?	사용자 "{0}"을(를) 삭제할까요?
 Details	세부 정보
+Dictionary {0}, about {1} MiB of memory per compression thread.	사전 {0}, 압축 스레드당 약 {1} MiB의 메모리.
 Disable two-factor	2단계 인증 끄기
 Disable two-factor authentication of "{0}"?	"{0}"의 2단계 인증을 끌까요?
 Disabled	사용 안 함
@@ -197,7 +198,6 @@ Mon	월
 Monthly	매월
 Name	이름
 Names	이름
-Needs about {0} GiB of memory per CPU core.	CPU 코어당 약 {0} GiB의 메모리가 필요합니다.
 Network	네트워크
 Network drive	네트워크 드라이브
 Network drive...	네트워크 드라이브...
@@ -397,6 +397,7 @@ Upload a certificate (PFX)	인증서(PFX) 업로드
 Use	사용
 Use a recovery code	복구 코드 사용
 Use the authenticator code	인증 앱 코드 사용
+Use the global setting ({0})	전체 설정 사용 ({0})
 Use {VM} for the VM name	VM 이름에 {VM} 사용
 User	사용자
 User name	사용자 이름
@@ -491,4 +492,4 @@ viewer	보기 전용
 {0} volume(s)	볼륨 {0}개
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: CPU 코어당 약 {1} MB/s, 백업이 수준 5보다 약 {2}% 큽니다.
 {0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: CPU 코어당 약 {1} MB/s, 백업이 수준 5보다 약 {2}% 작습니다.
-{0}: about {1} MB/s per CPU core; the baseline size (levels 1-4 are larger, 6-9 smaller).	{0}: CPU 코어당 약 {1} MB/s, 기준 크기(수준 1-4는 더 크고 6-9는 더 작음).
+{0}: about {1} MB/s per CPU core; the baseline size (levels 0-4 are larger, 6-9 smaller).	{0}: CPU 코어당 약 {1} MB/s; 기준 크기(레벨 0-4는 더 크고 6-9는 더 작음).

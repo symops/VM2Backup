@@ -107,6 +107,7 @@ Delete task "{0}"?	Supprimer la tâche « {0} » ?
 Delete the backup "{0}"?	Supprimer la sauvegarde « {0} » ?
 Delete user "{0}"?	Supprimer l'utilisateur « {0} » ?
 Details	Détails
+Dictionary {0}, about {1} MiB of memory per compression thread.	Dictionnaire {0}, environ {1} Mio de mémoire par thread de compression.
 Disable two-factor	Désactiver l'authentification à deux facteurs
 Disable two-factor authentication of "{0}"?	Désactiver l'authentification à deux facteurs de « {0} » ?
 Disabled	Désactivé
@@ -197,7 +198,6 @@ Mon	Lun
 Monthly	Mensuel
 Name	Nom
 Names	Noms
-Needs about {0} GiB of memory per CPU core.	Nécessite environ {0} GiB de mémoire par cœur de processeur.
 Network	Réseau
 Network drive	Lecteur réseau
 Network drive...	Lecteur réseau...
@@ -397,6 +397,7 @@ Upload a certificate (PFX)	Téléverser un certificat (PFX)
 Use	Utiliser
 Use a recovery code	Utiliser un code de récupération
 Use the authenticator code	Utiliser le code de l'application d'authentification
+Use the global setting ({0})	Utiliser le réglage global ({0})
 Use {VM} for the VM name	Utilisez {VM} pour le nom de la VM
 User	Utilisateur
 User name	Nom d'utilisateur
@@ -491,4 +492,4 @@ viewer	observateur
 {0} volume(s)	{0} volume(s)
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0} : environ {1} Mo/s par cœur de processeur ; les sauvegardes sont environ {2} % plus grandes qu'au niveau 5.
 {0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0} : environ {1} Mo/s par cœur de processeur ; les sauvegardes sont environ {2} % plus petites qu'au niveau 5.
-{0}: about {1} MB/s per CPU core; the baseline size (levels 1-4 are larger, 6-9 smaller).	{0} : environ {1} Mo/s par cœur de processeur ; la taille de référence (les niveaux 1-4 sont plus grands, 6-9 plus petits).
+{0}: about {1} MB/s per CPU core; the baseline size (levels 0-4 are larger, 6-9 smaller).	{0} : environ {1} Mo/s par cœur ; la taille de référence (les niveaux 0-4 sont plus gros, 6-9 plus petits).

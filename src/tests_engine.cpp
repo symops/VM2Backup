@@ -172,7 +172,7 @@ VM2B_TEST("engine", backup_restore_xz_levels)
         Str vm = Str::fmt("vm%d \xd0\x92\xd0\x9c", round);
         Vec<FileRec> files; MakeVm(c_, root, vm, files);
         BackupOptions o;
-        o.codec.level = c_.coin() ? 1 : c_.range(1, 3); o.codec.threads = c_.range(0, 2);
+        o.codec.level = c_.range(0, 9); o.codec.threads = c_.range(0, 2);
         bool enc = c_.coin(50); if (enc) o.password = Str::fmt("p@ss-%u-\xd0\xbf\xd0\xb0\xd1\x80", c_.rnd(1000));
         o.verify = c_.coin(70); o.keep = 0; o.kdfIterations = 3000;
         if (c_.coin(50)) o.segmentBytes = (u64)512 * (u64)c_.range(100, 4000);
@@ -205,6 +205,32 @@ VM2B_TEST("engine", backup_restore_xz_levels)
             if (enc) { Str ne; T_CHECK(!RestoreBackup(*t, m.archive, tmp.sub("nopw"), "", fr, nullptr, nullptr, ne)); }
         }
         delete src; delete t;
+    }
+    return true;
+}
+
+// Every level 0..9 (the real xz presets): a backup, verify and restore are exact, the manifest says the level that was really used, and a backup paused half way continues at the same level
+// (the stream depends on the data and the level only: a continuation writes the same bytes).
+VM2B_TEST("engine", every_xz_level_backs_up_resumes_and_restores)
+{
+    TmpDir tmp(c_, "lvls");
+    Str root = tmp.sub("vms"); Vec<FileRec> files; MakeVm(c_, root, "vm", files, 300000); AddBig(c_, root, "vm", files, 500000);
+    for (int lv = 0; lv <= 9; ++lv) {
+        BackupOptions o; o.kdfIterations = 3000; o.retry = FastRetry(); o.codec.level = lv; o.codec.threads = lv % 3; o.verify = true;
+        o.segmentBytes = (u64)512 * (u64)c_.range(100, 300); if (lv % 4 == 1) o.password = "pw-\xd0\xbf";
+        Str store = tmp.sub(Str::fmt("store%d", lv));
+        Target* t = LocalTargetAt(store); T_CHECK(t != nullptr); if (!t) return false;
+        VmSource* src = NewDirectorySource(root); Manifest m; Str w, err;
+        struct KeepProgress : CountProgress { bool keepOnAbort() override { return true; } } p1; p1.abortAt = true; p1.limit = 450000;
+        bool ok = BackupVm(*src, "vm", *t, o, &p1, m, w, err); T_CHECK(!ok);                                   // paused after ~200 KB of the source
+        CountProgress p2; ok = BackupVm(*src, "vm", *t, o, &p2, m, w, err);
+        if (!ok) c_.note("level %d: %s", lv, err.c_str());
+        T_CHECK(ok); T_CHECK(p2.resumes == 1); T_CHECK(m.level == lv); T_CHECK(m.codec == "xz");
+        Str ve; T_CHECK(VerifyBackup(*t, m.archive, o.password, nullptr, nullptr, ve));
+        Str dest = tmp.sub(Str::fmt("r%d", lv)); Manifest rm; Str re;
+        T_CHECK(RestoreBackup(*t, m.archive, dest, o.password, nullptr, &rm, re)); T_CHECK(SameTree(c_, dest, "vm", files));
+        T_CHECK(rm.level == lv);
+        delete src; delete t; RemoveTree(store); RemoveTree(dest);
     }
     return true;
 }
@@ -556,7 +582,7 @@ VM2B_TEST("resume", xz_encrypted_tiny_volumes_survive_connection_loss)
     for (int round = 0; round < 3; ++round) {
         TmpDir tmp(c_, "xzflaky");
         Str root = tmp.sub("vms"); Vec<FileRec> files; MakeVm(c_, root, "vm", files, 400000); AddBig(c_, root, "vm", files, 700000);
-        BackupOptions o; o.kdfIterations = 3000; o.retry = FastRetry(); o.codec.level = c_.range(1, 4); o.codec.threads = c_.range(0, 3);
+        BackupOptions o; o.kdfIterations = 3000; o.retry = FastRetry(); o.codec.level = c_.range(0, 9); o.codec.threads = c_.range(0, 3);
         o.segmentBytes = (u64)512 * (u64)c_.range(8, 120);                       // 4 .. 60 KiB: hundreds of volumes, each its own xz stream
         if (c_.coin(70)) o.password = "pw-\xd0\xbf";
         o.verify = c_.coin();

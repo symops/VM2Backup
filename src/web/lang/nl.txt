@@ -107,6 +107,7 @@ Delete task "{0}"?	Taak "{0}" verwijderen?
 Delete the backup "{0}"?	De back-up "{0}" verwijderen?
 Delete user "{0}"?	Gebruiker "{0}" verwijderen?
 Details	Details
+Dictionary {0}, about {1} MiB of memory per compression thread.	Woordenboek {0}, ongeveer {1} MiB geheugen per compressiethread.
 Disable two-factor	Tweestapsverificatie uitschakelen
 Disable two-factor authentication of "{0}"?	Tweestapsverificatie van "{0}" uitschakelen?
 Disabled	Uitgeschakeld
@@ -197,7 +198,6 @@ Mon	Ma
 Monthly	Maandelijks
 Name	Naam
 Names	Namen
-Needs about {0} GiB of memory per CPU core.	Heeft ongeveer {0} GiB geheugen per CPU-kern nodig.
 Network	Netwerk
 Network drive	Netwerkstation
 Network drive...	Netwerkstation...
@@ -397,6 +397,7 @@ Upload a certificate (PFX)	Een certificaat (PFX) uploaden
 Use	Gebruiken
 Use a recovery code	Een herstelcode gebruiken
 Use the authenticator code	De authenticator-code gebruiken
+Use the global setting ({0})	Algemene instelling gebruiken ({0})
 Use {VM} for the VM name	Gebruik {VM} voor de naam van de VM
 User	Gebruiker
 User name	Gebruikersnaam
@@ -491,4 +492,4 @@ viewer	kijker
 {0} volume(s)	{0} volume(s)
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: ongeveer {1} MB/s per CPU-kern; back-ups zijn ongeveer {2}% groter dan op niveau 5.
 {0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: ongeveer {1} MB/s per CPU-kern; back-ups zijn ongeveer {2}% kleiner dan op niveau 5.
-{0}: about {1} MB/s per CPU core; the baseline size (levels 1-4 are larger, 6-9 smaller).	{0}: ongeveer {1} MB/s per CPU-kern; de basisgrootte (niveaus 1-4 zijn groter, 6-9 kleiner).
+{0}: about {1} MB/s per CPU core; the baseline size (levels 0-4 are larger, 6-9 smaller).	{0}: ongeveer {1} MB/s per CPU-kern; de basisgrootte (niveaus 0-4 zijn groter, 6-9 kleiner).

@@ -6,7 +6,9 @@
 //   t_xz check dir       decodes dir/{xz,py,z7}_<n>_<v>.xz made by the other tools and compares with dir/in_<n>.bin
 //   t_xz interop dir     all of it: gen, then xz / 7z / python decode our files and write theirs, then check (needs xz, 7z, python3)
 #include <initializer_list>
+#include <algorithm>
 #include <time.h>
+#include <lzma.h>
 #include "../../src/xz.h"
 using namespace vm2b;
 #define CHECK(c) do { if (!(c)) { printf("FAIL %s:%d %s\n", __FILE__, __LINE__, #c); fails++; } } while (0)
@@ -71,11 +73,59 @@ static bool decodeAny(const Bytes& c, size_t* total) {
     delete g; if (total) *total = t; return ok;
 }
 
+// The dictionary size and the lc/lp/pb of the first LZMA2 chunk of the first block, read from the stream itself (no help from our code).
+static bool streamParams(const Bytes& c, u32& dict, int& props) {
+    if (c.size() < 12 + 12) return false;
+    lzma_block blk; memset(&blk, 0, sizeof blk); lzma_filter fl[LZMA_FILTERS_MAX + 1]; memset(fl, 0, sizeof fl);
+    blk.version = 0; blk.filters = fl; blk.check = LZMA_CHECK_CRC64;
+    blk.header_size = lzma_block_header_size_decode(c[12]);
+    if (c.size() < 12 + blk.header_size) return false;
+    if (lzma_block_header_decode(&blk, nullptr, c.data() + 12) != LZMA_OK) return false;
+    bool found = false; dict = 0;
+    for (int i = 0; fl[i].id != LZMA_VLI_UNKNOWN; ++i) if (fl[i].id == LZMA_FILTER_LZMA2) { dict = ((lzma_options_lzma*)fl[i].options)->dict_size; found = true; }
+    for (int i = 0; fl[i].id != LZMA_VLI_UNKNOWN; ++i) free(fl[i].options);
+    size_t at = 12 + blk.header_size; props = -1;
+    if (found && at + 6 <= c.size() && c[at] >= 0xE0) props = c[at + 5];            // 0xE0: LZMA chunk with dictionary reset and new properties; byte 5 = (pb * 5 + lp) * 9 + lc
+    return found;
+}
+static void levelTests() {
+    static const u32 want[10] = { 256u << 10, 1u << 20, 2u << 20, 4u << 20, 4u << 20, 8u << 20, 8u << 20, 16u << 20, 32u << 20, 64u << 20 };
+    Bytes d = gen(6, 3u << 20); size_t sz[10];
+    for (int lv = 0; lv <= 9; ++lv) {
+        Bytes c, o; Str e;
+        CHECK(comp(d, lv, lv % 3 + 1, 1 << 20, c, e)); sz[lv] = c.size();
+        CHECK(decomp(c, o, 1 << 16, e)); CHECK(same(o, d));
+        lzma_options_lzma pre; CHECK(!lzma_lzma_preset(&pre, (uint32_t)lv));         // the xz preset itself
+        u32 dict = 0; int props = -1; CHECK(streamParams(c, dict, props));
+        XzLevelParams lp; CHECK(XzLevelInfo(lv, lp));
+        u32 expect = pre.dict_size;
+        if (sizeof(size_t) == 8) { CHECK(dict == expect); CHECK(dict == want[lv]); }
+        CHECK(lp.dictBytes == expect && lp.lc == pre.lc && lp.lp == pre.lp && lp.pb == pre.pb && lp.niceLen == pre.nice_len && lp.depth == pre.depth && lp.mode == (int)pre.mode && lp.mf == (int)pre.mf);
+        CHECK(lp.blockBytes == (u64)std::max<u64>((u64)expect * 3, 1u << 20)); CHECK(lp.memPerThread > lp.dictBytes);
+        if (props >= 0) CHECK(props == (int)((pre.pb * 5 + pre.lp) * 9 + pre.lc));
+        if (lv >= 4) CHECK(pre.mode == LZMA_MODE_NORMAL && pre.mf == LZMA_MF_BT4); else CHECK(pre.mode == LZMA_MODE_FAST);
+    }
+    CHECK(sz[9] < sz[0]);                                                              // the bigger level really compresses this data better
+    printf("levels 0..9 on a 3 MiB disk-like sample:"); for (int lv = 0; lv <= 9; ++lv) printf(" %zu", sz[lv]); printf("\n");
+    XzLevelParams x; CHECK(!XzLevelInfo(-1, x)); CHECK(!XzLevelInfo(10, x));
+    { MemSink ms; Sink* g = MakeXzSink(&ms, 10, 1); bool w = g->write("abc", 3); CHECK(!w); CHECK(g->err.find("the compression level is 0..9") >= 0); delete g; }
+    { MemSink ms; Sink* g = MakeXzSink(&ms, -1, 1); bool w = g->write("abc", 3); CHECK(!w); delete g; }
+    // the stream does not depend on the thread count: several blocks (level 0: 1 MiB blocks), every level, 1 / 2 / 3 / auto threads, odd write sizes
+    Bytes big = gen(6, 5u << 20);
+    for (int lv : {0, 1, 2, 5, 9}) {
+        if (lv >= 8 && sizeof(size_t) == 4) continue;
+        Bytes ref, c, o; Str e; CHECK(comp(big, lv, 1, 1 << 20, ref, e));
+        for (int t : {2, 3, 0}) { CHECK(comp(big, lv, t, t == 3 ? 99991 : 1 << 22, c, e)); CHECK(same(c, ref)); }
+        CHECK(decomp(ref, o, 7001, e)); CHECK(same(o, big));
+    }
+}
+
 static void selfTests() {
+    levelTests();
     size_t sizes[] = {0, 1, 2, 3, 5, 100, 1000, 65535, 65536, 65537, 200000, 1500000};
     for (int kind = 0; kind < 8; ++kind) for (size_t sz : sizes) {
         Bytes d = gen(kind, sz);
-        for (int lv : {1, 2, 3, 4, 5, 7, 9}) {
+        for (int lv : {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}) {
             if ((lv >= 7 && sz > 300000) || (lv % 2 == 0 && sz > 700000 && kind != 0)) continue;
             Bytes c, o; Str e;
             int thr = lv == 5 ? 3 : 1;

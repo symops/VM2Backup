@@ -537,41 +537,38 @@ VM2B_TEST("engine", foreign_codec_manifest_is_refused)
     return true;
 }
 
-// A config written by an older version (codec gzip / none / unknown / missing) is migrated on load to xz and written back.
-VM2B_TEST("service", old_config_is_migrated_to_xz)
+// The compression level in config.json: 0..9 is read as it is (0 is a real level, a missing / null task level stays "not set": it takes the level of the Settings), anything else is an
+// error with one text. There is no migration of older formats (the product is not released). Fails on the old code (it rewrote the levels).
+VM2B_TEST("service", config_compression_levels_are_read_strictly)
 {
     HTmp tmp(c_, "mg");
-    Str dir = tmp.sub("data"); Str e; T_CHECK(MakeDirs(dir, e));
-    const char* old = R"({"servers":[],"scheduler":false,"settings":{"codec":"gzip","level":7,"segment_mib":64},
-        "tasks":[{"id":"t1","name":"Old","elements":[
-          {"type":"backup","compress":{"codec":"none","level":0}},
-          {"type":"backup","compress":{"codec":"gzip","level":9}},
-          {"type":"backup","compress":{"codec":"gzip","level":0}},
-          {"type":"backup","compress":{"codec":"gzip","level":42}},
-          {"type":"backup","compress":{"codec":"lz4","level":3}},
-          {"type":"backup","compress":{"level":4}},
-          {"type":"backup","compress":{"codec":"xz","level":2}},
-          {"type":"backup","compress":"junk"},
-          {"type":"backup"}]}]})";
-    T_CHECK(PutFile(JoinPath(dir, "config.json"), old, strlen(old)));
+    Str e;
     {
+        Str dir = tmp.sub("data"); T_CHECK(MakeDirs(dir, e));
+        const char* cfgText = R"({"servers":[],"scheduler":false,"settings":{"level":0,"segment_mib":64},
+            "tasks":[{"id":"t1","name":"T","elements":[
+              {"type":"backup","compress":{"codec":"xz","level":0}},
+              {"type":"backup","compress":{"codec":"xz","level":9}},
+              {"type":"backup","compress":{"codec":"xz"}},
+              {"type":"backup","compress":{"codec":"xz","level":null}},
+              {"type":"backup"}]}]})";
+        T_CHECK(PutFile(JoinPath(dir, "config.json"), cfgText, strlen(cfgText)));
         Config cfg; Str err; T_CHECK(cfg.open(dir, err));
-        Json st = cfg.settings(); T_CHECK(!st.has("codec")); T_CHECK(st.get("level").integer() == 7); T_CHECK(st.get("threads").integer() == 0);
-        Json t; T_CHECK(cfg.task("t1", true, t));
-        const Json& el = t.get("elements");
-        int want[] = { 1, 9, 6, 9, 5, 4, 2, 0 };
-        T_CHECK(el.size() == 9);
-        for (size_t i = 0; i < 8; ++i) { T_CHECK(el.at(i).get("compress").get("codec").str() == "xz"); T_CHECK(el.at(i).get("compress").get("level").integer() == want[i]); }
-        T_CHECK(!el.at(8).has("compress"));
+        T_CHECK(cfg.settings().get("level").integer() == 0);
+        Json t; T_CHECK(cfg.task("t1", true, t)); const Json& el = t.get("elements");
+        T_CHECK(el.at(0).get("compress").get("level").is_number() && el.at(0).get("compress").get("level").integer() == 0);
+        T_CHECK(el.at(1).get("compress").get("level").integer() == 9);
+        T_CHECK(!el.at(2).get("compress").has("level")); T_CHECK(!el.at(3).get("compress").get("level").is_number());
     }
-    Bytes b; T_CHECK(ReadWholeFile(JoinPath(dir, "config.json").c_str(), b, e));           // written back: no old codec is left
-    Str txt((const char*)b.data(), b.size()); T_CHECK(txt.find("gzip") < 0); T_CHECK(txt.find("\"none\"") < 0); T_CHECK(txt.find("lz4") < 0);
-    // settings of "none" / unknown / missing codec
-    const char* olds[] = { R"({"settings":{"codec":"none","level":0}})", R"({"settings":{"codec":"bogus","level":3}})", R"({"settings":{"level":8}})", R"({"settings":{"codec":"gzip"}})" };
-    int wantLv[] = { 1, 5, 8, 6 };
-    for (int i = 0; i < 4; ++i) {
-        Str d2 = tmp.sub(Str::fmt("d%d", i)); T_CHECK(MakeDirs(d2, e)); T_CHECK(PutFile(JoinPath(d2, "config.json"), olds[i], strlen(olds[i])));
-        Config cfg; Str err; T_CHECK(cfg.open(d2, err)); T_CHECK(cfg.settings().get("level").integer() == wantLv[i]); T_CHECK(!cfg.settings().has("codec"));
+    {   // a fresh data folder: the default of the Settings is 5
+        Str dir = tmp.sub("fresh"); T_CHECK(MakeDirs(dir, e)); Config cfg; Str err; T_CHECK(cfg.open(dir, err)); T_CHECK(cfg.settings().get("level").integer() == 5);
+    }
+    const char* bad[] = { R"({"settings":{"level":10}})", R"({"settings":{"level":-1}})", R"({"settings":{"level":"5"}})", R"({"settings":{"level":2.5}})",
+        R"({"tasks":[{"id":"t","name":"X","elements":[{"type":"backup","compress":{"codec":"xz","level":12}}]}]})",
+        R"({"tasks":[{"id":"t","name":"X","elements":[{"type":"backup","compress":{"codec":"xz","level":-3}}]}]})" };
+    for (int i = 0; i < 6; ++i) {
+        Str d2 = tmp.sub(Str::fmt("b%d", i)); T_CHECK(MakeDirs(d2, e)); T_CHECK(PutFile(JoinPath(d2, "config.json"), bad[i], strlen(bad[i])));
+        Config cfg; Str err; T_CHECK(!cfg.open(d2, err)); T_CHECK(err.find("the compression level is 0..9") >= 0);
     }
     return true;
 }

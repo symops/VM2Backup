@@ -66,26 +66,17 @@ static Json DefaultSettings(const Str& dir)
     return s;
 }
 
-// xz is the only compressor. A config written by an older version may name "gzip" or "none" (or nothing): the codec is replaced and the
-// level mapped: gzip L -> xz clamp(L, 1, 9) (gzip's own default was 6), none -> xz 1, an unknown name -> xz 5, no name -> xz with the level kept.
-// A task level 0 means "the level of the Settings" and stays 0.
-static i64 MigratedLevel(const Json& comp, bool zeroIsDefault)
-{
-    Str cn = comp.get("codec").str(); i64 lv = comp.get("level").integer(0), out;
-    if (cn.empty() || cn == "xz") out = lv < 0 ? 0 : lv > 9 ? 9 : lv;
-    else if (cn == "gzip") out = lv <= 0 ? 6 : lv > 9 ? 9 : lv;
-    else if (cn == "none") out = 1;
-    else out = 5;
-    return out == 0 && !zeroIsDefault ? 5 : out;
-}
+// The compression level (0..9 = xz -0 .. -9, a real level each): an integer, anything else is an error with ONE text everywhere (settings.set, tasks.save, the config file).
+static bool LevelValueOk(const Json& v) { return v.is_number() && v.num() == (double)v.integer() && CodecLevelOk(v.integer()); }
 
-// Applied to the loaded config: the settings and every task element. Returns true when something was rewritten.
-static bool MigrateConfig(Json& cfg)
+// Applied to the loaded config: the settings and every task element. Returns true when something was rewritten. (There are no formats of older versions to migrate: the product is not released.)
+// A task element without compress.level (or with null) takes the level of the Settings at run time; a level that is present is a number 0..9, otherwise `err` is set.
+static bool MigrateConfig(Json& cfg, Str& err)
 {
     bool changed = false;
     if (cfg.get("settings").is_object()) {
-        Json& st = cfg["settings"]; i64 lv = MigratedLevel(st, false);
-        if (st.has("codec") || !st.get("level").is_number() || st.get("level").integer() != lv) { st.remove("codec"); st["level"] = lv; changed = true; }
+        Json& st = cfg["settings"];
+        if (st.has("level") && !LevelValueOk(st.get("level"))) { err = Str("settings: ") + kCodecLevelError; return false; }
         if (!st.get("threads").is_number() || st.get("threads").integer() < 0 || st.get("threads").integer() > 64) { st["threads"] = 0; changed = true; }
     }
     if (!cfg.get("tasks").is_array()) return changed;
@@ -97,10 +88,8 @@ static bool MigrateConfig(Json& cfg)
             Json& el = els.item(k);
             if (el.is_object() && el.get("id").str().empty()) { u8 rb[6]; RandomBytes(rb, 6); el["id"] = HexEncode(rb, 6); changed = true; }      // every element has a stable id (its stored password is matched by it)
             if (!el.is_object() || !el.has("compress")) continue;
-            const Json& comp = el.get("compress"); i64 lv = MigratedLevel(comp, true);
-            if (!comp.is_object() || comp.get("codec").str() != "xz" || !comp.get("level").is_number() || comp.get("level").integer() != lv) {
-                Json nc = Json::object(); nc["codec"] = "xz"; nc["level"] = lv; el["compress"] = nc; changed = true;
-            }
+            const Json& lvj = el.get("compress").get("level");
+            if (el.get("compress").is_object() && lvj.is_number() && !LevelValueOk(lvj)) { err = "task \"" + ts.at(i).get("name").str() + "\": " + kCodecLevelError; return false; }
         }
     }
     return changed;
@@ -120,7 +109,7 @@ bool Config::open(const Str& dataDir, Str& err)
     }
     if (!m_cfg.has("servers")) m_cfg["servers"] = Json::array();
     if (!m_cfg.has("tasks")) m_cfg["tasks"] = Json::array();
-    MigrateConfig(m_cfg);                                                     // old codecs -> xz; written back by saveCfg() below
+    { Str me; MigrateConfig(m_cfg, me); if (!me.empty()) { err = "config.json: " + me; return false; } }      // written back by saveCfg() below
     Json def = DefaultSettings(m_dir);
     for (size_t i = 0; i < def.size(); ++i) if (!m_cfg.get("settings").has(def.key_at(i).c_str())) m_cfg["settings"][def.key_at(i).c_str()] = def.value_at(i);
     if (!m_cfg.has("scheduler")) m_cfg["scheduler"] = false;                 // like the original: the scheduler is off until it is enabled
@@ -159,6 +148,7 @@ bool Config::setSettings(const Json& patch, Str& err)
         if (!s.has(k.c_str())) { unlock(); err = "unknown setting: " + k; return false; }
         const Json& v = patch.value_at(i);
         auto cls = [](const Json& x) { return x.is_string() ? 1 : x.is_object() ? 2 : x.is_array() ? 3 : x.is_number() ? 4 : x.is_bool() ? 5 : 0; };
+        if (k == "level" && !LevelValueOk(v)) { unlock(); err = kCodecLevelError; return false; }                    // (before the generic kind check: a string "5" gets the same text as 10)
         bool defBool = s.get(k.c_str()).is_bool();                                                         // a switch may be sent as true / false or 1 / 0
         if (defBool ? !(v.is_bool() || v.is_number()) : cls(v) != cls(s.get(k.c_str()))) { unlock(); err = "bad value of " + k; return false; }   // a setting keeps the kind of its value (number / text / object)
         // upper limits: what the engine can really use (kdf: the decryptor refuses more than 100000000 iterations; the pauses are multiplied by 1000 as int; the volume size is shifted by 20)
@@ -168,7 +158,7 @@ bool Config::setSettings(const Json& patch, Str& err)
         if ((k == "max_parallel" && (v.integer() < 1 || v.integer() > 16)) || (k == "retry_attempts" && (v.integer() < 0 || v.integer() > 100)) ||
             (k == "retry_base_sec" && v.integer() < 1) || (k == "retry_max_sec" && v.integer() < 1) || (k == "speed_limit_mbit" && v.num() < 0) ||
             (k == "segment_mib" && v.integer() != 0 && v.integer() < 1) || (k == "kdf_iterations" && v.integer() < 1000) || (k == "misfire_grace_min" && v.integer() < 0) || (k == "retry_base_ms" && v.integer() < 0)) { unlock(); err = "bad value of " + k; return false; }
-        if (k == "level" && (v.integer() < 1 || v.integer() > 9)) { unlock(); err = "the compression level is 1..9"; return false; }
+        if (k == "level" && !LevelValueOk(v)) { unlock(); err = kCodecLevelError; return false; }
         if (k == "threads" && (v.integer() < 0 || v.integer() > 64)) { unlock(); err = "bad number of compression threads"; return false; }
         if (defBool) s[k.c_str()] = Json(v.boolean()); else s[k.c_str()] = v;
     }
@@ -388,8 +378,9 @@ bool Config::ValidateElement(Json& el, const Config& cfg, Str& err)
     if (vms.size() > 1 && !dir.empty() && dir.find("{VM}") < 0) { err = "for several virtual machines the folder must contain the {VM} tag"; return false; }
     Json comp = el.get("compress"); Str cn = comp.get("codec").str("xz");
     if (!CodecNameOk(cn.c_str())) { err = "only xz compression is supported"; return false; }
-    i64 lv = comp.get("level").integer(0); if (lv < 0 || lv > 9) { err = "the compression level is 1..9"; return false; }
-    Json nc = Json::object(); nc["codec"] = "xz"; nc["level"] = lv; el["compress"] = nc;
+    Json nc = Json::object(); nc["codec"] = "xz";
+    if (comp.has("level") && !comp.get("level").is_null()) { if (!LevelValueOk(comp.get("level"))) { err = kCodecLevelError; return false; } nc["level"] = comp.get("level").integer(); }   // absent / null = the level of the Settings (not 0: 0 is a real level)
+    el["compress"] = nc;
     if (el.get("keep").integer(0) < 0) { err = "the number of backups to keep cannot be negative"; return false; }
     if (el.get("segment_mib").integer(0) < 0 || el.get("segment_mib").integer(0) > (1 << 30)) { err = "bad volume size"; return false; }
     if (el.get("speed_mbit").num(0) < 0) { err = "the speed limit cannot be negative"; return false; }

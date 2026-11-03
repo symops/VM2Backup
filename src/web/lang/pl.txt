@@ -107,6 +107,7 @@ Delete task "{0}"?	Usunąć zadanie „{0}”?
 Delete the backup "{0}"?	Usunąć kopię zapasową „{0}”?
 Delete user "{0}"?	Usunąć użytkownika „{0}”?
 Details	Szczegóły
+Dictionary {0}, about {1} MiB of memory per compression thread.	Słownik {0}, około {1} MiB pamięci na wątek kompresji.
 Disable two-factor	Wyłącz uwierzytelnianie dwuskładnikowe
 Disable two-factor authentication of "{0}"?	Wyłączyć uwierzytelnianie dwuskładnikowe dla „{0}”?
 Disabled	Wyłączone
@@ -197,7 +198,6 @@ Mon	Pn
 Monthly	Co miesiąc
 Name	Nazwa
 Names	Nazwy
-Needs about {0} GiB of memory per CPU core.	Potrzebuje ok. {0} GiB pamięci na rdzeń procesora.
 Network	Sieć
 Network drive	Dysk sieciowy
 Network drive...	Dysk sieciowy...
@@ -397,6 +397,7 @@ Upload a certificate (PFX)	Prześlij certyfikat (PFX)
 Use	Użyj
 Use a recovery code	Użyj kodu odzyskiwania
 Use the authenticator code	Użyj kodu z aplikacji uwierzytelniającej
+Use the global setting ({0})	Użyj ustawienia globalnego ({0})
 Use {VM} for the VM name	Użyj {VM} jako nazwy maszyny
 User	Użytkownik
 User name	Nazwa użytkownika
@@ -491,4 +492,4 @@ viewer	przeglądający
 {0} volume(s)	Woluminy: {0}
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: ok. {1} MB/s na rdzeń procesora; kopie zapasowe są o ok. {2}% większe niż na poziomie 5.
 {0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: ok. {1} MB/s na rdzeń procesora; kopie zapasowe są o ok. {2}% mniejsze niż na poziomie 5.
-{0}: about {1} MB/s per CPU core; the baseline size (levels 1-4 are larger, 6-9 smaller).	{0}: ok. {1} MB/s na rdzeń procesora; rozmiar bazowy (poziomy 1-4 są większe, 6-9 mniejsze).
+{0}: about {1} MB/s per CPU core; the baseline size (levels 0-4 are larger, 6-9 smaller).	{0}: około {1} MB/s na rdzeń; rozmiar bazowy (poziomy 0-4 dają większe, 6-9 mniejsze).

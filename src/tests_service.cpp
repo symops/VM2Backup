@@ -426,7 +426,7 @@ VM2B_TEST("gui", program_selftest)
     return true;
 }
 
-// xz is the only compressor: the RPC refuses every other codec with a clear message and accepts xz at levels 1..9.
+// xz is the only compressor: the RPC refuses every other codec with a clear message and accepts xz at levels 0..9.
 VM2B_TEST("service", rpc_accepts_only_xz)
 {
     Svc s(c_, "svcxz"); if (!s.up) return false;
@@ -437,14 +437,60 @@ VM2B_TEST("service", rpc_accepts_only_xz)
         Json a = Json::object(); a["task"] = t; Json r;
         T_CHECK(!s.call("tasks.save", a, &r)); T_CHECK(s.lastErr.find("only xz") >= 0);
     }
-    for (int lv = 1; lv <= 9; lv += 4) T_CHECK(!s.saveTask(Str::fmt("Good%d", lv).c_str(), Svc::Element(srv, "vm1", JoinPath(s.tmp.sub("store"), "{VM}"), "xz", lv)).empty());
+    for (int lv = 0; lv <= 9; lv += 3) T_CHECK(!s.saveTask(Str::fmt("Good%d", lv).c_str(), Svc::Element(srv, "vm1", JoinPath(s.tmp.sub("store"), "{VM}"), "xz", lv)).empty());
     Json bs = Json::object(); bs["codec"] = "gzip"; T_CHECK(!s.call("settings.set", bs)); T_CHECK(s.lastErr.find("only xz") >= 0);
     bs = Json::object(); bs["codec"] = "none"; T_CHECK(!s.call("settings.set", bs));
     bs = Json::object(); bs["level"] = 12; T_CHECK(!s.call("settings.set", bs));
-    bs = Json::object(); bs["level"] = 0; T_CHECK(!s.call("settings.set", bs));
     bs = Json::object(); bs["threads"] = -1; T_CHECK(!s.call("settings.set", bs));
     bs = Json::object(); bs["level"] = 7; bs["threads"] = 2; bs["codec"] = "xz"; T_CHECK(s.call("settings.set", bs));
     Json st = s.ok("settings.get", Json::object()); T_CHECK(st.get("level").integer() == 7); T_CHECK(st.get("threads").integer() == 2); T_CHECK(!st.has("codec"));
+    return true;
+}
+
+// Levels are the real xz presets 0..9 (default 5): a strict check with one text everywhere, 0 is a real level, a task without compress.level (or with null)
+// takes the level of the Settings, the manifest stores the level that was really used. Fails on the old code (0 meant "inherit", the check said 1..9, a bad value was clamped).
+VM2B_TEST("service", rpc_compression_levels_strict_and_inherited)
+{
+    Svc s(c_, "svclv"); if (!s.up) return false;
+    const Str kErr = "the compression level is 0..9";
+    Json st = s.ok("settings.get", Json::object()); T_CHECK(st.get("level").integer() == 5);                    // the default of the Settings
+    for (int lv = 0; lv <= 9; ++lv) { Json a = Json::object(); a["level"] = lv; T_CHECK(s.call("settings.set", a)); T_CHECK(s.ok("settings.get", Json::object()).get("level").integer() == lv); }
+    { Json a = Json::object(); a["level"] = 3; T_CHECK(s.call("settings.set", a)); }
+    { Json bad[5]; bad[0] = Json(-1); bad[1] = Json(10); bad[2] = Json(5.5); bad[3] = Json("5"); bad[4] = Json(100);
+      for (int i = 0; i < 5; ++i) { Json a = Json::object(); a["level"] = bad[i]; T_CHECK(!s.call("settings.set", a)); T_CHECK(s.lastErr == kErr); } }
+    T_CHECK(s.ok("settings.get", Json::object()).get("level").integer() == 3);                                   // a refused value changed nothing
+    Str root = s.tmp.sub("vms"); WriteBytes(JoinPath(root, "vm1\\disk.vmdk"), Random(c_, 300000)); Str srv = s.addDirServer(root);
+    // tasks.save: a bad level of a task is refused with the same text
+    { Json bad[4]; bad[0] = Json(-1); bad[1] = Json(10); bad[2] = Json(1.5); bad[3] = Json("x");
+      for (int i = 0; i < 4; ++i) { Json el = Svc::Element(srv, "vm1", JoinPath(s.tmp.sub("sb"), "{VM}")); el["compress"]["level"] = bad[i]; Json t = Json::object(); t["name"] = "Bad"; Json els = Json::array(); els.push(el); t["elements"] = els; Json a = Json::object(); a["task"] = t;
+        T_CHECK(!s.call("tasks.save", a)); T_CHECK(s.lastErr == kErr); } }
+    // level 0 is kept as 0; a missing key / null stay "not set" and are not turned into 0
+    Json e0 = Svc::Element(srv, "vm1", JoinPath(s.tmp.sub("s0"), "{VM}"), "xz", 0); e0["verify"] = true;
+    Json en = Svc::Element(srv, "vm1", JoinPath(s.tmp.sub("sn"), "{VM}")); en["compress"].remove("level");
+    Json eu = Svc::Element(srv, "vm1", JoinPath(s.tmp.sub("su"), "{VM}")); eu["compress"]["level"] = Json();
+    Json e9 = Svc::Element(srv, "vm1", JoinPath(s.tmp.sub("s9"), "{VM}"), "xz", 9);
+    T_CHECK(!s.saveTask("L0", e0).empty()); T_CHECK(!s.saveTask("LN", en).empty()); T_CHECK(!s.saveTask("LU", eu).empty()); T_CHECK(!s.saveTask("L9", e9).empty());
+    Json tl = s.ok("tasks.list", Json::object()); int seen = 0;
+    for (size_t i = 0; i < tl.size(); ++i) {
+        Str nm = tl.at(i).get("name").str(); const Json& cp = tl.at(i).get("elements").at(0).get("compress");
+        if (nm == "L0") { ++seen; T_CHECK(cp.get("level").is_number() && cp.get("level").integer() == 0); }
+        if (nm == "L9") { ++seen; T_CHECK(cp.get("level").integer() == 9); }
+        if (nm == "LN" || nm == "LU") { ++seen; T_CHECK(!cp.has("level") || cp.get("level").is_null()); }
+    }
+    T_CHECK(seen == 4);
+    // the manifests: 0 -> 0, 9 -> 9, not set -> the Settings (3)
+    struct Run { const char* task; const char* dir; int want; };
+    Run runs[] = { { "L0", "s0", 0 }, { "L9", "s9", 9 }, { "LN", "sn", 3 }, { "LU", "su", 3 } };
+    for (const Run& r : runs) {
+        Json ra = Json::object(); ra["id"] = r.task; Str jid = s.ok("tasks.run", ra).get("job").str(); T_CHECK(!jid.empty());
+        Str fin = s.waitJob(jid, 120000); T_CHECK(fin == "Success" || fin == "Gone");
+    }
+    Json qa = Json::object(); qa["server"] = "local"; Json bl = s.ok("backups.list", qa); int found = 0;
+    for (size_t i = 0; i < bl.get("backups").size(); ++i) {
+        const Json& b = bl.get("backups").at(i); Str dir = b.get("directory").str();
+        for (const Run& r : runs) if (dir.find((Str("\\") + r.dir).c_str()) >= 0 || dir.ends_with(r.dir)) { ++found; T_CHECK(b.get("level").integer() == r.want); T_CHECK(b.get("compression").str() == "xz"); }
+    }
+    T_CHECK(found == 4);
     return true;
 }
 

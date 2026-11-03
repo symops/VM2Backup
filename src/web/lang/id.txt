@@ -107,6 +107,7 @@ Delete task "{0}"?	Hapus tugas "{0}"?
 Delete the backup "{0}"?	Hapus cadangan "{0}"?
 Delete user "{0}"?	Hapus pengguna "{0}"?
 Details	Detail
+Dictionary {0}, about {1} MiB of memory per compression thread.	Kamus {0}, sekitar {1} MiB memori per thread kompresi.
 Disable two-factor	Nonaktifkan dua faktor
 Disable two-factor authentication of "{0}"?	Nonaktifkan autentikasi dua faktor untuk "{0}"?
 Disabled	Nonaktif
@@ -197,7 +198,6 @@ Mon	Sen
 Monthly	Bulanan
 Name	Nama
 Names	Nama
-Needs about {0} GiB of memory per CPU core.	Membutuhkan sekitar {0} GiB memori per inti CPU.
 Network	Jaringan
 Network drive	Drive jaringan
 Network drive...	Drive jaringan...
@@ -397,6 +397,7 @@ Upload a certificate (PFX)	Unggah sertifikat (PFX)
 Use	Gunakan
 Use a recovery code	Gunakan kode pemulihan
 Use the authenticator code	Gunakan kode autentikator
+Use the global setting ({0})	Gunakan pengaturan global ({0})
 Use {VM} for the VM name	Gunakan {VM} untuk nama VM
 User	Pengguna
 User name	Nama pengguna
@@ -491,4 +492,4 @@ viewer	penampil
 {0} volume(s)	{0} volume
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: sekitar {1} MB/s per inti CPU; cadangan sekitar {2}% lebih besar daripada tingkat 5.
 {0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: sekitar {1} MB/s per inti CPU; cadangan sekitar {2}% lebih kecil daripada tingkat 5.
-{0}: about {1} MB/s per CPU core; the baseline size (levels 1-4 are larger, 6-9 smaller).	{0}: sekitar {1} MB/s per inti CPU; ukuran dasar (tingkat 1-4 lebih besar, 6-9 lebih kecil).
+{0}: about {1} MB/s per CPU core; the baseline size (levels 0-4 are larger, 6-9 smaller).	{0}: sekitar {1} MB/dtk per inti CPU; ukuran dasar (level 0-4 lebih besar, 6-9 lebih kecil).

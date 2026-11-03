@@ -107,6 +107,7 @@ Delete task "{0}"?	Eliminare l'attività "{0}"?
 Delete the backup "{0}"?	Eliminare il backup "{0}"?
 Delete user "{0}"?	Eliminare l'utente "{0}"?
 Details	Dettagli
+Dictionary {0}, about {1} MiB of memory per compression thread.	Dizionario {0}, circa {1} MiB di memoria per thread di compressione.
 Disable two-factor	Disattiva autenticazione a due fattori
 Disable two-factor authentication of "{0}"?	Disattivare l'autenticazione a due fattori di "{0}"?
 Disabled	Disattivato
@@ -197,7 +198,6 @@ Mon	Lun
 Monthly	Mensile
 Name	Nome
 Names	Nomi
-Needs about {0} GiB of memory per CPU core.	Richiede circa {0} GiB di memoria per core della CPU.
 Network	Rete
 Network drive	Unità di rete
 Network drive...	Unità di rete...
@@ -397,6 +397,7 @@ Upload a certificate (PFX)	Carica un certificato (PFX)
 Use	Usa
 Use a recovery code	Usa un codice di ripristino
 Use the authenticator code	Usa il codice dell'app di autenticazione
+Use the global setting ({0})	Usa l'impostazione globale ({0})
 Use {VM} for the VM name	Usare {VM} per il nome della VM
 User	Utente
 User name	Nome utente
@@ -491,4 +492,4 @@ viewer	osservatore
 {0} volume(s)	{0} volume/i
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: circa {1} MB/s per core della CPU; i backup sono circa il {2}% più grandi che al livello 5.
 {0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: circa {1} MB/s per core della CPU; i backup sono circa il {2}% più piccoli che al livello 5.
-{0}: about {1} MB/s per CPU core; the baseline size (levels 1-4 are larger, 6-9 smaller).	{0}: circa {1} MB/s per core della CPU; la dimensione di riferimento (i livelli 1-4 sono più grandi, i 6-9 più piccoli).
+{0}: about {1} MB/s per CPU core; the baseline size (levels 0-4 are larger, 6-9 smaller).	{0}: circa {1} MB/s per core; la dimensione di riferimento (i livelli 0-4 sono più grandi, 6-9 più piccoli).

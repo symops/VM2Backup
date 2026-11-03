@@ -107,6 +107,7 @@ Delete task "{0}"?	Удалить задачу «{0}»?
 Delete the backup "{0}"?	Удалить копию «{0}»?
 Delete user "{0}"?	Удалить пользователя «{0}»?
 Details	Подробности
+Dictionary {0}, about {1} MiB of memory per compression thread.	Словарь {0}, около {1} МиБ памяти на поток сжатия.
 Disable two-factor	Отключить двухфакторную проверку
 Disable two-factor authentication of "{0}"?	Отключить двухфакторную проверку у «{0}»?
 Disabled	Отключена
@@ -197,7 +198,6 @@ Mon	Пн
 Monthly	Ежемесячно
 Name	Имя
 Names	Имена
-Needs about {0} GiB of memory per CPU core.	Нужно около {0} ГиБ памяти на одно ядро.
 Network	Сеть
 Network drive	Сетевой диск
 Network drive...	Сетевой диск...
@@ -397,6 +397,7 @@ Upload a certificate (PFX)	Загрузка сертификата (PFX)
 Use	Использовать
 Use a recovery code	Использовать код восстановления
 Use the authenticator code	Использовать код аутентификатора
+Use the global setting ({0})	Как в общих настройках ({0})
 Use {VM} for the VM name	{VM} подставляет имя ВМ
 User	Пользователь
 User name	Имя пользователя
@@ -491,4 +492,4 @@ viewer	наблюдатель
 {0} volume(s)	томов: {0}
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: около {1} МБ/с на одно ядро; копии примерно на {2}% больше, чем на уровне 5.
 {0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: около {1} МБ/с на одно ядро; копии примерно на {2}% меньше, чем на уровне 5.
-{0}: about {1} MB/s per CPU core; the baseline size (levels 1-4 are larger, 6-9 smaller).	{0}: около {1} МБ/с на одно ядро; базовый размер (уровни 1-4 дают больше, 6-9 меньше).
+{0}: about {1} MB/s per CPU core; the baseline size (levels 0-4 are larger, 6-9 smaller).	{0}: около {1} МБ/с на ядро; базовый размер (уровни 0-4 дают больше, 6-9 меньше).

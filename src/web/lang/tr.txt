@@ -107,6 +107,7 @@ Delete task "{0}"?	"{0}" görevi silinsin mi?
 Delete the backup "{0}"?	"{0}" yedeği silinsin mi?
 Delete user "{0}"?	"{0}" kullanıcısı silinsin mi?
 Details	Ayrıntılar
+Dictionary {0}, about {1} MiB of memory per compression thread.	Sözlük {0}, sıkıştırma iş parçacığı başına yaklaşık {1} MiB bellek.
 Disable two-factor	İki aşamalıyı kapat
 Disable two-factor authentication of "{0}"?	"{0}" için iki aşamalı kimlik doğrulama kapatılsın mı?
 Disabled	Devre dışı
@@ -197,7 +198,6 @@ Mon	Pzt
 Monthly	Aylık
 Name	Ad
 Names	Adlar
-Needs about {0} GiB of memory per CPU core.	CPU çekirdeği başına yaklaşık {0} GiB bellek gerekir.
 Network	Ağ
 Network drive	Ağ sürücüsü
 Network drive...	Ağ sürücüsü...
@@ -397,6 +397,7 @@ Upload a certificate (PFX)	Sertifika yükle (PFX)
 Use	Kullan
 Use a recovery code	Kurtarma kodu kullan
 Use the authenticator code	Kimlik doğrulayıcı kodunu kullan
+Use the global setting ({0})	Genel ayarı kullan ({0})
 Use {VM} for the VM name	VM adı için {VM} kullanın
 User	Kullanıcı
 User name	Kullanıcı adı
@@ -491,4 +492,4 @@ viewer	görüntüleyici
 {0} volume(s)	{0} birim
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: CPU çekirdeği başına yaklaşık {1} MB/s; yedekler 5. düzeye göre yaklaşık %{2} daha büyüktür.
 {0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: CPU çekirdeği başına yaklaşık {1} MB/s; yedekler 5. düzeye göre yaklaşık %{2} daha küçüktür.
-{0}: about {1} MB/s per CPU core; the baseline size (levels 1-4 are larger, 6-9 smaller).	{0}: CPU çekirdeği başına yaklaşık {1} MB/s; temel boyut (1-4. düzeyler daha büyük, 6-9. düzeyler daha küçüktür).
+{0}: about {1} MB/s per CPU core; the baseline size (levels 0-4 are larger, 6-9 smaller).	{0}: CPU çekirdeği başına yaklaşık {1} MB/sn; temel boyut (0-4. seviyeler daha büyük, 6-9 daha küçük).

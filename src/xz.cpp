@@ -15,17 +15,17 @@ namespace {
 const size_t kBufSize = 128 * 1024;
 const u64 kMaxDecoderMem = (u64)1536 << 20;           // a stream that needs more than this (a 1.5 GiB dictionary) is refused
 
-// Our own level table (not the xz presets): the preset's match finder / nice length / depth, but a larger dictionary from level 4 on. The
-// block size is 3 x the dictionary (cap 192 MiB) and depends on the level only, never on the thread count, so the output depends only on the
-// data and the level. Per thread about 3 x block + the match finder (~6 x dictionary) of memory is held.
-const u32 kDictMiB[10] = { 0, 1, 2, 4, 8, 16, 16, 32, 64, 64 };
-
-void LevelOptions(int level, u32 dictMiB, lzma_options_lzma& o, u64& block)
+// The levels 0..9 ARE the xz presets (lzma_lzma_preset, no "extreme" flag): dictionary, match finder, nice length, depth, mode, lc / lp / pb of `xz -0` .. `xz -9`.
+// The block size is like the one of xz -T: 3 x the dictionary, at least 1 MiB (level 0: 3 x 256 KiB = 768 KiB would give tiny blocks), and depends on the level only, never on the
+// thread count, so the output depends only on the data and the level (a continuation of a paused backup writes the same bytes). Per thread about the encoder
+// (lzma_raw_encoder_memusage: the match finder, ~6-11 x the dictionary) + 2 x block + block / 4 of memory is held.
+// `dictCap` (0 = none) lowers the dictionary below the preset for a 32-bit process; the stream stays readable everywhere (the dictionary size is in the block headers).
+void LevelOptions(int level, u32 dictCap, lzma_options_lzma& o, u64& block)
 {
     lzma_lzma_preset(&o, (uint32_t)level);
-    o.dict_size = dictMiB << 20;
-    block = (u64)dictMiB * 3 << 20;
-    if (block > ((u64)192 << 20)) block = (u64)192 << 20;
+    if (dictCap && dictCap < o.dict_size) o.dict_size = dictCap;
+    block = (u64)o.dict_size * 3;
+    if (block < ((u64)1 << 20)) block = (u64)1 << 20;
 }
 
 const char* EncErr(lzma_ret r)
@@ -138,7 +138,7 @@ const int kAbortedJob = -1000;
 class XzSink : public Sink {
 public:
     XzSink(Sink* out, int level, int threads)
-        : m_out(out), m_level(level < 1 ? 1 : level > 9 ? 9 : level), m_threads(threads), m_init(false), m_ok(true), m_finished(false), m_headerDone(false),
+        : m_out(out), m_level(level), m_threads(threads), m_init(false), m_ok(true), m_finished(false), m_headerDone(false),
           m_block(0), m_cur(nullptr), m_curLen(0), m_ring(nullptr), m_N(0), m_T(1), m_submitted(0), m_written(0), m_nextRun(0), m_stopping(false), m_nth(0),
           m_abort(0), m_index(nullptr) {
         memset(&m_opt, 0, sizeof m_opt);
@@ -220,15 +220,15 @@ private:
     }
     bool start() {
         if (m_init) return true;
-        u32 dictMiB = kDictMiB[m_level];
+        if (m_level < 0 || m_level > 9) return bad("the compression level is 0..9");
         lzma_filter fl[2];
         fl[0].id = LZMA_FILTER_LZMA2; fl[0].options = &m_opt; fl[1].id = LZMA_VLI_UNKNOWN; fl[1].options = nullptr;
-        LevelOptions(m_level, dictMiB, m_opt, m_block);
+        LevelOptions(m_level, 0, m_opt, m_block);
         // per thread: the encoder, the raw block, the compressed block
         auto perThread = [&]() -> u64 { u64 e = lzma_raw_encoder_memusage(fl); return (e == UINT64_MAX ? (u64)1 << 40 : e) + 2 * m_block + (m_block >> 2); };
-        // A 32-bit process cannot hold the big dictionaries: shrink until one thread fits in ~900 MiB (streams stay readable everywhere).
+        // A 32-bit process cannot hold the big dictionaries (presets 8 and 9: 32 / 64 MiB): shrink until one thread fits in ~900 MiB (streams stay readable everywhere).
         if (sizeof(size_t) == 4)
-            while (dictMiB > 4 && perThread() + m_block > ((u64)900 << 20)) { dictMiB /= 2; LevelOptions(m_level, dictMiB, m_opt, m_block); }
+            while (m_opt.dict_size > ((u32)4 << 20) && perThread() + m_block > ((u64)900 << 20)) LevelOptions(m_level, m_opt.dict_size / 2, m_opt, m_block);
         const u64 budget = sizeof(size_t) == 4 ? ((u64)700 << 20) : ((u64)2560 << 20);
         u32 t = m_threads > 0 ? (u32)m_threads : (u32)NumCpus();
         if (t < 1) t = 1;
@@ -400,6 +400,18 @@ private:
 } // namespace
 
 Sink* MakeXzSink(Sink* out, int level, int threads) { return new XzSink(out, level, threads); }
+
+bool XzLevelInfo(int level, XzLevelParams& p)
+{
+    lzma_options_lzma o; u64 block;
+    if (level < 0 || level > 9) return false;
+    LevelOptions(level, 0, o, block);
+    lzma_filter fl[2]; fl[0].id = LZMA_FILTER_LZMA2; fl[0].options = &o; fl[1].id = LZMA_VLI_UNKNOWN; fl[1].options = nullptr;
+    u64 e = lzma_raw_encoder_memusage(fl);
+    p.dictBytes = o.dict_size; p.blockBytes = block; p.lc = o.lc; p.lp = o.lp; p.pb = o.pb; p.mode = (int)o.mode; p.mf = (int)o.mf; p.niceLen = o.nice_len; p.depth = o.depth;
+    p.memPerThread = (e == UINT64_MAX ? 0 : e) + 2 * block + (block >> 2);
+    return true;
+}
 Source* MakeXzSource(Source* in) { return new XzSource(in); }
 
 } // namespace vm2b

@@ -107,6 +107,7 @@ Delete task "{0}"?	Xóa tác vụ "{0}"?
 Delete the backup "{0}"?	Xóa bản sao lưu "{0}"?
 Delete user "{0}"?	Xóa người dùng "{0}"?
 Details	Chi tiết
+Dictionary {0}, about {1} MiB of memory per compression thread.	Từ điển {0}, khoảng {1} MiB bộ nhớ cho mỗi luồng nén.
 Disable two-factor	Tắt xác thực hai yếu tố
 Disable two-factor authentication of "{0}"?	Tắt xác thực hai yếu tố của "{0}"?
 Disabled	Đã tắt
@@ -197,7 +198,6 @@ Mon	T2
 Monthly	Hằng tháng
 Name	Tên
 Names	Tên
-Needs about {0} GiB of memory per CPU core.	Cần khoảng {0} GiB bộ nhớ cho mỗi lõi CPU.
 Network	Mạng
 Network drive	Ổ đĩa mạng
 Network drive...	Ổ đĩa mạng...
@@ -397,6 +397,7 @@ Upload a certificate (PFX)	Tải lên chứng chỉ (PFX)
 Use	Dùng
 Use a recovery code	Dùng mã khôi phục
 Use the authenticator code	Dùng mã từ ứng dụng xác thực
+Use the global setting ({0})	Dùng cài đặt chung ({0})
 Use {VM} for the VM name	Dùng {VM} cho tên VM
 User	Người dùng
 User name	Tên người dùng
@@ -491,4 +492,4 @@ viewer	người xem
 {0} volume(s)	{0} volume
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: khoảng {1} MB/s trên mỗi lõi CPU; bản sao lưu lớn hơn khoảng {2}% so với mức 5.
 {0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: khoảng {1} MB/s trên mỗi lõi CPU; bản sao lưu nhỏ hơn khoảng {2}% so với mức 5.
-{0}: about {1} MB/s per CPU core; the baseline size (levels 1-4 are larger, 6-9 smaller).	{0}: khoảng {1} MB/s trên mỗi lõi CPU; kích thước cơ sở (mức 1-4 lớn hơn, 6-9 nhỏ hơn).
+{0}: about {1} MB/s per CPU core; the baseline size (levels 0-4 are larger, 6-9 smaller).	{0}: khoảng {1} MB/s mỗi lõi CPU; kích thước cơ sở (mức 0-4 lớn hơn, 6-9 nhỏ hơn).

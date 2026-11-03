@@ -107,6 +107,7 @@ Delete task "{0}"?	删除任务"{0}"?
 Delete the backup "{0}"?	删除备份"{0}"?
 Delete user "{0}"?	删除用户"{0}"?
 Details	详细信息
+Dictionary {0}, about {1} MiB of memory per compression thread.	字典 {0}，每个压缩线程约占用 {1} MiB 内存。
 Disable two-factor	停用双因素认证
 Disable two-factor authentication of "{0}"?	停用"{0}"的双因素认证?
 Disabled	已禁用
@@ -197,7 +198,6 @@ Mon	周一
 Monthly	每月
 Name	名称
 Names	名称
-Needs about {0} GiB of memory per CPU core.	每个 CPU 核心约需 {0} GiB 内存。
 Network	网络
 Network drive	网络驱动器
 Network drive...	网络驱动器...
@@ -397,6 +397,7 @@ Upload a certificate (PFX)	上传证书 (PFX)
 Use	使用
 Use a recovery code	使用恢复代码
 Use the authenticator code	使用验证器代码
+Use the global setting ({0})	使用全局设置（{0}）
 Use {VM} for the VM name	用 {VM} 表示虚拟机名称
 User	用户
 User name	用户名
@@ -491,4 +492,4 @@ viewer	查看者
 {0} volume(s)	{0} 个卷
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: 每个 CPU 核心约 {1} MB/s; 备份比级别 5 约大 {2}%。
 {0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: 每个 CPU 核心约 {1} MB/s; 备份比级别 5 约小 {2}%。
-{0}: about {1} MB/s per CPU core; the baseline size (levels 1-4 are larger, 6-9 smaller).	{0}: 每个 CPU 核心约 {1} MB/s; 基准大小(级别 1-4 更大,6-9 更小)。
+{0}: about {1} MB/s per CPU core; the baseline size (levels 0-4 are larger, 6-9 smaller).	{0}：每个 CPU 核心约 {1} MB/s；基准大小（0-4 级更大，6-9 级更小）。

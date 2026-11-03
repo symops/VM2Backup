@@ -107,6 +107,7 @@ Delete task "{0}"?	Выдаліць заданне «{0}»?
 Delete the backup "{0}"?	Выдаліць копію «{0}»?
 Delete user "{0}"?	Выдаліць карыстальніка «{0}»?
 Details	Падрабязнасці
+Dictionary {0}, about {1} MiB of memory per compression thread.	Слоўнік {0}, каля {1} МіБ памяці на паток сціскання.
 Disable two-factor	Адключыць двухфактарную праверку
 Disable two-factor authentication of "{0}"?	Адключыць двухфактарную праверку для «{0}»?
 Disabled	Адключана
@@ -197,7 +198,6 @@ Mon	Пн
 Monthly	Штомесяц
 Name	Назва
 Names	Назвы
-Needs about {0} GiB of memory per CPU core.	Патрэбна прыкладна {0} GiB памяці на адно ядро.
 Network	Сетка
 Network drive	Сеткавы дыск
 Network drive...	Сеткавы дыск...
@@ -397,6 +397,7 @@ Upload a certificate (PFX)	Загрузка сертыфіката (PFX)
 Use	Выкарыстаць
 Use a recovery code	Выкарыстаць код аднаўлення
 Use the authenticator code	Выкарыстаць код аўтэнтыфікатара
+Use the global setting ({0})	Як у агульных наладах ({0})
 Use {VM} for the VM name	{VM} падстаўляе назву ВМ
 User	Карыстальнік
 User name	Імя карыстальніка
@@ -491,4 +492,4 @@ viewer	назіральнік
 {0} volume(s)	тамоў: {0}
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: каля {1} МБ/с на адно ядро; копіі прыкладна на {2}% большыя, чым на ўзроўні 5.
 {0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: каля {1} МБ/с на адно ядро; копіі прыкладна на {2}% меншыя, чым на ўзроўні 5.
-{0}: about {1} MB/s per CPU core; the baseline size (levels 1-4 are larger, 6-9 smaller).	{0}: каля {1} МБ/с на адно ядро; базавы памер (узроўні 1-4 даюць больш, 6-9 менш).
+{0}: about {1} MB/s per CPU core; the baseline size (levels 0-4 are larger, 6-9 smaller).	{0}: каля {1} МБ/с на ядро; базавы памер (узроўні 0-4 даюць больш, 6-9 менш).

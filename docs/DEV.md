@@ -24,7 +24,7 @@ projects Click2Screen / Speak2Mic. Read `src/base.h`, `src/stream.h`, `src/targe
 * `Target` — `target.h`: `connect/open_write/open_read/list/remove`; a write goes to `<name>.part` and takes its name when
   `finish()` succeeds; `abort()` removes it; `list()` hides `.part` files. `MakeTarget()` (in `target_local.cpp`) builds one from a
   JSON config; the FTP and SSH modules provide `NewFtpTarget` / `NewSshTarget` (see the config keys in `target.h`).
-* `Codec` — `codec.h`: xz is the ONLY compressor (levels 1-9, default 5, threads 0 = Auto): `CodecMakeSink / CodecMakeSource` wrap `MakeXzSink / MakeXzSource`. gzip and "none" were removed; a manifest whose `compression` is not `"xz"` is listed but refused with "only xz is supported", a journal of another codec is ignored, and `Config::open` migrates old configs/tasks (gzip L -> xz L, none -> xz 1, unknown -> xz 5) and writes them back.
+* `Codec` — `codec.h`: xz is the ONLY compressor (levels 0-9 = the real xz presets via `lzma_lzma_preset`, default 5, threads 0 = Auto; `XzLevelInfo()` gives the parameters / memory of a level; `kCodecLevelError` is the one refusal text; `CodecOptions::level` defaults to 5, a task without `compress.level` takes `settings.level`): `CodecMakeSink / CodecMakeSource` wrap `MakeXzSink / MakeXzSource`. gzip and "none" were removed; a manifest whose `compression` is not `"xz"` is listed but refused with "only xz is supported", a journal of another codec is ignored, and `Config::open` migrates old configs/tasks (gzip L -> xz L, none -> xz 1, unknown -> xz 5) and writes them back.
 * Crypto primitives (OpenSSL) — `crypto.h`: SHA-256/SHA-1, HMAC, PBKDF2, AES-GCM, random. Add what you need there (additive only).
   TLS client (`tls.h`, FTPS / HTTPS / ESXi) and TLS server + certificates (`webtls.h`) are OpenSSL as well; the sockets stay ours (`select` loops with
   timeouts and an abort flag, OpenSSL only does the records). The format V2BENC3 is fixed by `tests_crypto.cpp` (vector from an independent implementation).
@@ -148,7 +148,7 @@ in your report). Never edit `engine.*`, `tests_core.cpp`, `tests_engine.cpp`, `b
   The web server keeps a connection that has not sent a byte parked at the end of the queue (a worker never waits for it); a full queue drops the oldest entry.
 * Window test scenarios (`guitest.cpp`): `network drives` (the picker with fake drives: `SmbSetFakeDrives`, test hook in target_smb.cpp), `compression` (all 9 levels and the
   thread counts saved and read back), `web 2fa` (certificate dialogs, 2FA enrolment with a TOTP computed by the script), `dialog churn` (private bytes after 30 rounds of dialogs;
-  handles / GDI are not measurable under Wine), and the restore dialog in ESXi mode (server down). `run-gui-layout.sh` cycles all 9 compression levels on the settings page.
+  handles / GDI are not measurable under Wine), and the restore dialog in ESXi mode (server down). (the former panel GUI test; the web page now offers 10 levels, checked by `web_level_table_matches_the_codec`).
 * Installer: `tools/test-package-extra.sh` (own package from `BUILD_X64` / `BUILD_X86`, flags, path with spaces / Cyrillic, bad `/dir`, update in place, moving the folder, removal with
   the service running, damaged Setup.exe). With `/silent` the launcher never shows an error box (exit code 1 instead).
 

@@ -355,16 +355,22 @@ function createApp(env) {
         options.forEach(function (o) { s.appendChild(h('option', { value: String(o[0]), selected: String(o[0]) === String(value), text: o[1] })); });
         return s;
     }
-    // The one compressor is xz, levels 1..9; the figures are the approximate ones of docs/bench/xz-levels.md (one CPU core, typical data).
-    var LV_SPEED = ['6', '5', '4', '2.5', '1.7', '1.4', '1.4', '1.3', '1.3'], LV_SIZE = [40, 30, 25, 13, 0, -2, -8, -12, -12], LV_MEM = ['', '', '', '', '', '', '0.5', '0.8', '0.8'];
-    function levelName(l) { return l === 1 ? T('Fastest') : l === 5 ? T('Balanced (default)') : l === 9 ? T('Maximum') : l < 5 ? T('Fast') : T('Strong'); }
+    // The one compressor is xz, levels 0..9 = the real xz presets (`xz -0` .. `xz -9`), 5 is the default. LV_DICT_KIB and LV_MEM_MIB are the dictionary and the memory of one compression
+    // thread of the program (xz.cpp, XzLevelInfo): the autotest `web_level_table_matches_the_codec` compares them with the codec. The speed / size figures are measured (docs/WEB.md, "Compression levels").
+    var LV_DICT_KIB = [256, 1024, 2048, 4096, 4096, 8192, 8192, 16384, 32768, 65536], LV_MEM_MIB = [5, 15, 30, 58, 74, 147, 147, 293, 585, 1105];
+    var LV_SPEED = ['8.5', '6.5', '4', '3', '1.6', '1.1', '0.9', '0.9', '0.8', '0.8'], LV_SIZE = [38, 23, 17, 13, 7, 0, -2, -2, -2, -2];
+    function levelName(l) { return l === 0 ? T('Fastest') : l === 5 ? T('Balanced (default)') : l === 9 ? T('Maximum') : l < 5 ? T('Fast') : T('Strong'); }
+    function levelOf(st) { var l = st ? st.level : undefined; return typeof l === 'number' && l >= 0 && l <= 9 ? l : 5; }
+    function dictText(kib) { return kib >= 1024 ? (kib / 1024) + ' MiB' : kib + ' KiB'; }
     function levelHint(l) {
-        if (!(l >= 1 && l <= 9)) l = 5;
-        var i = l - 1, d = LV_SIZE[i], nm = levelName(l);
-        var r = d > 0 ? T('{0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.', nm, LV_SPEED[i], d) : d < 0 ? T('{0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.', nm, LV_SPEED[i], -d) : T('{0}: about {1} MB/s per CPU core; the baseline size (levels 1-4 are larger, 6-9 smaller).', nm, LV_SPEED[i]);
-        return LV_MEM[i] ? r + ' ' + T('Needs about {0} GiB of memory per CPU core.', LV_MEM[i]) : r;
+        if (!(l >= 0 && l <= 9)) l = 5;
+        var d = LV_SIZE[l], nm = levelName(l);
+        var r = d > 0 ? T('{0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.', nm, LV_SPEED[l], d) : d < 0 ? T('{0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.', nm, LV_SPEED[l], -d) : T('{0}: about {1} MB/s per CPU core; the baseline size (levels 0-4 are larger, 6-9 smaller).', nm, LV_SPEED[l]);
+        return r + ' ' + T('Dictionary {0}, about {1} MiB of memory per compression thread.', dictText(LV_DICT_KIB[l]), LV_MEM_MIB[l]);
     }
-    function levelSel(v) { return sel([1, 2, 3, 4, 5, 6, 7, 8, 9].map(function (l) { return [l, l + ' - ' + levelName(l)]; }), v); }
+    function levelSel(v) { return sel([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(function (l) { return [l, l + ' - ' + levelName(l)]; }), v); }
+    // a task: "Use the global setting (N)" (no compress.level in the task: the level of the Settings is used at run time) or one of the levels 0..9
+    function levelSelTask(v, globalLevel) { return sel([['', T('Use the global setting ({0})', globalLevel)]].concat([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(function (l) { return [l, l + ' - ' + levelName(l)]; })), v === undefined || v === null ? '' : v); }
     function threadsSel(v, cpus) {
         var n = Math.max(1, Math.min(64, cpus || 1, 64)), o = [[0, T('Auto')]]; if (v > n) n = Math.min(64, v);
         for (var t = 1; t <= n; t++) o.push([t, String(t)]);
@@ -657,14 +663,14 @@ function createApp(env) {
     // ---------- Virtual Machine Backup dialog (General / Connection / Advanced / Verify Backup) ----------
     // o: { server (source id), element (to edit), run (start now), onOk(element) }
     function vmBackupDialog(o) {
-        var el = o.element ? JSON.parse(JSON.stringify(o.element)) : { type: 'backup', enabled: true, source: { server: o.server || '', vms: [] }, target: { server: 'local', directory: '' }, compress: { codec: 'xz', level: 5 }, encrypt: { enabled: false }, keep: 0, verify: true, segment_mib: 256, speed_mbit: 0, on_error_next: true };
-        el.source = el.source || { vms: [] }; el.target = el.target || { server: 'local' }; el.compress = el.compress || { codec: 'xz', level: 5 }; el.encrypt = el.encrypt || {};
+        var el = o.element ? JSON.parse(JSON.stringify(o.element)) : { type: 'backup', enabled: true, source: { server: o.server || '', vms: [] }, target: { server: 'local', directory: '' }, compress: { codec: 'xz' }, encrypt: { enabled: false }, keep: 0, verify: true, segment_mib: 256, speed_mbit: 0, on_error_next: true };
+        el.source = el.source || { vms: [] }; el.target = el.target || { server: 'local' }; el.compress = el.compress || { codec: 'xz' }; el.encrypt = el.encrypt || {};
         var srcSel = h('select'), tgtSel = h('select');
         var vmBox = h('div', { class: 'vmlist' }), manual = h('textarea', { rows: 3 }); manual.style.display = 'none';
         var checks = [];
         var dir = txt(el.target.directory), keep = sel([[0, T('All')], [1, 1], [2, 2], [3, 3], [5, 5], [7, 7], [10, 10], [14, 14], [30, 30], [60, 60], [90, 90]], el.keep || 0);
-        var level = levelSel(el.compress.level || (S.state && S.state.settings && S.state.settings.level) || 5), levelNote = h('div', { class: 'note' });
-        function updateLevel() { levelNote.textContent = levelHint(parseInt(level.value, 10)); }
+        var glob = levelOf(S.state && S.state.settings), level = levelSelTask(typeof el.compress.level === 'number' ? el.compress.level : '', glob), levelNote = h('div', { class: 'note' });
+        function updateLevel() { levelNote.textContent = levelHint(level.value === '' ? glob : parseInt(level.value, 10)); }
         level.addEventListener('change', updateLevel); updateLevel();
         var enc = chk('Encrypt the backup (AES-256)', el.encrypt.enabled); var pw = txt(el.encrypt.has_password ? '********' : '', 'password');
         var speed = num(el.speed_mbit || 0, 0), seg = sel([[64, '64 MiB'], [128, '128 MiB'], [256, '256 MiB'], [512, '512 MiB'], [1024, '1 GiB'], [4096, '4 GiB'], [0, T('One volume (no resuming)')]], el.segment_mib === undefined ? 256 : el.segment_mib);
@@ -737,7 +743,7 @@ function createApp(env) {
             var out = JSON.parse(JSON.stringify(el));                                  // keeps the element id and every key the form does not show
             out.type = 'backup'; out.enabled = el.enabled !== false;
             out.source = Object.assign({}, el.source, { server: srcSel.value, vms: vms }); out.target = Object.assign({}, el.target, { server: tgtSel.value, directory: dir.value.trim() });
-            out.compress = { codec: 'xz', level: parseInt(level.value, 10) }; out.encrypt = { enabled: enc.input.checked }; out.keep = parseInt(keep.value, 10) || 0;
+            out.compress = level.value === '' ? { codec: 'xz' } : { codec: 'xz', level: parseInt(level.value, 10) }; out.encrypt = { enabled: enc.input.checked }; out.keep = parseInt(keep.value, 10) || 0;
             out.verify = verify.input.checked; out.allow_live = live.input.checked; out.resume = resume.input.checked; out.on_error_next = nextTask.input.checked;
             out.segment_mib = parseInt(seg.value, 10); out.speed_mbit = parseFloat(speed.value) || 0;
             var sv = srvOf(srcSel.value), ty = sv ? sv.type : '';
@@ -993,7 +999,7 @@ function createApp(env) {
                 box.appendChild(grid([
                     { title: 'Virtual machine', get: function (r) { return r.vm; } }, { title: 'Created', get: function (r) { return fmtTime(r.created); } },
                     { title: 'Source', get: function (r) { return fmtSize(r.raw_size || r.raw_bytes); } }, { title: 'Stored', get: function (r) { return fmtSize(r.size || r.stored_bytes); } },
-                    { title: 'Compression', get: function (r) { return r.compression === 'xz' ? 'xz ' + (r.level || '') : (r.compression || '?'); } }, { title: 'Encrypted', get: function (r) { return r.encrypted ? T('Yes') : T('No'); } },
+                    { title: 'Compression', get: function (r) { return r.compression === 'xz' ? 'xz ' + (typeof r.level === 'number' ? r.level : '') : (r.compression || '?'); } }, { title: 'Encrypted', get: function (r) { return r.encrypted ? T('Yes') : T('No'); } },
                     { title: 'Volumes', get: function (r) { return r.volumes || r.volumes_done || ''; } }, { title: 'Status', get: function (r) { return r.resumable ? T('Unfinished (resumable)') : T('Complete'); } }, { title: 'Folder', get: function (r) { return r.directory; } }
                 ], rows, function (r) { return r.archive + '|' + r.directory; }, null, can('backups.restore') ? function (r) { if (r.resumable) { toast(T('This is an unfinished backup.')); return; } restoreDialog(r); } : null));
             }, function (e) { clear(box); box.appendChild(h('div', { class: 'msg err', text: e.message })); });
@@ -1287,7 +1293,7 @@ function createApp(env) {
             function row(k, v) { kv.appendChild(h('b', { text: T(k) })); kv.appendChild(h('span', { text: String(v) })); }
             row('Version', st.version); row('Data folder', st.data_dir); row('Scheduler', st.scheduler ? T('on') : T('off'));
             row('Parallel jobs', s.max_parallel); row('History entries kept', s.max_history); row('Speed limit, Mbit/s (0 = unlimited)', s.speed_limit_mbit);
-            row('Compression level', (s.level || 5) + ' - ' + levelName(s.level || 5)); row('Compression threads', s.threads ? s.threads : T('Auto')); row('Retries after a lost connection', s.retry_attempts); row('First wait before a reconnect, s', s.retry_base_sec); row('Longest wait before a reconnect, s', s.retry_max_sec); row('Volume size, MiB (0 = one volume)', s.segment_mib); row('Keep the computer awake while the scheduler is on', s.prevent_sleep ? T('Yes') : T('No')); row('Default local folder', s.default_local_path);
+            row('Compression level', levelOf(s) + ' - ' + levelName(levelOf(s))); row('Compression threads', s.threads ? s.threads : T('Auto')); row('Retries after a lost connection', s.retry_attempts); row('First wait before a reconnect, s', s.retry_base_sec); row('Longest wait before a reconnect, s', s.retry_max_sec); row('Volume size, MiB (0 = one volume)', s.segment_mib); row('Keep the computer awake while the scheduler is on', s.prevent_sleep ? T('Yes') : T('No')); row('Default local folder', s.default_local_path);
             box.appendChild(kv);
             box.appendChild(h('div', { class: 'toolbar' },
                 btn(st.scheduler ? 'Switch the scheduler off' : 'Switch the scheduler on', 'scheduler.set', function () { api('scheduler.set', { enabled: !st.scheduler }).then(refreshView, fail); }),
@@ -1295,7 +1301,7 @@ function createApp(env) {
         }, fail);
     }
     function settingsDialog(s) {
-        var par = num(s.max_parallel, 1), hist = num(s.max_history, 10), speed = num(s.speed_limit_mbit, 0), retries = num(s.retry_attempts, 0), rbase = num(s.retry_base_sec, 1), rmax = num(s.retry_max_sec, 1), segm = num(s.segment_mib, 0), awake = chk('Keep the computer awake while the scheduler is on', s.prevent_sleep), lvl = levelSel(s.level || 5), lvlNote = h('div', { class: 'note' }), thr = threadsSel(s.threads || 0, (S.state && S.state.cpus)), local = txt(s.default_local_path);
+        var par = num(s.max_parallel, 1), hist = num(s.max_history, 10), speed = num(s.speed_limit_mbit, 0), retries = num(s.retry_attempts, 0), rbase = num(s.retry_base_sec, 1), rmax = num(s.retry_max_sec, 1), segm = num(s.segment_mib, 0), awake = chk('Keep the computer awake while the scheduler is on', s.prevent_sleep), lvl = levelSel(levelOf(s)), lvlNote = h('div', { class: 'note' }), thr = threadsSel(s.threads || 0, (S.state && S.state.cpus)), local = txt(s.default_local_path);
         lvl.addEventListener('change', function () { lvlNote.textContent = levelHint(parseInt(lvl.value, 10)); }); lvlNote.textContent = levelHint(parseInt(lvl.value, 10));
         dialog({ title: 'Settings', width: 520, body: h('div', null, field('Parallel jobs', par), field('History entries kept', hist), field('Speed limit, Mbit/s (0 = unlimited)', speed), field('Retries after a lost connection', retries), field('First wait before a reconnect, s', rbase), field('Longest wait before a reconnect, s', rmax), field('Volume size, MiB (0 = one volume)', segm), h('div', { class: 'f' }, awake), field('Compression level', lvl), lvlNote, field('Compression threads', thr), h('div', { class: 'note', text: T('The figures are approximate (typical data). More CPU cores make compression faster.') }), fieldBrowse('Default local folder', local, '', { title: 'Default local folder' })),
             buttons: [{ label: 'OK', primary: true, fn: function (dd) {
