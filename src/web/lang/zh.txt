@@ -44,7 +44,7 @@ Backup Explorer	Backup Explorer
 Backup of {0}	{0} 的备份
 Backup started.	备份已开始。
 Backup virtual machines...	备份虚拟机...
-Balanced (default)	均衡(默认)
+Balanced	均衡
 Browse network	浏览网络
 Browse network...	浏览网络...
 Browse...	浏览...
@@ -194,6 +194,7 @@ Machine file	机器文件
 Maximum	最大
 Message	消息
 Minimum TLS version	最低 TLS 版本
+Moderate	适中
 Mon	周一
 Monthly	每月
 Name	名称
@@ -312,7 +313,8 @@ Status	状态
 Stop	停止
 Stopped.	已停止。
 Stored	已存储
-Strong	强
+Strong (default)	强（默认）
+Stronger	更强
 Subject	主题
 Success	成功
 Sun	周日

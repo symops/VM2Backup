@@ -44,7 +44,7 @@ Backup Explorer	Sicherungs-Explorer
 Backup of {0}	Sicherung von {0}
 Backup started.	Die Sicherung wurde gestartet.
 Backup virtual machines...	Virtuelle Maschinen sichern...
-Balanced (default)	Ausgewogen (Standard)
+Balanced	Ausgewogen
 Browse network	Netzwerk durchsuchen
 Browse network...	Netzwerk durchsuchen...
 Browse...	Durchsuchen...
@@ -194,6 +194,7 @@ Machine file	Maschinendatei
 Maximum	Maximal
 Message	Meldung
 Minimum TLS version	Minimale TLS-Version
+Moderate	Mäßig
 Mon	Mo
 Monthly	Monatlich
 Name	Name
@@ -312,7 +313,8 @@ Status	Status
 Stop	Beenden
 Stopped.	Beendet.
 Stored	Gespeichert
-Strong	Stark
+Strong (default)	Stark (Standard)
+Stronger	Stärker
 Subject	Antragsteller
 Success	Erfolgreich
 Sun	So

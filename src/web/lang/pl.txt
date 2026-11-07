@@ -44,7 +44,7 @@ Backup Explorer	Eksplorator kopii zapasowych
 Backup of {0}	Kopia zapasowa {0}
 Backup started.	Rozpoczęto tworzenie kopii zapasowej.
 Backup virtual machines...	Utwórz kopię zapasową maszyn wirtualnych...
-Balanced (default)	Zrównoważony (domyślnie)
+Balanced	Zrównoważony
 Browse network	Przeglądaj sieć
 Browse network...	Przeglądaj sieć...
 Browse...	Przeglądaj...
@@ -194,6 +194,7 @@ Machine file	Plik maszyny
 Maximum	Maksymalna
 Message	Komunikat
 Minimum TLS version	Minimalna wersja TLS
+Moderate	Umiarkowany
 Mon	Pn
 Monthly	Co miesiąc
 Name	Nazwa
@@ -312,7 +313,8 @@ Status	Status
 Stop	Zatrzymaj
 Stopped.	Zatrzymano.
 Stored	Zapisano
-Strong	Silne
+Strong (default)	Mocny (domyślny)
+Stronger	Mocniejszy
 Subject	Podmiot
 Success	Powodzenie
 Sun	Nd

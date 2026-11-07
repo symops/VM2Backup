@@ -44,7 +44,7 @@ Backup Explorer	Esplora backup
 Backup of {0}	Backup di {0}
 Backup started.	Backup avviato.
 Backup virtual machines...	Esegui backup di macchine virtuali...
-Balanced (default)	Bilanciato (predefinito)
+Balanced	Bilanciato
 Browse network	Sfoglia rete
 Browse network...	Sfoglia rete...
 Browse...	Sfoglia...
@@ -194,6 +194,7 @@ Machine file	File della macchina
 Maximum	Massimo
 Message	Messaggio
 Minimum TLS version	Versione TLS minima
+Moderate	Moderato
 Mon	Lun
 Monthly	Mensile
 Name	Nome
@@ -312,7 +313,8 @@ Status	Stato
 Stop	Arresta
 Stopped.	Arrestata.
 Stored	Memorizzata
-Strong	Forte
+Strong (default)	Forte (predefinito)
+Stronger	Più forte
 Subject	Oggetto
 Success	Riuscito
 Sun	Dom

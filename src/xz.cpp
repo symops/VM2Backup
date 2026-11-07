@@ -226,7 +226,7 @@ private:
         LevelOptions(m_level, 0, m_opt, m_block);
         // per thread: the encoder, the raw block, the compressed block
         auto perThread = [&]() -> u64 { u64 e = lzma_raw_encoder_memusage(fl); return (e == UINT64_MAX ? (u64)1 << 40 : e) + 2 * m_block + (m_block >> 2); };
-        // A 32-bit process cannot hold the big dictionaries (presets 8 and 9: 32 / 64 MiB): shrink until one thread fits in ~900 MiB (streams stay readable everywhere).
+        // A 32-bit process cannot hold the big dictionaries (only preset 9: 64 MiB; preset 8 with 32 MiB and the default 7 with 16 MiB fit one thread in 900 MiB): shrink until one thread fits in ~900 MiB (streams stay readable everywhere).
         if (sizeof(size_t) == 4)
             while (m_opt.dict_size > ((u32)4 << 20) && perThread() + m_block > ((u64)900 << 20)) LevelOptions(m_level, m_opt.dict_size / 2, m_opt, m_block);
         const u64 budget = sizeof(size_t) == 4 ? ((u64)700 << 20) : ((u64)2560 << 20);

@@ -1,14 +1,14 @@
-// VM2Backup — the one compressor of a backup: xz (LZMA2 in .xz, via liblzma), levels 0..9 = the real xz presets, default 5. Blocks are compressed in
+// VM2Backup — the one compressor of a backup: xz (LZMA2 in .xz, via liblzma), levels 0..9 = the real xz presets, default 7. Blocks are compressed in
 // parallel (see xz.h). There is no other codec: gzip and "stored" were removed; a manifest that names another one is refused.
 #pragma once
 #include "stream.h"
 
 namespace vm2b {
 
-enum { kCodecMinLevel = 0, kCodecMaxLevel = 9, kCodecDefaultLevel = 5 };
+enum { kCodecMinLevel = 0, kCodecMaxLevel = 9, kCodecDefaultLevel = 7 };
 
 struct CodecOptions {
-    int level;                     // 0..9 (0 = `xz -0`, the fastest, a real level); the default is 5; anything else is an error of the compressor
+    int level;                     // 0..9 (0 = `xz -0`, the fastest, a real level); the default is 7; anything else is an error of the compressor
     int threads;                   // 0 = automatic (one per processor, bounded by the memory budget in xz.cpp)
     CodecOptions() : level(kCodecDefaultLevel), threads(0) {}
     explicit CodecOptions(int l, int t = 0) : level(l), threads(t) {}

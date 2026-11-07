@@ -447,13 +447,13 @@ VM2B_TEST("service", rpc_accepts_only_xz)
     return true;
 }
 
-// Levels are the real xz presets 0..9 (default 5): a strict check with one text everywhere, 0 is a real level, a task without compress.level (or with null)
+// Levels are the real xz presets 0..9 (default 7): a strict check with one text everywhere, 0 is a real level, a task without compress.level (or with null)
 // takes the level of the Settings, the manifest stores the level that was really used. Fails on the old code (0 meant "inherit", the check said 1..9, a bad value was clamped).
 VM2B_TEST("service", rpc_compression_levels_strict_and_inherited)
 {
     Svc s(c_, "svclv"); if (!s.up) return false;
     const Str kErr = "the compression level is 0..9";
-    Json st = s.ok("settings.get", Json::object()); T_CHECK(st.get("level").integer() == 5);                    // the default of the Settings
+    Json st = s.ok("settings.get", Json::object()); T_CHECK(st.get("level").integer() == 7);                    // the default of the Settings
     for (int lv = 0; lv <= 9; ++lv) { Json a = Json::object(); a["level"] = lv; T_CHECK(s.call("settings.set", a)); T_CHECK(s.ok("settings.get", Json::object()).get("level").integer() == lv); }
     { Json a = Json::object(); a["level"] = 3; T_CHECK(s.call("settings.set", a)); }
     { Json bad[5]; bad[0] = Json(-1); bad[1] = Json(10); bad[2] = Json(5.5); bad[3] = Json("5"); bad[4] = Json(100);

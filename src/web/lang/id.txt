@@ -44,7 +44,7 @@ Backup Explorer	Penjelajah Cadangan
 Backup of {0}	Cadangan {0}
 Backup started.	Pencadangan dimulai.
 Backup virtual machines...	Cadangkan mesin virtual...
-Balanced (default)	Seimbang (default)
+Balanced	Seimbang
 Browse network	Telusuri jaringan
 Browse network...	Telusuri jaringan...
 Browse...	Telusuri...
@@ -194,6 +194,7 @@ Machine file	Berkas mesin
 Maximum	Maksimum
 Message	Pesan
 Minimum TLS version	Versi TLS minimum
+Moderate	Sedang
 Mon	Sen
 Monthly	Bulanan
 Name	Nama
@@ -312,7 +313,8 @@ Status	Status
 Stop	Hentikan
 Stopped.	Dihentikan.
 Stored	Tersimpan
-Strong	Kuat
+Strong (default)	Kuat (bawaan)
+Stronger	Lebih kuat
 Subject	Subjek
 Success	Berhasil
 Sun	Min

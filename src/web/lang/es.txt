@@ -44,7 +44,7 @@ Backup Explorer	Explorador de copias de seguridad
 Backup of {0}	Copia de {0}
 Backup started.	Copia de seguridad iniciada.
 Backup virtual machines...	Copiar máquinas virtuales...
-Balanced (default)	Equilibrado (predeterminado)
+Balanced	Equilibrado
 Browse network	Examinar la red
 Browse network...	Examinar la red...
 Browse...	Examinar...
@@ -194,6 +194,7 @@ Machine file	Archivo de la máquina
 Maximum	Máxima
 Message	Mensaje
 Minimum TLS version	Versión mínima de TLS
+Moderate	Moderado
 Mon	Lun
 Monthly	Mensual
 Name	Nombre
@@ -312,7 +313,8 @@ Status	Estado
 Stop	Detener
 Stopped.	Detenida.
 Stored	Almacenada
-Strong	Fuerte
+Strong (default)	Fuerte (predeterminado)
+Stronger	Más fuerte
 Subject	Asunto
 Success	Correcto
 Sun	Dom

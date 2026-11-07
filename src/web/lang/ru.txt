@@ -44,7 +44,7 @@ Backup Explorer	Обозреватель копий
 Backup of {0}	Копия {0}
 Backup started.	Резервное копирование запущено.
 Backup virtual machines...	Копировать виртуальные машины...
-Balanced (default)	Сбалансированное (по умолчанию)
+Balanced	Сбалансированный
 Browse network	Обзор сети
 Browse network...	Обзор сети...
 Browse...	Обзор...
@@ -194,6 +194,7 @@ Machine file	Файл машины
 Maximum	Максимальное
 Message	Сообщение
 Minimum TLS version	Минимальная версия TLS
+Moderate	Умеренный
 Mon	Пн
 Monthly	Ежемесячно
 Name	Имя
@@ -312,7 +313,8 @@ Status	Состояние
 Stop	Остановить
 Stopped.	Остановлено.
 Stored	Сохранено
-Strong	Сильное
+Strong (default)	Сильный (по умолчанию)
+Stronger	Усиленный
 Subject	Субъект
 Success	Успешно
 Sun	Вс

@@ -561,7 +561,7 @@ VM2B_TEST("service", config_compression_levels_are_read_strictly)
         T_CHECK(!el.at(2).get("compress").has("level")); T_CHECK(!el.at(3).get("compress").get("level").is_number());
     }
     {   // a fresh data folder: the default of the Settings is 5
-        Str dir = tmp.sub("fresh"); T_CHECK(MakeDirs(dir, e)); Config cfg; Str err; T_CHECK(cfg.open(dir, err)); T_CHECK(cfg.settings().get("level").integer() == 5);
+        Str dir = tmp.sub("fresh"); T_CHECK(MakeDirs(dir, e)); Config cfg; Str err; T_CHECK(cfg.open(dir, err)); T_CHECK(cfg.settings().get("level").integer() == 7);
     }
     const char* bad[] = { R"({"settings":{"level":10}})", R"({"settings":{"level":-1}})", R"({"settings":{"level":"5"}})", R"({"settings":{"level":2.5}})",
         R"({"tasks":[{"id":"t","name":"X","elements":[{"type":"backup","compress":{"codec":"xz","level":12}}]}]})",

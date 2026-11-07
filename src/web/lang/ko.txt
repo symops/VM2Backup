@@ -44,7 +44,7 @@ Backup Explorer	Backup Explorer
 Backup of {0}	{0} 백업
 Backup started.	백업이 시작되었습니다.
 Backup virtual machines...	가상 컴퓨터 백업...
-Balanced (default)	균형(기본값)
+Balanced	균형
 Browse network	네트워크 찾아보기
 Browse network...	네트워크 찾아보기...
 Browse...	찾아보기...
@@ -194,6 +194,7 @@ Machine file	컴퓨터 파일
 Maximum	최대
 Message	메시지
 Minimum TLS version	최소 TLS 버전
+Moderate	보통
 Mon	월
 Monthly	매월
 Name	이름
@@ -312,7 +313,8 @@ Status	상태
 Stop	중지
 Stopped.	중지되었습니다.
 Stored	저장됨
-Strong	강함
+Strong (default)	강함(기본값)
+Stronger	더 강함
 Subject	주체
 Success	성공
 Sun	일

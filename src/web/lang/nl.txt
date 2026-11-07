@@ -44,7 +44,7 @@ Backup Explorer	Back-upverkenner
 Backup of {0}	Back-up van {0}
 Backup started.	Back-up gestart.
 Backup virtual machines...	Back-up maken van virtuele machines...
-Balanced (default)	Gebalanceerd (standaard)
+Balanced	Evenwichtig
 Browse network	Netwerk doorbladeren
 Browse network...	Netwerk doorbladeren...
 Browse...	Bladeren...
@@ -194,6 +194,7 @@ Machine file	Machinebestand
 Maximum	Maximaal
 Message	Bericht
 Minimum TLS version	Minimale TLS-versie
+Moderate	Matig
 Mon	Ma
 Monthly	Maandelijks
 Name	Naam
@@ -312,7 +313,8 @@ Status	Status
 Stop	Stoppen
 Stopped.	Gestopt.
 Stored	Opgeslagen
-Strong	Sterk
+Strong (default)	Sterk (standaard)
+Stronger	Sterker
 Subject	Onderwerp
 Success	Geslaagd
 Sun	Zo

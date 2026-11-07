@@ -44,7 +44,7 @@ Backup Explorer	Backup Explorer
 Backup of {0}	{0} のバックアップ
 Backup started.	バックアップを開始しました。
 Backup virtual machines...	仮想マシンをバックアップ...
-Balanced (default)	バランス (既定)
+Balanced	バランス
 Browse network	ネットワークを参照
 Browse network...	ネットワークを参照...
 Browse...	参照...
@@ -194,6 +194,7 @@ Machine file	マシンファイル
 Maximum	最大
 Message	メッセージ
 Minimum TLS version	最小 TLS バージョン
+Moderate	中程度
 Mon	月
 Monthly	毎月
 Name	名前
@@ -312,7 +313,8 @@ Status	ステータス
 Stop	停止
 Stopped.	停止しました。
 Stored	保存済み
-Strong	強
+Strong (default)	強（既定）
+Stronger	より強い
 Subject	サブジェクト
 Success	成功
 Sun	日

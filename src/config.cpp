@@ -60,7 +60,7 @@ static Json DefaultSettings(const Str& dir)
     s["default_local_path"] = JoinPath(dir, "Backups");
     s["max_parallel"] = 2; s["max_history"] = 500; s["speed_limit_mbit"] = 0.0;
     s["retry_attempts"] = 8; s["retry_base_sec"] = 2; s["retry_max_sec"] = 60;
-    s["level"] = 5; s["threads"] = 0; s["segment_mib"] = (int)kDefaultSegmentMiB;
+    s["level"] = 7; s["threads"] = 0; s["segment_mib"] = (int)kDefaultSegmentMiB;
     s["prevent_sleep"] = false; s["email"] = Json::object();
     s["kdf_iterations"] = (int)kEncIterationsDefault; s["misfire_grace_min"] = 15; s["retry_base_ms"] = 0;      // the last one: a test hook (milliseconds instead of retry_base_sec)
     return s;

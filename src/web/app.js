@@ -355,15 +355,15 @@ function createApp(env) {
         options.forEach(function (o) { s.appendChild(h('option', { value: String(o[0]), selected: String(o[0]) === String(value), text: o[1] })); });
         return s;
     }
-    // The one compressor is xz, levels 0..9 = the real xz presets (`xz -0` .. `xz -9`), 5 is the default. LV_DICT_KIB and LV_MEM_MIB are the dictionary and the memory of one compression
+    // The one compressor is xz, levels 0..9 = the real xz presets (`xz -0` .. `xz -9`), 7 is the default. LV_DICT_KIB and LV_MEM_MIB are the dictionary and the memory of one compression
     // thread of the program (xz.cpp, XzLevelInfo): the autotest `web_level_table_matches_the_codec` compares them with the codec. The speed / size figures are measured (docs/WEB.md, "Compression levels").
     var LV_DICT_KIB = [256, 1024, 2048, 4096, 4096, 8192, 8192, 16384, 32768, 65536], LV_MEM_MIB = [5, 15, 30, 58, 74, 147, 147, 293, 585, 1105];
     var LV_SPEED = ['8.5', '6.5', '4', '3', '1.6', '1.1', '0.9', '0.9', '0.8', '0.8'], LV_SIZE = [38, 23, 17, 13, 7, 0, -2, -2, -2, -2];
-    function levelName(l) { return l === 0 ? T('Fastest') : l === 5 ? T('Balanced (default)') : l === 9 ? T('Maximum') : l < 5 ? T('Fast') : T('Strong'); }
-    function levelOf(st) { var l = st ? st.level : undefined; return typeof l === 'number' && l >= 0 && l <= 9 ? l : 5; }
+    function levelName(l) { return l === 0 ? T('Fastest') : l === 7 ? T('Strong (default)') : l === 8 ? T('Stronger') : l === 9 ? T('Maximum') : l <= 2 ? T('Fast') : l <= 4 ? T('Moderate') : T('Balanced'); }
+    function levelOf(st) { var l = st ? st.level : undefined; return typeof l === 'number' && l >= 0 && l <= 9 ? l : 7; }
     function dictText(kib) { return kib >= 1024 ? (kib / 1024) + ' MiB' : kib + ' KiB'; }
     function levelHint(l) {
-        if (!(l >= 0 && l <= 9)) l = 5;
+        if (!(l >= 0 && l <= 9)) l = 7;
         var d = LV_SIZE[l], nm = levelName(l);
         var r = d > 0 ? T('{0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.', nm, LV_SPEED[l], d) : d < 0 ? T('{0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.', nm, LV_SPEED[l], -d) : T('{0}: about {1} MB/s per CPU core; the baseline size (levels 0-4 are larger, 6-9 smaller).', nm, LV_SPEED[l]);
         return r + ' ' + T('Dictionary {0}, about {1} MiB of memory per compression thread.', dictText(LV_DICT_KIB[l]), LV_MEM_MIB[l]);

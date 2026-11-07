@@ -44,7 +44,7 @@ Backup Explorer	Backup Explorer
 Backup of {0}	Sao lưu {0}
 Backup started.	Đã bắt đầu sao lưu.
 Backup virtual machines...	Sao lưu máy ảo...
-Balanced (default)	Cân bằng (mặc định)
+Balanced	Cân bằng
 Browse network	Duyệt mạng
 Browse network...	Duyệt mạng...
 Browse...	Duyệt...
@@ -194,6 +194,7 @@ Machine file	Tệp máy
 Maximum	Tối đa
 Message	Thông báo
 Minimum TLS version	Phiên bản TLS tối thiểu
+Moderate	Vừa phải
 Mon	T2
 Monthly	Hằng tháng
 Name	Tên
@@ -312,7 +313,8 @@ Status	Trạng thái
 Stop	Dừng
 Stopped.	Đã dừng.
 Stored	Đã lưu trữ
-Strong	Mạnh
+Strong (default)	Mạnh (mặc định)
+Stronger	Mạnh hơn
 Subject	Chủ thể
 Success	Thành công
 Sun	CN

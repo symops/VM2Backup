@@ -44,7 +44,7 @@ Backup Explorer	Explorateur de sauvegardes
 Backup of {0}	Sauvegarde de {0}
 Backup started.	Sauvegarde démarrée.
 Backup virtual machines...	Sauvegarder des machines virtuelles...
-Balanced (default)	Équilibré (par défaut)
+Balanced	Équilibré
 Browse network	Parcourir le réseau
 Browse network...	Parcourir le réseau...
 Browse...	Parcourir...
@@ -194,6 +194,7 @@ Machine file	Fichier de la machine
 Maximum	Maximum
 Message	Message
 Minimum TLS version	Version TLS minimale
+Moderate	Modéré
 Mon	Lun
 Monthly	Mensuel
 Name	Nom
@@ -312,7 +313,8 @@ Status	Statut
 Stop	Arrêter
 Stopped.	Arrêtée.
 Stored	Stockée
-Strong	Fort
+Strong (default)	Fort (par défaut)
+Stronger	Plus fort
 Subject	Objet
 Success	Réussi
 Sun	Dim

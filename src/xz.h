@@ -7,9 +7,9 @@
 // Every block chooses its own filter chain from its own bytes: executable code (x86 CALL / JMP) gets the BCJ filter in front of LZMA2
 // (3-5% smaller), everything else plain LZMA2; the decision never depends on the thread count or timing, so the output stays identical.
 // Levels 0..9 are the REAL xz presets (lzma_lzma_preset without "extreme": `xz -0` .. `xz -9`; dictionaries 0: 256 KiB, 1: 1, 2: 2, 3: 4, 4: 4, 5: 8, 6: 8, 7: 16, 8: 32, 9: 64 MiB).
-// Block size = 3 x dictionary, at least 1 MiB (like xz -T); it depends on the level only. Level 5 is the default of the program. Memory per compressing thread: XzLevelInfo().
+// Block size = 3 x dictionary, at least 1 MiB (like xz -T); it depends on the level only. Level 7 is the default of the program. Memory per compressing thread: XzLevelInfo().
 // threads = 0 picks one per processor but never more than fit in about 2.5 GiB (700 MiB in a 32-bit process, which also shrinks the
-// dictionary of presets 8 / 9 until one thread fits in ~900 MiB: the stream stays readable everywhere). The decoder refuses a stream that needs more than 1.5 GiB.
+// dictionary of preset 9 until one thread fits in ~900 MiB (presets 7 and 8 fit): the stream stays readable everywhere). The decoder refuses a stream that needs more than 1.5 GiB.
 #pragma once
 #include "stream.h"
 

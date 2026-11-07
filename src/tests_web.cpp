@@ -4,6 +4,7 @@
 #include <ws2tcpip.h>
 #include "autotest.h"
 #include "xz.h"
+#include "codec.h"
 #include "webserver.h"
 #include "webauth.h"
 #include "webtls.h"
@@ -134,6 +135,8 @@ VM2B_TEST("web", web_level_table_matches_the_codec)
     }
     T_CHECK(js.find("[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(function (l) { return [l, l + ' - ' + levelName(l)]; })") >= 0);
     T_CHECK(js.find("Use the global setting ({0})") >= 0);
+    T_CHECK(CodecOptions().level == 7 && kCodecDefaultLevel == 7);                       // the default level of the program is 7 (preset 7, 16 MiB dictionary) ...
+    T_CHECK(js.find("l === 7 ? T('Strong (default)')") >= 0 && js.find("l : 7; }") >= 0);   // ... and the page says so
     T_CHECK(js.find("level: 5 }") < 0);                                                // a new task does not pin the level any more
     return true;
 }

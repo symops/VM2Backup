@@ -44,7 +44,7 @@ Backup Explorer	Yedek Gezgini
 Backup of {0}	{0} yedeği
 Backup started.	Yedekleme başlatıldı.
 Backup virtual machines...	Sanal makineleri yedekle...
-Balanced (default)	Dengeli (varsayılan)
+Balanced	Dengeli
 Browse network	Ağa göz at
 Browse network...	Ağa göz at...
 Browse...	Gözat...
@@ -194,6 +194,7 @@ Machine file	Makine dosyası
 Maximum	Maksimum
 Message	İleti
 Minimum TLS version	En düşük TLS sürümü
+Moderate	Orta
 Mon	Pzt
 Monthly	Aylık
 Name	Ad
@@ -312,7 +313,8 @@ Status	Durum
 Stop	Durdur
 Stopped.	Durduruldu.
 Stored	Saklanan
-Strong	Güçlü
+Strong (default)	Güçlü (varsayılan)
+Stronger	Daha güçlü
 Subject	Konu
 Success	Başarılı
 Sun	Paz
