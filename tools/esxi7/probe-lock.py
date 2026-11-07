@@ -3,7 +3,9 @@
    probe-lock.py <Vmid или имя>  [list|lock|unlock|foreign <Method>]   Пароль читается из .winvm/esxi/secret, нигде не печатается."""
 import ssl, sys, re, urllib.request, os
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')
-PW = open(os.path.join(ROOT, '.winvm', 'esxi', 'secret')).read().strip()
+# ESXI_HOST=10.213.77.11 ESXI_USER=administrator@vsphere.local ESXI_SECRET=secret-vc-sso: тот же разговор с настоящим vCenter (сессия «чужого» администратора)
+PW = open(os.path.join(ROOT, '.winvm', 'esxi', os.environ.get('ESXI_SECRET', 'secret'))).read().strip()
+USER = os.environ.get('ESXI_USER', 'root')
 HOST = os.environ.get('ESXI_HOST', '10.213.77.10')
 CTX = ssl.create_default_context(); CTX.check_hostname = False; CTX.verify_mode = ssl.CERT_NONE
 ENV = '<?xml version="1.0" encoding="UTF-8"?><soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><soapenv:Body>%s</soapenv:Body></soapenv:Envelope>'
@@ -13,7 +15,7 @@ class Sess:
         r = self.call('<RetrieveServiceContent xmlns="urn:vim25"><_this type="ServiceInstance">ServiceInstance</_this></RetrieveServiceContent>')
         self.sc = r[1]
         sm = re.search(r'<sessionManager[^>]*>([^<]+)', self.sc).group(1)
-        self.call('<Login xmlns="urn:vim25"><_this type="SessionManager">%s</_this><userName>root</userName><password>%s</password></Login>' % (sm, PW))
+        self.call('<Login xmlns="urn:vim25"><_this type="SessionManager">%s</_this><userName>%s</userName><password>%s</password></Login>' % (sm, USER, PW))
         self.auth = re.search(r'<authorizationManager[^>]*>([^<]+)', self.sc).group(1)
         self.pc = re.search(r'<propertyCollector[^>]*>([^<]+)', self.sc).group(1)
     def call(self, body):

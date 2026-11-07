@@ -8,15 +8,19 @@ EXE=${VM2B_EXE:-$ROOT/build/x64/vm2bautotest.exe}
 RES=${RES:-$ROOT/.winvm-results/esxi7-cold-$(date +%Y%m%d)}; mkdir -p "$RES" "$E/cold"
 DS=/vmfs/volumes/datastore1; G=vm2b-guest
 export WINEDEBUG=${WINEDEBUG:--all}
+[ -n "$COLD_KEY" ] && export VM2B_REAL_KEY=$COLD_KEY        # vcenter_real: те же этапы через настоящий vCenter
 W() { echo "Z:$1" | sed 's#/#\\#g'; }
 cfg() { # $1 force_off(0/1)  $2 ref ("" = не сверять)  $3 restore_name
   FP=$(echo | openssl s_client -connect 10.213.77.10:443 2>/dev/null | openssl x509 -noout -fingerprint -sha256 | sed 's/.*=//; s/://g' | tr A-F a-f)
-  python3 - "$E" "$FP" "$1" "$2" "${3:-vm2b-cold-rt}" <<'PY'
+  FPV=$(echo | timeout 10 openssl s_client -connect 10.213.77.11:443 2>/dev/null | openssl x509 -noout -fingerprint -sha256 2>/dev/null | sed 's/.*=//; s/://g' | tr A-F a-f)
+  python3 - "$E" "$FP" "$1" "$2" "${3:-vm2b-cold-rt}" "$FPV" <<'PY'
 import json, sys, os
-e, fp, force, ref, rn = sys.argv[1:6]
+e, fp, force, ref, rn, fpv = sys.argv[1:7]
 w = lambda p: "Z:" + p.replace('/', '\\')
 cfg = {"esxi_real": {"host": "10.213.77.10", "port": 443, "user": "root", "password_file": w(e + "/secret"), "fingerprint": "sha256:" + fp, "vms": [], "restore_prefix": "vm2b-rt"},
        "esxi_cold": {"vm": os.environ.get("COLD_VM", "vm2b-guest"), "store": w(e + "/cold/store"), "restore": w(e + "/cold/restore"), "ref": (w(ref) if ref else ""), "force_off": force == "1", "shutdown_timeout": 1500, "pause_mb": 20, "restore_name": rn}}
+if fpv:   # настоящий vCenter (COLD_KEY=vcenter_real): те же этапы через него, ВМ в датацентре vm2b-dc
+    cfg["vcenter_real"] = {"host": "10.213.77.11", "port": 443, "user": "administrator@vsphere.local", "password_file": w(e + "/secret-vc-sso"), "fingerprint": "sha256:" + fpv, "datacenter": "vm2b-dc", "vms": [], "restore_prefix": "vm2b-vc-rt"}
 json.dump(cfg, open(e + "/servers.json", "w")); os.chmod(e + "/servers.json", 0o600)
 PY
 }
@@ -77,6 +81,21 @@ offrestore)
   fact "восстановленная ВМ vm2b-cold-rt"
   $S "ls $DS/vm2b-cold-rt | head; sha256sum $DS/vm2b-cold-rt/vm2b-off-flat.vmdk | cut -d' ' -f1; cat /dev/null" | tee -a "$RES/cold.txt"; cat "$E/cold/ref" | tee -a "$RES/cold.txt"
   $S "I=\$(vim-cmd vmsvc/getallvms | grep ' vm2b-cold-rt ' | cut -d' ' -f1); vim-cmd vmsvc/power.getstate \$I | tail -1; vim-cmd vmsvc/power.off \$I >/dev/null 2>&1; vim-cmd vmsvc/unregister \$I; rm -rf $DS/vm2b-cold-rt" 2>&1 | tee -a "$RES/cold.txt"; clean; unset COLD_VM ;;
+vcoff)
+  fact "НАСТОЯЩИЙ vCENTER, выключенная ВМ vm2b-off: удержание, чужие вызовы, продолжение"
+  COLD_KEY=vcenter_real; export COLD_KEY VM2B_REAL_KEY=vcenter_real; COLD_VM=vm2b-off; export COLD_VM; clean; cfg 0 ""
+  stage esxireal_cold_stage_pause; vmstate vm2b-off
+  fact "что видит чужая сессия vCenter и прямой вызов на хост (probe-vc.py)"
+  python3 -I "$D/probe-vc.py" held vm2b-off 2>&1 | tee -a "$RES/cold.txt"
+  stage esxireal_cold_stage_resume; vmstate vm2b-off; clean; unset COLD_VM ;;
+vcguest)
+  fact "НАСТОЯЩИЙ vCENTER, работающий гость с Tools: холодный бэкап, пауза, чужие вызовы, эталон sha256, продолжение, восстановление в vCenter"
+  COLD_KEY=vcenter_real; export COLD_KEY VM2B_REAL_KEY=vcenter_real; ensure_guest || exit 1; clean; cfg 0 "$E/cold/ref"
+  vmstate $G
+  stage esxireal_cold_stage_pause; vmstate $G
+  PROBE_NO_HOSTPOWER=1 python3 -I "$D/probe-vc.py" held $G 2>&1 | tee -a "$RES/cold.txt"
+  $S "sha256sum $DS/$G/$G-flat.vmdk | cut -d' ' -f1" | tail -1 > "$E/cold/ref"; cat "$E/cold/ref" | tee -a "$RES/cold.txt"
+  stage esxireal_cold_stage_resume; vmstate $G; clean ;;
 aftercrash)
   fact "СЛЕДУЮЩИЙ ЗАПУСК после гибели/сбоя: ВМ выключена, на ней осталась метка, журнала нет (состояние как после scenario crash)"
   clean; cfg 0 ""
@@ -93,6 +112,14 @@ notools)
   stage esxireal_cold_stage_no_tools; vmstate vm2b-on
   ensure_on; cfg 1 ""
   stage esxireal_cold_stage_no_tools; vmstate vm2b-on; clean ;;
+offlimits)
+  fact "ОТДЕЛЬНЫЙ хост, ВЫКЛЮЧЕННАЯ ВМ vm2b-off под удержанием: vim-cmd vmsvc/power.on из SSH и продолжение (не нужны Tools)"
+  COLD_VM=vm2b-off; export COLD_VM; clean; cfg 0 ""
+  stage esxireal_cold_stage_pause; vmstate vm2b-off
+  fact "vim-cmd vmsvc/power.on из SSH под удержанием"
+  $S "vim-cmd vmsvc/power.on \$(vim-cmd vmsvc/getallvms | grep ' vm2b-off ' | cut -d' ' -f1) 2>&1 | tail -3" | tee -a "$RES/cold.txt"; sleep 8; vmstate vm2b-off
+  fact "продолжение после включения мимо продукта"
+  stage esxireal_cold_stage_resume; vmstate vm2b-off; clean; unset COLD_VM ;;
 limits)
   fact "ПРЕДЕЛЫ: что можно сделать с удерживаемой ВМ мимо продукта на ОТДЕЛЬНОМ хосте"
   ensure_guest || exit 1; clean; cfg 0 ""

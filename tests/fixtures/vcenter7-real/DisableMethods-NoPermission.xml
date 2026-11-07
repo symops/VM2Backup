@@ -1,0 +1,10 @@
+HTTP 500
+<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/"
+ xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+ xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<soapenv:Body>
+<soapenv:Fault><faultcode>ServerFaultCode</faultcode><faultstring>Permission to perform this operation was denied.</faultstring><detail><NoPermissionFault xmlns="urn:vim25" xsi:type="NoPermission"><object type="Folder">group-d1</object><privilegeId>Global.DisableMethods</privilegeId></NoPermissionFault></detail></soapenv:Fault>
+</soapenv:Body>
+</soapenv:Envelope>

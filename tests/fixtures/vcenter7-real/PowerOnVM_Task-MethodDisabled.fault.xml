@@ -1,0 +1,10 @@
+HTTP 500
+<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/"
+ xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+ xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<soapenv:Body>
+<soapenv:Fault><faultcode>ServerFaultCode</faultcode><faultstring>The method is disabled by &apos;VM2Backup-6669fce65b-on-1794043919&apos;</faultstring><detail><MethodDisabledFault xmlns="urn:vim25" xsi:type="MethodDisabled"><source>VM2Backup-6669fce65b-on-1794043919</source></MethodDisabledFault></detail></soapenv:Fault>
+</soapenv:Body>
+</soapenv:Envelope>
