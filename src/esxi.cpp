@@ -945,6 +945,39 @@ private:
         if (v.holdSource.empty() && v.annotation.find("[VM2Backup hold ") < 0) return true;
         return reconfigure(vmRef, Tag("annotation", StripHoldNote(v.annotation)) + "<extraConfig xsi:type=\"OptionValue\"><key>vm2backup.hold</key><value xsi:type=\"xsd:string\"></value></extraConfig>");
     }
+    // The sources that disable methods of the VM (AuthorizationManager.QueryDisabledMethods: <returnval><method/><sources><sourceId/><reasonId/></sources></returnval>, real vCenter 7.0.3);
+    // a standalone host answers NotSupported (false). Used to find a lock whose marker is gone.
+    bool queryLocks(const Str& vmRef, Vec<Str>& sources) {
+        sources.clear();
+        if (m_authMgr.empty()) return false;
+        const XmlNode* r;
+        Str e = err; bool t = transient;
+        bool ok = call("QueryDisabledMethods", Ref("_this", "AuthorizationManager", m_authMgr) + Ref("entity", "VirtualMachine", vmRef), r);
+        if (ok) {
+            struct W { static void Go(const XmlNode& n, Vec<Str>& out) {
+                for (const XmlNode& k : n.kids) {
+                    if (k.name == "sourceId") { Str v = k.text.trim(); bool dup = false; for (const Str& o : out) if (o == v) dup = true; if (!v.empty() && !dup) out.push_back(v); }
+                    Go(k, out);
+                }
+            } };
+            W::Go(*r, sources);
+        }
+        err = e; transient = t; m_hasFault = false;
+        return ok;
+    }
+    // VM2Backup locks (ours: the source id parses) that belong to no running or resumable backup and have no marker any more (a lock outlives an edited .vmx): removed, the power state restored.
+    int sweepOrphanLocks(const VmData& v, const Str& keep, Str& warning) {
+        Vec<Str> srcs; if (!queryLocks(v.id, srcs)) return 0;
+        int n = 0;
+        for (const Str& src : srcs) {
+            Hold h; if (!ParseHoldSource(src, h) || src == keep || src == v.holdSource || LiveRegistered(h.id)) continue;
+            Str w; bool powered = false;
+            giveBack(v.id, h, true, w, &powered); ++n; if (powered) m_justStarted = true;
+            if (!warning.empty()) warning += "; ";
+            warning += "removed an old VM2Backup lock of this VM whose marker was gone (left by a backup that was interrupted)" + Str(powered ? ", the VM was powered on again" : "") + (w.empty() ? Str() : "; " + w);
+        }
+        return n;
+    }
     bool lockMethods(const Str& vmRef, const Str& source, bool withPowerOff, Str& why) {
         const XmlNode* r;
         if (m_authMgr.empty()) { why = "the server has no authorization manager"; return false; }
@@ -1069,6 +1102,7 @@ private:
     // Starts or continues the hold of the VM `v`. `th`: the hold of the interrupted run (from the resume token). On success m_hold is valid and `v` is read again (powered off / suspended).
     bool coldAcquire(VmData& v, const Hold& th, bool haveTh, Str& warning, Str& restartWhy) {
         int freed = sweepHold(v, haveTh ? th.source : Str(), warning);
+        freed += sweepOrphanLocks(v, haveTh ? th.source : Str(), warning);
         if (freed && !readVm(m_vmRef, m_dc, v)) return false;
         m_hold = Hold(); m_holdResumed = false;
         if (haveTh) {
@@ -1089,6 +1123,7 @@ private:
         LiveRegister(m_hold.id, true);
         // the marker (always), then the lock (where the server has it). Both are set again on a continuation: a restarted host service forgets a lock, somebody may have edited the VM.
         if (v.holdSource != m_hold.source) {
+            if (haveTh && !m_authMgr.empty()) unlockMethods(v.id, m_hold.source);      // the marker was edited away but our own lock stayed (it forbids ReconfigVM): lift it, it is set again below
             if (!setMarker(v, m_hold)) { Str e = err; bool t = transient; if (!(t && haveTh)) { LiveRegister(m_hold.id, false); m_hold = Hold(); } err = e; transient = t; return fail("the VM could not be marked as held for the backup: " + e, t); }
         }
         {
@@ -1815,6 +1850,8 @@ bool Impl::unlockVm(const Str& vm, Str& message)
     if (!findVm(vm, v)) { Str e = err; bool t = transient; logout(); return fail(e, t); }
     m_vmRef = v.id; m_vmName = v.name; m_dc = v.dc;
     int n = 0; Str w; { Hold h; if (ParseHoldSource(v.holdSource, h)) n = 1; }
+    int orph = 0; if (!n) { Vec<Str> srcs; if (queryLocks(v.id, srcs)) for (const Str& q : srcs) { Hold h; if (ParseHoldSource(q, h)) { LiveRegister(h.id, false); ++orph; } } }      // a lock whose marker is gone
+    if (orph) { sweepOrphanLocks(v, Str(), w); logout(); message = Str::fmt("released %d VM2Backup lock(s) of \"%s\" (the marker was gone)", orph, vm.c_str()); if (!w.empty()) message += "; " + w; return true; }
     if (!n) { logout(); message = "the VM \"" + vm + "\" is not held by VM2Backup (no lock of ours); nothing was changed"; return true; }
     // a hold of a backup that works in this process (a running job) is released too: the administrator asked for it explicitly, the job then fails when it needs the VM
     { Hold h; if (ParseHoldSource(v.holdSource, h)) LiveRegister(h.id, false); }

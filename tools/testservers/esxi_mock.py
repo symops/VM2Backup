@@ -1337,10 +1337,15 @@ def m_query_disabled(req, h):
     record('auth', 'QueryDisabledMethods', vm.name if vm else '')
     if vm is None:
         raise Fault('ManagedObjectNotFound', 'The object has already been deleted or has not been completely created')
+    if S.kind == 'esxi' and not fault_get('esxi_lock'):
+        raise Fault('NotSupported', 'The operation is not supported on the object.')
     out = ''
+    bym = {}
     for src, ms in getattr(vm, 'disabled', {}).items():
         for m in ms:
-            out += '<returnval><entity type="VirtualMachine">%s</entity><method>%s</method><source>%s</source></returnval>' % (x(vm.id), x(m), x(src))
+            bym.setdefault(m, []).append(src)
+    for m, srcs in bym.items():       # the real vCenter 7.0.3: <returnval><method/><sources><sourceId/><reasonId/></sources>...</returnval>
+        out += '<returnval><method>%s</method>%s</returnval>' % (x(m), ''.join('<sources><sourceId>%s</sourceId><reasonId>VM2Backup: the VM is held for a backup</reasonId></sources>' % x(sr) for sr in srcs))
     return '<QueryDisabledMethodsResponse xmlns="urn:vim25">%s</QueryDisabledMethodsResponse>' % out
 
 
@@ -2019,6 +2024,10 @@ def control(cmd, a, q):
                 was = vm.power; vm.power = 'poweredOn'
                 if was != 'poweredOn':
                     power_cycle_effects(vm)
+            return dict(ok=True)
+        if cmd == 'unmark':         # the marker of a hold disappears (an edited .vmx), the lock stays: {vm}
+            vm = next(v for v in S.vms.values() if v.name == a['vm'])
+            vm.annotation = ''; getattr(vm, 'extra_cfg', {}).pop('vm2backup.hold', None); write_vmx(vm)
             return dict(ok=True)
         if cmd == 'lock':           # somebody else's lock: {vm, source, methods}
             vm = next(v for v in S.vms.values() if v.name == a['vm'])

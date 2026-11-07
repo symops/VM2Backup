@@ -581,6 +581,7 @@ VM2B_TEST("esxireal", esxireal_guest_stage_resume)
 struct ColdCfg { Str vm, store, restore, ref; bool forceOff = false; int timeout = 240, pauseMB = 20; };
 static bool LoadCold(Ctx& c, Real& r, ColdCfg& k)
 {
+    { const char* ek = getenv("VM2B_REAL_KEY"); if (ek && *ek) g_realKey = ek; }          // "vcenter_real": the same stages through a real vCenter (tools/esxi7/cold-scenario.sh with COLD_KEY)
     if (!Load(c, r)) return false;
     if (!c.servers.has("esxi_cold")) { c.skip("нет ключа \"esxi_cold\" (tools/esxi7/cold-scenario.sh)"); return false; }
     const Json& j = c.servers.get("esxi_cold");

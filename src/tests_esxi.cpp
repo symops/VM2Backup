@@ -3339,6 +3339,40 @@ VM2B_TEST("esxi", esxi_cold_power_cycle_between_runs_starts_over)
     return true;
 }
 
+// vCenter: блокировка переживает правку .vmx (метка исчезла, блокировка осталась): настоящий vCenter 7.0.3 отвечал «The method is disabled by 'VM2Backup-...'» на пометку ВМ. QueryDisabledMethods
+// (ответ настоящего vCenter: <returnval><method/><sources><sourceId/><reasonId/></sources>) показывает наш sourceId, следующий запуск снимает блокировку и возвращает питание; unlock_vm делает то же.
+VM2B_TEST("esxi", esxi_cold_lock_without_marker_is_swept)
+{
+    Vec<Env> all, es; if (!Envs(c_, all)) return true; Normal(all, es);
+    EsTmp tmp(c_, "esxi-cold9");
+    int round = (int)c_.rnd(2);
+    for (const Env& e : es) {
+        if (!Locks(e)) continue;                                                            // a standalone host has no lock and answers NotSupported to QueryDisabledMethods
+        bool viaUnlock = (round++ % 2) == 0;
+        Ctl ctl(e); ctl.reset();
+        Fix f; T_CHECK(MakeFix(c_, ctl, e, f, "LM", 1, 1500000, "poweredOn", false, 800000)); if (!f.m.ok) return false;
+        VmSet(ctl, f.spec.name, "running", 0.2);
+        BackupOptions o = RandomOpts(c_, true); o.segmentBytes = (u64)512 * (u64)c_.range(300, 900); o.password.clear(); Str store = tmp.sub("store"); Target* t = LocalAt(store);
+        { ColdRun r; r.pr.abortAt = true; r.pr.keep = true; r.pr.limit = 150000; RunBackup(c_, e, ctl, e.coldCfg(), f.spec.name, *t, o, r); T_CHECK(!r.ok); }
+        T_CHECK(LocksOn(ctl, f.spec.name) == 1);
+        { Json a = Json::object(), o2; a["vm"] = f.spec.name; ctl.call("unmark", a, o2); }
+        T_CHECK(!HasVm2bLock(ctl, f.spec.name)); T_CHECK(LocksOn(ctl, f.spec.name) == 1);       // the marker is gone, the lock stays
+        T_CHECK(Foreign(ctl, f.spec.name, "PowerOnVM_Task").get("fault").str() == "MethodDisabled");
+        if (viaUnlock) {
+            Str er, msg; VmSource* src = NewEsxiSource(e.coldCfg(), er); T_CHECK(src != nullptr);
+            T_CHECK(static_cast<EsxiSource*>(src)->unlockVm(f.spec.name, msg)); T_CHECK(Contains(msg, "marker was gone")); delete src;
+            T_CHECK(LocksOn(ctl, f.spec.name) == 0); T_CHECK(PowerOf(ctl, f.spec.name) == "poweredOn");
+        }
+        RemoveTree(store); Str me; MakeDirs(store, me);
+        ColdRun r2; RunBackup(c_, e, ctl, e.coldCfg(), f.spec.name, *t, o, r2);
+        if (!r2.ok) c_.note("%s: %s", e.name.c_str(), r2.err.c_str());
+        T_CHECK(r2.ok); if (!viaUnlock) T_CHECK(Contains(r2.warn, "whose marker was gone"));
+        T_CHECK(LocksOn(ctl, f.spec.name) == 0); T_CHECK(!HasVm2bLock(ctl, f.spec.name)); T_CHECK(PowerOf(ctl, f.spec.name) == "poweredOn");
+        delete t; DeleteVm(ctl, f.spec.name); RemoveTree(store);
+    }
+    return true;
+}
+
 // Холодный режим и `history`: собственные снапшоты ВМ копируются по тем же правилам, что у выключенной ВМ; диски читаются на месте (вся текущая цепочка вместе с точкой работы).
 VM2B_TEST("esxi", esxi_cold_with_own_snapshots_and_history)
 {
