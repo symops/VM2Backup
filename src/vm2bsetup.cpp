@@ -315,7 +315,6 @@ bool DoRemove()
     Say(TR("Removing the shortcuts."));
     if (desk[0]) DeleteFileW(desk);
     if (menu[0]) DeleteFileW(menu);
-    HKEY k;
     RegDeleteKeyW(HKEY_LOCAL_MACHINE, kUninstallKey);
     if (g_regDir[0] ? (wcscpy(dir, g_regDir), true) : ProgramDir(dir)) {
         wchar_t self[MAX_PATH], want[MAX_PATH];

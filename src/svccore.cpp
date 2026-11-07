@@ -12,8 +12,6 @@
 
 namespace vm2b {
 
-static const char* const kStatuses[] = { "Success", "Warning", "Failed", "Abort", "Disabled", "Waiting", "Running", "Paused" };
-
 static bool WebDefaultOn(const ServiceOptions& o)
 {
     if (o.webDefault >= 0) return o.webDefault != 0;

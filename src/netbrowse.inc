@@ -130,7 +130,6 @@ Str LdapFirst(void* (*getVals)(void*, void*, const wchar_t*), int (*freeVals)(vo
 
 unsigned long RealEnumDomain(Str& domain, Vec<NetNode>& out)
 {
-    DWORD t0 = GetTickCount();
     typedef DWORD (WINAPI *DsGetFn)(LPCWSTR, LPCWSTR, GUID*, LPCWSTR, ULONG, void**);
     typedef DWORD (WINAPI *FreeFn)(LPVOID);
     HMODULE na = LoadLibraryW(L"netapi32.dll"); if (!na) return ERROR_NO_NETWORK;
@@ -225,7 +224,7 @@ struct BrowseJob {
     Str host, root; DWORD startTick, budgetMs;
     Json result; Str err; bool ok;
     Json partial; volatile LONG partialReady;      // root: the servers of the domain, published before the slow NetBIOS walk; the caller uses them when the walk does not finish in time
-    BrowseJob() : refs(2), abandoned(0), partialReady(0), done(CreateEventW(nullptr, TRUE, FALSE, nullptr)), level(0), startTick(GetTickCount()), budgetMs(0), ok(false) {}
+    BrowseJob() : refs(2), abandoned(0), done(CreateEventW(nullptr, TRUE, FALSE, nullptr)), level(0), startTick(GetTickCount()), budgetMs(0), ok(false), partialReady(0) {}
     ~BrowseJob() { if (done) CloseHandle(done); Wipe(pass); Wipe(user); }
     bool late() const { return abandoned || (DWORD)(GetTickCount() - startTick) > budgetMs; }
 };

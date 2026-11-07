@@ -159,7 +159,6 @@ VM2B_TEST("engine", hostile_manifest_fuzz)
         Manifest m; Str err; bool ok = Backup(*t, root, o, m, err); T_CHECK(ok); if (!ok) { c_.note("%s", err.c_str()); delete t; continue; }
         Str mpath = JoinPath(store, m.archive + ".json"); Bytes orig; Str e; T_CHECK(ReadWholeFile(mpath.c_str(), orig, e));
         Json base; T_CHECK(Json::parse((const char*)orig.data(), orig.size(), base, e));
-        int accepted = 0;
         for (int t2 = 0; t2 < 60; ++t2) {
             Json j = base; int k = c_.range(1, 3); for (int q = 0; q < k; ++q) MutateOne(c_, j);
             Str js = j.dump(c_.coin());
@@ -168,7 +167,6 @@ VM2B_TEST("engine", hostile_manifest_fuzz)
             Vec<Manifest> ms; Str le; ListBackups(*t, nullptr, ms, le);
             bool vOk = false, rOk = false;
             Poke(*t, m.archive, o.password, tmp.sub("scratch"), &vOk, &rOk);
-            if (vOk) ++accepted;
             // a restore that says OK on a mutated manifest must have produced exactly the original files
             if (rOk) { T_CHECK(vOk); }
         }

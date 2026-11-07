@@ -154,7 +154,7 @@ static Str NormVmx(const Str& path)
     Str t((const char*)b.data(), b.size()), out; size_t s = 0;
     for (size_t i = 0; i <= t.size(); ++i) if (i == t.size() || t[i] == '\n') {
         Str l = t.substr(s, i - s); s = i + 1;
-        if (l.lower().find(".filename") >= 0 || l.starts_with("snapshot.") || l.find("ctkEnabled") >= 0 && l.find("scsi") >= 0) continue;
+        if (l.lower().find(".filename") >= 0 || l.starts_with("snapshot.") || (l.find("ctkEnabled") >= 0 && l.find("scsi") >= 0)) continue;
         out += l + "\n";
     }
     return out;

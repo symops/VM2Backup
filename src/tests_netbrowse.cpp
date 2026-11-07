@@ -291,7 +291,7 @@ VM2B_TEST("smb", netbrowse_hostile_and_truncation)
 {
     Scope s(c_, "nbhost"); Json r; Str e;
     static const char* const bad[] = { "C:\\x", "Z:", "relative\\x", "\\x", "\\\\?\\C:\\x", "\\\\.\\pipe\\x", "\\\\?\\UNC\\h\\s", "\\\\nas\\backup\\..", "\\\\nas\\backup\\a\\..\\b", "\\\\nas\\..\\x", "\\\\..", "\\\\.",
-        "\\\\ho st", "\\\\nas;calc", "\\\\nas&calc\\x", "\\\\nas|x", "\\\\nas\\ba:ckup", "\\\\nas\\backup\\a*", "\\\\nas\\backup\\CON", "\\\\nas\\backup\\x.", "\\\\[::1]", "\\\\fe80::1\\x", "\\\\\\nas", "http://x/y", "\\\\nas\\ba\x01" "ckup", "\\\\nas\\backup\\\xff" };
+        "\\\\ho st", "\\\\nas;calc", "\\\\nas&calc\\x", "\\\\nas|x", "\\\\nas\\ba:ckup", "\\\\nas\\backup\\a*", "\\\\nas\\backup\\CON", "\\\\nas\\backup\\x.", "\\\\[::1]", "\\\\fe80::1\\x", "\\\\\\nas", "http://x/y", ("\\\\nas\\ba\x01" "ckup"), "\\\\nas\\backup\\\xff" };
     int adds = s.n.adds;
     for (size_t i = 0; i < sizeof(bad) / sizeof(bad[0]); ++i) { Json x; Str ee; if (NetBrowse(bad[i], "", "", x, ee)) { c_.note("accepted: %s", bad[i]); return false; } if (ee.empty()) return false; }
     T_CHECK(s.n.adds == adds);                                                   // nothing hostile reached the network layer

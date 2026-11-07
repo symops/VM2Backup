@@ -285,8 +285,8 @@ bool SshSession::connect(const SshConfig& cfg)
     if (!connect_socket(cfg)) { disconnect(); return false; }
     I.ses = libssh2_session_init_ex(nullptr, nullptr, nullptr, &I);
     if (!I.ses) { disconnect(); return fail("out of memory", false); }
-    libssh2_session_callback_set(I.ses, LIBSSH2_CALLBACK_RECV, (void*)RecvCb);
-    libssh2_session_callback_set(I.ses, LIBSSH2_CALLBACK_SEND, (void*)SendCb);
+    libssh2_session_callback_set2(I.ses, LIBSSH2_CALLBACK_RECV, (libssh2_cb_generic*)(void*)RecvCb);
+    libssh2_session_callback_set2(I.ses, LIBSSH2_CALLBACK_SEND, (libssh2_cb_generic*)(void*)SendCb);
     libssh2_session_set_blocking(I.ses, 0);
     libssh2_session_banner_set(I.ses, "SSH-2.0-VM2Backup");
     struct Pref { int type; const Str* list; const char* def; } prefs[] = {
