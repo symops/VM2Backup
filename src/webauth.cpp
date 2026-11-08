@@ -65,7 +65,9 @@ const char* const kAdminCmds[] = { "state", "scheduler.set", "settings.get", "se
     "web.status", "web.settings.get", "web.settings.set", "web.interfaces.list", "web.cert.generate", "web.cert.import", "web.users.list", "web.users.save", "web.users.delete",
     "web.users.totp_enroll", "web.users.totp_confirm", "web.users.totp_disable", "web.audit.tail", nullptr };
 const char* const kViewerCmds[] = { "state", "servers.list", "tasks.list", "tasks.next", "jobs.list", "history.list", "history.get", "backups.list", nullptr };
-const char* const kOperatorExtra[] = { "tasks.run", "jobs.abort", "backup.run", "backups.verify", nullptr };
+// An operator starts SAVED tasks (tasks.run: everything comes from the task an administrator made) and checks backups; backup.run takes a whole element from the
+// request (any target folder, `keep` that deletes old copies, the stored passwords of any server), so it is admin only (security review F2).
+const char* const kOperatorExtra[] = { "tasks.run", "jobs.abort", "backups.verify", nullptr };
 const char* const kReadOnly[] = { "state", "settings.get", "servers.list", "tasks.list", "tasks.next", "jobs.list", "history.list", "history.get", "backups.list", "web.status", "web.settings.get", "web.interfaces.list", "web.users.list", "web.audit.tail", nullptr };
 bool In(const char* const* l, const Str& c) { for (; *l; ++l) if (c == *l) return true; return false; }
 
@@ -182,8 +184,11 @@ bool WebAuth::open(const Str& dataDir, Str& err, bool enabledDefault)
             audit("default_admin_created", "admin", "", "default administrator created (first start)");
         }
     }
+    // The control hash for an unknown user: the same shape as a real one (16-byte salt, 32-byte hash), so verifyPassword runs the whole PBKDF2
+    // for it and the answer time does not tell a missing user from a wrong password (the iteration count is refreshed at every use, see login()).
     Bytes salt; salt.resize(16); RandomBytes(salt.data(), 16);
-    Json d = Json::object(); d["salt"] = Base64Encode(salt.data(), 16); d["iter"] = (i64)m_kdfIter; d["hash"] = Base64Encode(salt.data(), 16); m_dummy = d;
+    Bytes fake; fake.resize(32); RandomBytes(fake.data(), 32);
+    Json d = Json::object(); d["salt"] = Base64Encode(salt.data(), 16); d["iter"] = (i64)m_kdfIter; d["hash"] = Base64Encode(fake.data(), 32); m_dummy = d;
     return true;
 }
 
@@ -278,7 +283,11 @@ bool WebAuth::verifyPassword(const Json& ph, const Str& pw)
 {
     Bytes salt, want; Str s = ph.get("salt").str(), h = ph.get("hash").str();
     i64 it = ph.get("iter").integer(0);
-    if (!Base64Decode(s.data(), s.size(), salt) || !Base64Decode(h.data(), h.size(), want) || want.size() != 32 || it < 1 || it > 100000000) return false;
+    if (!Base64Decode(s.data(), s.size(), salt) || !Base64Decode(h.data(), h.size(), want) || want.size() != 32 || it < 1 || it > 100000000) {
+        // damaged record: still spend the time of one hash (never an early exit that can be timed)
+        u8 burn[32]; static const u8 kSalt[16] = { 1 }; Pbkdf2Sha256(pw.data(), pw.size(), kSalt, 16, m_kdfIter, burn, 32);
+        return false;
+    }
     u8 got[32]; if (!Pbkdf2Sha256(pw.data(), pw.size(), salt.data(), salt.size(), (u32)it, got, 32)) return false;
     return CtEq(got, want.data(), 32);
 }
@@ -525,12 +534,13 @@ WebAuth::LoginResult WebAuth::login(const Str& ip, const Str& userIn, const Str&
     int left = throttleLeft(ipKey), l2 = throttleLeft(uKey); if (l2 > left) left = l2;
     if (left > 0) {
         r.status = 429; r.retryAfter = left; r.message = Str::fmt("Too many failed attempts. Try again in %d seconds.", left);
-        audit("login_blocked", ln, ip, "");
+        noteBlocked(ln, ip);
         return r;
     }
     if (m_doc.get("users").size() == 0) { r.message = "No users are configured. On the server, run VM2BackupService.exe /reset-web as an administrator."; audit("login_no_users", ln, ip, ""); return r; }
     int idx = findUser(ln);
     Json u = idx >= 0 ? m_doc.get("users").at((size_t)idx) : Json();
+    if (idx < 0) m_dummy["iter"] = (i64)m_kdfIter;          // the same cost as a real user
     Json ph = idx >= 0 ? u.get("pw") : m_dummy;
     bool ok;
     { Unguard ug(&m_cs); ok = verifyPassword(ph, pw); }
@@ -624,17 +634,60 @@ bool WebAuth::changePassword(const Str& user, const Str& current, const Str& nex
 }
 
 // ---- audit -----------------------------------------------------------------------------------------------------------------------
+// Blocked logins (HTTP 429) are not written one by one: a stream of them from the network would wash the real events out of the log (found by the
+// security review). Per address the first blocked attempt of a minute is written, the rest are counted, and when the minute is over (or when the next
+// audit event comes) one line "N blocked login attempts from <addr> in last minute" is added.  At most kBlockedLinesPerMinute lines of this kind per
+// minute in all; the rest of the addresses only go into a common counter.
+static const int kBlockedLinesPerMinute = 20;
+
+void WebAuth::noteBlocked(const Str& user, const Str& ip)
+{
+    i64 t = now();
+    flushBlocked(false);
+    if (t - m_blkWin >= 60 || t < m_blkWin) { m_blkWin = t; m_blkLines = 0; }
+    for (size_t i = 0; i < m_blk.size(); ++i) if (m_blk[i].ip == ip) { m_blk[i].count++; return; }
+    BlockAgg a; a.ip = ip; a.start = t; a.count = 1;
+    if (m_blkLines < kBlockedLinesPerMinute) { ++m_blkLines; writeAudit("login_blocked", user, ip, ""); }
+    else a.quiet = true;
+    if (m_blk.size() >= 512) flushBlocked(true);
+    m_blk.push_back(a);
+}
+
+void WebAuth::flushBlocked(bool all)
+{
+    i64 t = now(); int quiet = 0, quietAddrs = 0;
+    for (size_t i = m_blk.size(); i-- > 0;) {
+        BlockAgg& a = m_blk[i];
+        if (!all && t - a.start < 60 && t >= a.start) continue;
+        if (a.quiet) { quiet += a.count; ++quietAddrs; }
+        else if (a.count > 1) writeAudit("login_blocked_summary", "", a.ip, Str::fmt("%d blocked login attempts from %s in last minute", a.count, a.ip.c_str()));
+        m_blk.erase(i);
+    }
+    if (quiet) writeAudit("login_blocked_summary", "", "many", Str::fmt("%d blocked login attempts from %d more addresses in last minute", quiet, quietAddrs));
+}
+
 void WebAuth::audit(const char* event, const Str& user, const Str& ip, const Str& detail)
 {
     Guard g(&m_cs);                                          // recursive: callers may hold it
+    if (m_auditFile.empty()) return;
+    flushBlocked(false);
+    writeAudit(event, user, ip, detail);
+}
+
+// audit.log, audit.1.log ... audit.4.log: five generations of 5 MB, the oldest goes
+void WebAuth::writeAudit(const char* event, const Str& user, const Str& ip, const Str& detail)
+{
     if (m_auditFile.empty()) return;
     time_t tt = (time_t)now(); struct tm tmv; struct tm* tm = gmtime_s(&tmv, &tt) == 0 ? &tmv : nullptr;      // gmtime_s: no shared static buffer
     char ts[40] = "";
     if (tm) snprintf(ts, sizeof(ts), "%04d-%02d-%02dT%02d:%02d:%02dZ", tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
     Str line = Str(ts) + "\t" + event + "\t" + Sanitize(user, 64) + "\t" + Sanitize(ip, 64) + "\t" + Sanitize(detail) + "\r\n";
     WIN32_FILE_ATTRIBUTE_DATA fa;
-    if (GetFileAttributesExW(FilePath(m_auditFile), GetFileExInfoStandard, &fa) && fa.nFileSizeLow > (5u << 20) && !fa.nFileSizeHigh)
+    if (GetFileAttributesExW(FilePath(m_auditFile), GetFileExInfoStandard, &fa) && fa.nFileSizeLow > (5u << 20) && !fa.nFileSizeHigh) {
+        for (int n = 3; n >= 1; --n)
+            MoveFileExW(FilePath(JoinPath(m_dir, Str::fmt("audit.%d.log", n))), FilePath(JoinPath(m_dir, Str::fmt("audit.%d.log", n + 1))), MOVEFILE_REPLACE_EXISTING);
         MoveFileExW(FilePath(m_auditFile), FilePath(JoinPath(m_dir, "audit.1.log")), MOVEFILE_REPLACE_EXISTING);
+    }
     HANDLE h = CreateFileW(FilePath(m_auditFile), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (h == INVALID_HANDLE_VALUE) return;
     DWORD w; WriteFile(h, line.data(), (DWORD)line.size(), &w, nullptr);
@@ -646,6 +699,7 @@ Str WebAuth::auditTail(int lines)
     if (lines < 1) lines = 1;
     if (lines > 2000) lines = 2000;
     Guard g(&m_cs);
+    flushBlocked(false);
     Bytes b; Str e;
     if (!FileExists(m_auditFile) || !ReadWholeFile(m_auditFile.c_str(), b, e, 64 << 20)) return Str();
     size_t end = b.size(), pos = end; int n = 0;

@@ -219,6 +219,16 @@ void RemoveFilesIn(const wchar_t* dir, const wchar_t* keepSelf)
     RemoveDirectoryW(dir);
 }
 
+// A volume without persistent ACLs (FAT, exFAT) cannot be protected; there the install goes on with a warning.
+bool VolumeHasAcls(const wchar_t* path)
+{
+    wchar_t root[MAX_PATH];
+    if (!GetVolumePathNameW(path, root, MAX_PATH)) return true;
+    DWORD flags = 0;
+    if (!GetVolumeInformationW(root, nullptr, 0, nullptr, nullptr, &flags, nullptr, 0)) return true;
+    return (flags & FILE_PERSISTENT_ACLS) != 0;
+}
+
 bool DoInstall()
 {
     Say(TR("- Installing VM2Backup -"));
@@ -248,6 +258,14 @@ bool DoInstall()
     wcscpy(a, srcSetup); wcscpy(b, dstSetup);
     if (_wcsicmp(a, b) != 0 && !CopyOne(srcSetup, dstSetup)) { Say(TR("Error: cannot copy %s (error %lu)."), L"VM2Backup-Setup.exe", GetLastError()); return false; }
     if (GetFileAttributesW(srcUn) != INVALID_FILE_ATTRIBUTES) CopyOne(srcUn, dstUn);
+    {   // only SYSTEM and Administrators may write here (the service runs this code as SYSTEM); also on an update over an old copy
+        const wchar_t* mine[] = { dstExe, dstSvc, dstSetup, dstUn };
+        if (!SecureInstallDir(dir, mine, 4)) {
+            DWORD e = GetLastError();
+            if (VolumeHasAcls(dir)) { Say(TR("Error: cannot restrict the access rights of the installation folder (error %lu)."), e); return false; }
+            Say(TR("Warning: the access rights of the installation folder could not be restricted (error %lu)."), e);   // FAT and the like have no ACLs
+        }
+    }
 
     Say(TR("Registering the program in Apps & features."));
     HKEY k;

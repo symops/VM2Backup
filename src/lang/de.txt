@@ -16,6 +16,7 @@ Error: VM2Backup.exe was not found next to the installer.	Fehler: VM2Backup.exe 
 Error: VM2BackupService.exe was not found next to the installer.	Fehler: VM2BackupService.exe wurde neben dem Installationsprogramm nicht gefunden.
 Error: cannot copy %s (error %lu).	Fehler: %s kann nicht kopiert werden (Fehler %lu).
 Error: cannot find the Program Files folder.	Fehler: Der Ordner Program Files wurde nicht gefunden.
+Error: cannot restrict the access rights of the installation folder (error %lu).	Fehler: Die Zugriffsrechte des Installationsordners konnten nicht eingeschränkt werden (Fehler %lu).
 Error: the installation folder is not valid (a full path such as C:\\Programs\\VM2Backup is needed).	Fehler: Der Installationsordner ist ungültig (ein vollständiger Pfad wie C:\\Programs\\VM2Backup ist nötig).
 Error: the service could not be registered (are you an administrator?).	Fehler: Der Dienst konnte nicht registriert werden (sind Sie Administrator?).
 Exit	Beenden
@@ -58,6 +59,7 @@ The web site is enabled, but not listening. Check the certificate and the port i
 The web site is off. Switch it on in the web interface, or reset it with VM2BackupService.exe /reset-web.	Die Webseite ist aus. Schalten Sie sie in der Weboberfläche ein oder setzen Sie sie mit VM2BackupService.exe /reset-web zurück.
 Update	Aktualisieren
 Version:	Version:
+Warning: the access rights of the installation folder could not be restricted (error %lu).	Warnung: Die Zugriffsrechte des Installationsordners konnten nicht eingeschränkt werden (Fehler %lu).
 Web site:	Webseite:
 Windows language	Windows-Sprache
 Your settings, the history and the backups you made are kept.	Ihre Einstellungen, der Verlauf und die erstellten Sicherungen bleiben erhalten.

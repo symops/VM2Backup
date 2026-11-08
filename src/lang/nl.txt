@@ -16,6 +16,7 @@ Error: VM2Backup.exe was not found next to the installer.	Fout: VM2Backup.exe is
 Error: VM2BackupService.exe was not found next to the installer.	Fout: VM2BackupService.exe is niet gevonden naast het installatieprogramma.
 Error: cannot copy %s (error %lu).	Fout: kan %s niet kopiëren (fout %lu).
 Error: cannot find the Program Files folder.	Fout: de map Program Files is niet gevonden.
+Error: cannot restrict the access rights of the installation folder (error %lu).	
 Error: the installation folder is not valid (a full path such as C:\\Programs\\VM2Backup is needed).	Fout: de installatiemap is ongeldig (een volledig pad zoals C:\\Programs\\VM2Backup is nodig).
 Error: the service could not be registered (are you an administrator?).	Fout: de service kon niet worden geregistreerd (bent u beheerder?).
 Exit	Afsluiten
@@ -58,6 +59,7 @@ The web site is enabled, but not listening. Check the certificate and the port i
 The web site is off. Switch it on in the web interface, or reset it with VM2BackupService.exe /reset-web.	De website staat uit. Schakel hem in via de webinterface of reset hem met VM2BackupService.exe /reset-web.
 Update	Bijwerken
 Version:	Versie:
+Warning: the access rights of the installation folder could not be restricted (error %lu).	
 Web site:	Website:
 Windows language	Windows-taal
 Your settings, the history and the backups you made are kept.	Uw instellingen, de geschiedenis en de gemaakte back-ups blijven behouden.

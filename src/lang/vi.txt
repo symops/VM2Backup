@@ -16,6 +16,7 @@ Error: VM2Backup.exe was not found next to the installer.	Lỗi: không tìm th�
 Error: VM2BackupService.exe was not found next to the installer.	Lỗi: không tìm thấy VM2BackupService.exe cạnh trình cài đặt.
 Error: cannot copy %s (error %lu).	Lỗi: không sao chép được %s (lỗi %lu).
 Error: cannot find the Program Files folder.	Lỗi: không tìm thấy thư mục Program Files.
+Error: cannot restrict the access rights of the installation folder (error %lu).	
 Error: the installation folder is not valid (a full path such as C:\\Programs\\VM2Backup is needed).	Lỗi: thư mục cài đặt không hợp lệ (cần đường dẫn đầy đủ như C:\\Programs\\VM2Backup).
 Error: the service could not be registered (are you an administrator?).	Lỗi: không đăng ký được dịch vụ (bạn có phải quản trị viên không?).
 Exit	Thoát
@@ -58,6 +59,7 @@ The web site is enabled, but not listening. Check the certificate and the port i
 The web site is off. Switch it on in the web interface, or reset it with VM2BackupService.exe /reset-web.	Trang web đang tắt. Hãy bật trong giao diện web hoặc đặt lại bằng VM2BackupService.exe /reset-web.
 Update	Cập nhật
 Version:	Phiên bản:
+Warning: the access rights of the installation folder could not be restricted (error %lu).	
 Web site:	Trang web:
 Windows language	Ngôn ngữ Windows
 Your settings, the history and the backups you made are kept.	Cài đặt, lịch sử và các bản sao lưu đã tạo được giữ lại.

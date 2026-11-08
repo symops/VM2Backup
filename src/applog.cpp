@@ -77,6 +77,38 @@ static void SecureDataFolders(const wchar_t* dataDir, const wchar_t* logsDir)
     SetProtectedDacl(logsDir, L"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1301bf;;;BU)");
 }
 
+// Права на КАТАЛОГ УСТАНОВКИ (находка ревью F1). Служба работает от SYSTEM и запускает отсюда exe; если каталог лежит вне Program Files
+// (C:\VM2Backup, D:\Tools\...), он наследует от корня тома "Прошедшие проверку: изменение", и любой пользователь подменил бы
+// VM2BackupService.exe. Поэтому каталог и наши файлы получают ЗАЩИЩЁННЫЙ DACL: SYSTEM и администраторы - полный доступ, "Пользователи" - только
+// чтение и выполнение (0x1200a9 = FILE_GENERIC_READ | FILE_GENERIC_EXECUTE), владелец - администраторы. Каталог ставится без распространения на
+// чужие файлы (SetFileSecurity не обходит дерево): трогаются только каталог и перечисленные файлы.
+extern const wchar_t* const kInstallDirSddl  = L"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;BU)";
+extern const wchar_t* const kInstallFileSddl = L"D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;0x1200a9;;;BU)";
+
+static bool ApplyProtected(const wchar_t* path, const wchar_t* sddl)
+{
+    PSECURITY_DESCRIPTOR sd = nullptr;
+    if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, SDDL_REVISION_1, &sd, nullptr)) return false;
+    bool ok = SetFileSecurityW(path, DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION, sd) != FALSE;
+    LocalFree(sd);
+    if (!ok) return false;
+    PSECURITY_DESCRIPTOR own = nullptr;                      // the owner is best effort: it needs the right to give the file to the group
+    if (ConvertStringSecurityDescriptorToSecurityDescriptorW(L"O:BA", SDDL_REVISION_1, &own, nullptr)) {
+        SetFileSecurityW(path, OWNER_SECURITY_INFORMATION, own);
+        LocalFree(own);
+    }
+    return true;
+}
+
+// Returns true when the folder and every listed file got the protected DACL; `files` may be null.
+bool SecureInstallDir(const wchar_t* dir, const wchar_t* const* files, int nfiles)
+{
+    bool ok = ApplyProtected(dir, kInstallDirSddl);
+    for (int i = 0; files && i < nfiles; ++i)
+        if (GetFileAttributesW(files[i]) != INVALID_FILE_ATTRIBUTES && !ApplyProtected(files[i], kInstallFileSddl)) ok = false;
+    return ok;
+}
+
 static LONG WINAPI CrashFilter(EXCEPTION_POINTERS* info)
 {
     void* addr = info && info->ExceptionRecord ? info->ExceptionRecord->ExceptionAddress : nullptr;

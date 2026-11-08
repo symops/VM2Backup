@@ -7,7 +7,10 @@ VM2Backup - backup of virtual machines (VMware ESXi / vCenter / folders) to a fo
    - Click "Install" ("Update" when it is already installed). The program goes to C:\Program Files\VM2Backup\
      (VM2Backup.exe = the control panel, VM2BackupService.exe = the Windows service "VM2Backup Service", which runs the
      scheduled tasks also when nobody is logged on) and appears in Settings > Apps.
-   - For scripts: VM2Backup-Setup.exe /install /silent [/nostart] [/desktop-] [/startmenu-]   (the exit code is 0 on success)
+   - For scripts: VM2Backup-Setup.exe /install /silent [/nostart] [/desktop-] [/startmenu-] [/dir "D:\Some\Folder"]   (the exit code is 0 on success)
+   - Access rights of the program folder: the service runs the program as SYSTEM, so the installer (also on an update, and when you choose another
+     folder) gives the folder and its files a protected access list: SYSTEM and Administrators have full access, ordinary users may only read and
+     run. A folder outside Program Files therefore does not inherit "users may change" from the root of the disk.
 
 2. First use
    - The program (VM2Backup.exe) is a small control panel: it shows whether the service runs, its version, the data folder and the web

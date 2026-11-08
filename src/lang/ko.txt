@@ -16,6 +16,7 @@ Error: VM2Backup.exe was not found next to the installer.	오류: 설치 프로�
 Error: VM2BackupService.exe was not found next to the installer.	오류: 설치 프로그램 옆에서 VM2BackupService.exe를 찾을 수 없습니다.
 Error: cannot copy %s (error %lu).	오류: %s을(를) 복사할 수 없습니다(오류 %lu).
 Error: cannot find the Program Files folder.	오류: Program Files 폴더를 찾을 수 없습니다.
+Error: cannot restrict the access rights of the installation folder (error %lu).	
 Error: the installation folder is not valid (a full path such as C:\\Programs\\VM2Backup is needed).	오류: 설치 폴더가 올바르지 않습니다(C:\\Programs\\VM2Backup와 같은 전체 경로가 필요합니다).
 Error: the service could not be registered (are you an administrator?).	오류: 서비스를 등록할 수 없습니다(관리자입니까?).
 Exit	종료
@@ -58,6 +59,7 @@ The web site is enabled, but not listening. Check the certificate and the port i
 The web site is off. Switch it on in the web interface, or reset it with VM2BackupService.exe /reset-web.	웹 사이트가 꺼져 있습니다. 웹 인터페이스에서 켜거나 VM2BackupService.exe /reset-web 으로 초기화하세요.
 Update	업데이트
 Version:	버전:
+Warning: the access rights of the installation folder could not be restricted (error %lu).	
 Web site:	웹 사이트:
 Windows language	Windows 언어
 Your settings, the history and the backups you made are kept.	설정, 기록 및 만든 백업은 유지됩니다.

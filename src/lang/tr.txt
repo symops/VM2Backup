@@ -16,6 +16,7 @@ Error: VM2Backup.exe was not found next to the installer.	Hata: VM2Backup.exe y�
 Error: VM2BackupService.exe was not found next to the installer.	Hata: VM2BackupService.exe yükleyicinin yanında bulunamadı.
 Error: cannot copy %s (error %lu).	Hata: %s kopyalanamıyor (hata %lu).
 Error: cannot find the Program Files folder.	Hata: Program Files klasörü bulunamıyor.
+Error: cannot restrict the access rights of the installation folder (error %lu).	
 Error: the installation folder is not valid (a full path such as C:\\Programs\\VM2Backup is needed).	Hata: yükleme klasörü geçerli değil (C:\\Programs\\VM2Backup gibi tam bir yol gerekir).
 Error: the service could not be registered (are you an administrator?).	Hata: hizmet kaydedilemedi (yönetici misiniz?).
 Exit	Çıkış
@@ -58,6 +59,7 @@ The web site is enabled, but not listening. Check the certificate and the port i
 The web site is off. Switch it on in the web interface, or reset it with VM2BackupService.exe /reset-web.	Web sitesi kapalı. Web arayüzünden açın veya VM2BackupService.exe /reset-web ile sıfırlayın.
 Update	Güncelle
 Version:	Sürüm:
+Warning: the access rights of the installation folder could not be restricted (error %lu).	
 Web site:	Web sitesi:
 Windows language	Windows dili
 Your settings, the history and the backups you made are kept.	Ayarlarınız, geçmiş ve oluşturduğunuz yedekler korunur.

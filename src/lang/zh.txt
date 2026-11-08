@@ -16,6 +16,7 @@ Error: VM2Backup.exe was not found next to the installer.	错误: 在安装程�
 Error: VM2BackupService.exe was not found next to the installer.	错误: 在安装程序旁未找到 VM2BackupService.exe。
 Error: cannot copy %s (error %lu).	错误: 无法复制 %s (错误 %lu)。
 Error: cannot find the Program Files folder.	错误: 找不到 Program Files 文件夹。
+Error: cannot restrict the access rights of the installation folder (error %lu).	
 Error: the installation folder is not valid (a full path such as C:\\Programs\\VM2Backup is needed).	错误: 安装文件夹无效(需要完整路径,如 C:\\Programs\\VM2Backup)。
 Error: the service could not be registered (are you an administrator?).	错误: 无法注册服务(您是管理员吗?)。
 Exit	退出
@@ -58,6 +59,7 @@ The web site is enabled, but not listening. Check the certificate and the port i
 The web site is off. Switch it on in the web interface, or reset it with VM2BackupService.exe /reset-web.	网站已关闭。请在网页界面中开启，或用 VM2BackupService.exe /reset-web 重置。
 Update	更新
 Version:	版本：
+Warning: the access rights of the installation folder could not be restricted (error %lu).	
 Web site:	网站：
 Windows language	Windows 语言
 Your settings, the history and the backups you made are kept.	您的设置、历史记录和已创建的备份将保留。

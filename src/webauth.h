@@ -72,6 +72,11 @@ public:
     Str auditTail(int lines);
 
 private:
+    struct BlockAgg { Str ip; i64 start; int count; bool quiet; BlockAgg() : start(0), count(0), quiet(false) {} };
+    void noteBlocked(const Str& user, const Str& ip);        // a refused (429) login: counted, written once a minute per address
+    void flushBlocked(bool all);                             // writes the summaries of finished minutes (caller holds the lock)
+    void writeAudit(const char* event, const Str& user, const Str& ip, const Str& detail);
+    Vec<BlockAgg> m_blk; i64 m_blkWin = 0; int m_blkLines = 0;
     bool save(Str& err);                                     // caller holds the lock
     int findUser(const Str& lname) const;
     bool verifyPassword(const Json& ph, const Str& pw);

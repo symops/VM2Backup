@@ -60,7 +60,7 @@ The launchers (`tools/testservers/launch.py`, `esxi_launch.py`, `pm_server.py`, 
 | `web` | `SslStream` per protocol (TLS 1.0-1.3), `curl.exe` (Schannel), `Invoke-WebRequest`, `HttpClient`, login admin/admin, `/api/me`, state, `web.interfaces.list` vs `Win32_NetworkAdapterConfiguration`, bind to the real address + host curl, **DPAPI**: a server with a password is saved, `config.json` must not hold it, it must still work after a service restart and after a restart of Windows | |
 | `net` | `ftp,tls,http`, `ssh,scp`, `esxi,svcesxi` on the guest against the host's servers | |
 | `smb` | group `smbreal` (`src/tests_smb_real.cpp`) against the real Samba share + `net use Z:` and `net.drives` | |
-| `installer` | update in place over the running service, `/remove /silent` (data kept), reinstall | |
+| `installer` | update in place over the running service, `/remove /silent` (data kept), reinstall; **`guest/instacl.ps1` (`08-installer-acl`, расширена 08.11.2026, ещё НЕ прогонялась на настоящей Windows)**: установка в `C:\VM2B-acltest` (вне Program Files, каталог унаследовал от корня тома «Прошедшие проверку: изменение»), защищённый DACL каталога и exe (Users только чтение и выполнение, владелец Administrators / SYSTEM), обычный пользователь (`guest/instacl-user.ps1`) не может записать, переименовать, заменить или удалить `VM2BackupService.exe` и положить файл в каталог; обновление поверх при намеренно испорченных правах; смена каталога (`C:\VM2B-acltest2`) с удалением старого; `/remove` из защищённого каталога | |
 | `defender` | (w11) Defender в конце прогона: защита в реальном времени включена, нет исключений и обнаружений | `16-defender.out` |
 | `signing` | (w11) подписанный установщик (`tools/sign.sh`, тестовый центр из `tools/make-test-cert.sh`) с Mark of the Web, четыре сочетания: (c) без подписи, (a) подписан, корень не доверен, (b) подписан, корень в `Root` + издатель в `TrustedPublisher`, (d) подписан, доверен, файл изменён после подписи; снимки SmartScreen и UAC. На время фазы включается UAC (на dockur `EnableLUA=0`) с перезапуском и затем возвращается | `20-sign-*.out`, `signing-observed.txt`, `shots/signing/*.png` |
 | `signinst` | (раунд 8) подписанный пакет на Windows 10: `Get-AuthenticodeSignature`, тихая установка (32-битный загрузчик на x86), подписи внутри Program Files, обновление поверх старой версии, файл с Mark of the Web, изменённые после подписи файлы (`guest/signinst.ps1`, варианты `tools/winvm-variants.sh`) | `21-signinst.out` |
@@ -1079,3 +1079,16 @@ Wine, полный `tools/run-tests.sh --seed 7774`: native, core 150 / 0 (199 �
 ## Results
 
 `.winvm-results/<os>-<time>/`: `summary.txt`, `results/*.out` (every job), `results/autotest-*.txt` (autotest logs), `results/shots/*.png`, `container.log`, `smbreal.log`.
+
+## Дополнение 08.11.2026: что добавлено по ревью безопасности и ещё НЕ прогонялось на настоящей Windows
+
+Эти проверки написаны и проходят там, где их можно запустить (Wine), но права NTFS, UAC и повышенный запуск настоящая Windows покажет сама. Прогон на ВМ - следующий этап.
+
+* Фаза `installer` (`tools/run-winvm.sh`, задание `08-installer-acl`): `.winvm/guest/instacl.ps1` + `instacl-user.ps1`. Ищем: установка вне Program Files (`C:\VM2B-acltest`) даёт защищённый DACL
+  (`D:P`, SYSTEM и Administrators - полный доступ, Users - `0x1200a9`), обычный пользователь не подменяет `VM2BackupService.exe`; то же после обновления поверх (права перед ним испорчены `icacls`),
+  после смены каталога, `/remove` работает, служба стартует из этого каталога; в конце пакет ставится обратно в обычное место (последующие фазы не страдают).
+  Ожидаемые риски, которые надо проверить глазами: `SetFileSecurity` с `PROTECTED_DACL_SECURITY_INFORMATION` на каталоге; владелец «Администраторы» (может не примениться без привилегии, тогда остаётся создатель - проверка владельца в тесте допускает SY и BA);
+  то, что `VM2Backup.exe` при запуске обычным пользователем по-прежнему читается и запускается.
+* Лаунчер (`src/vm2blauncher.cpp`): папка распаковки с непредсказуемым именем и закрытым DACL, проверка имён файлов cab, сверка SHA-256 со списком в пакете, файлы удерживаются открытыми без доступа на запись. Под Wine проверено
+  (`tools/test-package-wine.sh`: изменённый хеш, имя `..\x`, имя с диском - установка отклонена, временная папка убрана). На настоящей Windows надо убедиться, что повышенный (UAC) установщик запускается из удерживаемого файла
+  (общий доступ только на чтение допускает запуск, но это проверяется только там) и что папка `%TEMP%\VM2Backup-Setup-<32 hex>` не остаётся.

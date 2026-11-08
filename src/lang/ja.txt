@@ -16,6 +16,7 @@ Error: VM2Backup.exe was not found next to the installer.	エラー: インス�
 Error: VM2BackupService.exe was not found next to the installer.	エラー: インストーラーと同じ場所に VM2BackupService.exe が見つかりません。
 Error: cannot copy %s (error %lu).	エラー: %s をコピーできません (エラー %lu)。
 Error: cannot find the Program Files folder.	エラー: Program Files フォルダーが見つかりません。
+Error: cannot restrict the access rights of the installation folder (error %lu).	
 Error: the installation folder is not valid (a full path such as C:\\Programs\\VM2Backup is needed).	エラー: インストール フォルダーが無効です (C:\\Programs\\VM2Backup のような完全なパスが必要です)。
 Error: the service could not be registered (are you an administrator?).	エラー: サービスを登録できませんでした (管理者ですか?)。
 Exit	終了
@@ -58,6 +59,7 @@ The web site is enabled, but not listening. Check the certificate and the port i
 The web site is off. Switch it on in the web interface, or reset it with VM2BackupService.exe /reset-web.	Web サイトはオフです。Web インターフェイスでオンにするか、VM2BackupService.exe /reset-web でリセットしてください。
 Update	更新
 Version:	バージョン:
+Warning: the access rights of the installation folder could not be restricted (error %lu).	
 Web site:	Web サイト:
 Windows language	Windows の言語
 Your settings, the history and the backups you made are kept.	設定、履歴、作成したバックアップは保持されます。

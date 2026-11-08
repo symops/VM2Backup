@@ -167,7 +167,9 @@ if want installer; then
   cp "$W/pkg-old/"*.exe "$W/shared/pkg/old.exe" 2>/dev/null
   gj 08-installer 1800 'call C:\vm2b\guest\uninstall-update.cmd' > /dev/null; RC=$?
   tr -d '\r' < "$RES/08-installer.out" | grep -aE '_RC=|service pid|FileVersion|^[0-9]+\.[0-9]+\.[0-9]+|STATE|^INFO \[old\]' | tee -a "$SUM"
-  tally installer-acl $RC 08-installer
+  # F1 (ревью безопасности): установка вне Program Files получает защищённый DACL (guest/instacl.ps1); ставит пакет обратно в обычное место
+  gj 08-installer-acl 1500 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\instacl.ps1' > /dev/null; RC2=$?
+  tally installer-acl $(( RC + RC2 )) 08-installer 08-installer-acl
   RESULT[installer]="rc=$RC"
 fi
 

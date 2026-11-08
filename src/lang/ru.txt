@@ -16,6 +16,7 @@ Error: VM2Backup.exe was not found next to the installer.	Ошибка: VM2Backu
 Error: VM2BackupService.exe was not found next to the installer.	Ошибка: VM2BackupService.exe не найден рядом с установщиком.
 Error: cannot copy %s (error %lu).	Ошибка: не удалось скопировать %s (ошибка %lu).
 Error: cannot find the Program Files folder.	Ошибка: папка Program Files не найдена.
+Error: cannot restrict the access rights of the installation folder (error %lu).	Ошибка: не удалось ограничить права доступа к папке установки (ошибка %lu).
 Error: the installation folder is not valid (a full path such as C:\\Programs\\VM2Backup is needed).	Ошибка: неверная папка установки (нужен полный путь, например C:\\Programs\\VM2Backup).
 Error: the service could not be registered (are you an administrator?).	Ошибка: не удалось зарегистрировать службу (вы администратор?).
 Exit	Выход
@@ -58,6 +59,7 @@ The web site is enabled, but not listening. Check the certificate and the port i
 The web site is off. Switch it on in the web interface, or reset it with VM2BackupService.exe /reset-web.	Веб-сайт выключен. Включите его в веб-интерфейсе или сбросьте командой VM2BackupService.exe /reset-web.
 Update	Обновить
 Version:	Версия:
+Warning: the access rights of the installation folder could not be restricted (error %lu).	Внимание: не удалось ограничить права доступа к папке установки (ошибка %lu).
 Web site:	Веб-сайт:
 Windows language	Язык Windows
 Your settings, the history and the backups you made are kept.	Ваши параметры, журнал и созданные копии сохранятся.
