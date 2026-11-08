@@ -47,6 +47,7 @@ for a possible restore in `/home/symo/Claude/.wip/gui-full-backup/` (sources, la
     tools/run-winvm.sh x86      # the whole plan on a REAL Windows VM (x86 / w10 / w11), deleted afterwards: docs/WINDOWS-TESTS.md
     python3 tools/gen_lang.py --update   # after adding TR("...") strings; --check, --missing <code>
 
+Security review (08.11.2026): the fixes (install-folder access rights, `backup.run` admin only, login timing, audit flood, installer unpacking, signing warning) are listed in `docs/DEV.md`, "Безопасность: что исправлено"; the default `admin` / `admin` login stays the owner's decision.
 Details for developers: `docs/DEV.md`; tests on real Windows: `docs/WINDOWS-TESTS.md`; ESXi/vCenter: `docs/ESXI.md`; web site: `docs/WEB.md`; installation: `docs/INSTALL.en.txt`.
 
 ## What is verified, and what is not
