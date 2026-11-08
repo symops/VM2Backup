@@ -127,7 +127,7 @@ def status_of(raw): return int(raw[9:12]) if raw.startswith(b'HTTP/1.1 ') else 0
 ALL_CMDS = ['state', 'scheduler.set', 'settings.get', 'settings.set', 'servers.list', 'servers.save', 'servers.delete', 'servers.unblock', 'servers.test', 'servers.vms', 'tasks.list', 'tasks.save', 'tasks.copy', 'tasks.delete',
             'tasks.run', 'tasks.next', 'backup.run', 'jobs.list', 'jobs.abort', 'history.list', 'history.get', 'history.clear', 'backups.list', 'backups.verify', 'backups.restore', 'backups.delete', 'resumable.discard']
 VIEWER = {'state', 'servers.list', 'tasks.list', 'tasks.next', 'jobs.list', 'history.list', 'history.get', 'backups.list'}
-OPERATOR = VIEWER | {'tasks.run', 'jobs.abort', 'backup.run', 'backups.verify'}
+OPERATOR = VIEWER | {'tasks.run', 'jobs.abort', 'backups.verify'}   # backup.run (an element from the request) is admin only
 NEVER = ['service.shutdown', 'nonsense.cmd']
 # admin only: restore to ESXi, the network helpers (net.* are covered in-process with a fake network: the real one may hang under Wine) and the site's own administration
 ESXI_CMDS = ['backups.restore_esxi', 'esxi.restore_options']
@@ -529,6 +529,20 @@ def t_full_flow_and_secrets():
     while time.time() - t0 < 60 and not os.path.exists(os.path.join(dest, 'vm1', 'disk.vmdk')): time.sleep(0.3)
     time.sleep(1)
     check(os.path.exists(os.path.join(dest, 'vm1', 'disk.vmdk')) and open(os.path.join(dest, 'vm1', 'disk.vmdk'), 'rb').read() == open(os.path.join(root, 'vm1', 'disk.vmdk'), 'rb').read(), 'restored data equals the source')
+    # security review F2: an operator cannot start a backup with an element of his own (a folder of his choice, keep that deletes old copies); saved tasks he can
+    outside = os.path.join(DATA, 'outside-op')
+    el_out = json.loads(json.dumps(el)); el_out['target']['directory'] = winpath(os.path.join(outside, '{VM}')); el_out['keep'] = 1
+    for n in range(2):
+        st, j = o.api('backup.run', {'element': el_out, 'name': 'poc'}); check(st == 403, 'operator: backup.run with an own element is refused (403)')
+    time.sleep(1); check(not os.path.exists(outside), 'operator: nothing was written outside the task folders')
+    st, j = o.api('backups.list', {'server': 'local', 'directory': winpath(outside)}); check(st == 200 and not j['ok'] and 'known backup folders' in j.get('error', ''), 'operator: backups.list of an unknown folder is refused: %r' % j)
+    st, j = o.api('backups.list', {'server': 'local', 'directory': winpath(os.path.join(DATA, '..'))}); check(not j['ok'], 'operator: backups.list of a parent folder is refused')
+    st, j = o.api('backups.list', {'server': 'local', 'directory': b['directory'] + '\\..\\..'}); check(not j['ok'], 'operator: backups.list with .. is refused')
+    st, j = o.api('backups.list', {'server': 'local', 'directory': b['directory']}); check(j['ok'] and len(j['result']['backups']) == 1, 'operator: backups.list of the folder of a known backup works')
+    st, j = o.api('backups.verify', {'server': 'local', 'directory': winpath(outside), 'archive': b['archive']}); check(st == 200 and not j['ok'], 'operator: backups.verify in an unknown folder is refused')
+    st, j = o.api('backups.verify', {'server': 'local', 'archive': b['archive']}); check(st == 200 and not j['ok'], 'operator: backups.verify without a folder is refused')
+    v = Client(); v.login('vw', PW['vw']); st, j = v.api('backups.list', {'server': 'local', 'directory': winpath(outside)}); check(not j['ok'], 'viewer: backups.list of an unknown folder is refused')
+    st, j = c.api('backups.list', {'server': 'local', 'directory': winpath(outside)}); check(j['ok'], 'admin: backups.list of any folder still works')
     # a manual backup, then abort
     st, j = c.api('backup.run', {'element': el, 'name': 'manual'}); check(j['ok'], 'backup.run from the web')
     st, j = c.api('jobs.list')
@@ -537,6 +551,10 @@ def t_full_flow_and_secrets():
     # audit log and secrets
     a = admin('web.audit.tail', lines=500)['result']['text']
     check('login_ok' in a and 'login_failed' in a and 'tasks.run' in a and 'tasks.save' in a and 'servers.save' in a and 'backups.restore' in a, 'audit log has logins and state-changing calls')
+    check('role=admin source=' in a, 'audit of backup.run has the role, source, VMs, target and folder')
+    check('vms=[vm1] target=local directory=' in a and 'keep=' in a, 'audit of a start names the VM list, the target server and the folder')
+    check('tasks.run' in a and 'role=operator task=' in a, 'audit of tasks.run (an operator) names the role and the task contents')
+    check('forbidden\top\t' in a and 'backup.run role=operator' in a, 'the refused operator backup.run is in the audit with the role')
     check('user=' not in a and '\tadm\t127.0.0.1\t' in a, 'audit lines carry user and IP')
     aud = open(os.path.join(LOCAL_DATA, 'audit.log'), encoding='utf-8', errors='replace').read()
     allsecrets = SECRETS + list(PW.values()) + ['Totp-User-Passw0rd', 'Throttle-Test-Pass-1']

@@ -53,6 +53,9 @@ public:
     i64 now() const { return m_opt.clock ? m_opt.clock() : (i64)UnixNow(); }
     int runningJobs() const;
     static Str DefaultDataDir();
+    // The folders a non-administrator may look into (backups.list / backups.verify with a `directory`): those where this service has already written
+    // backups for the server (catalog.json) and the server's own default folder with its sub-folders.  Anything else is refused for the roles below admin.
+    bool knownBackupDirectory(const Str& serverId, const Str& dir);
 
 private:
     friend class Job;

@@ -670,8 +670,17 @@ struct WebServer::Impl {
             j["ok"] = true; r = JsonResp(200, j); r.extra.push_back(SessionCookie(Str(), 0)); return;
         }
         if (!WebAuth::RoleAllows(s.role, name)) {
-            auth.audit("forbidden", s.user, ip, name);
+            auth.audit("forbidden", s.user, ip, name + " role=" + s.role);
             r = Err(403, name == "service.shutdown" ? "this command is not available over the web" : "your role does not allow this"); return;
+        }
+        if ((name == "backups.list" || name == "backups.verify") && s.role != "admin") {
+            // below admin only the folders the service already knows (where its backups are) may be looked into: no probing of arbitrary paths of a registered server
+            Str dir = args.get("directory").str();
+            if ((!dir.empty() || name == "backups.verify") && !core->knownBackupDirectory(args.get("server").str(), dir)) {
+                auth.audit("forbidden_directory", s.user, ip, name + " role=" + s.role + " server=" + args.get("server").str() + " directory=" + dir);
+                Json j = Json::object(); j["ok"] = false; j["error"] = "this folder is not one of the known backup folders of the server; ask an administrator";
+                r = JsonResp(200, j); return;
+            }
         }
         Json result; Str err; bool ok, later = false;
         if (name.starts_with("web.")) ok = owner->handleAdminFromWeb(s.user, s.id, ip, name, args, result, err, later);      // the site's own administration (admin role): with lock-out protections
@@ -679,11 +688,41 @@ struct WebServer::Impl {
         if (!WebAuth::IsReadOnlyCmd(name)) {
             Str d = name; Str id = args.get("id").str(); if (id.empty()) id = args.get("task").get("name").str(); if (id.empty()) id = args.get("server").get("name").str(); if (id.empty()) id = args.get("name").str();
             if (!id.empty()) d += " " + id;
+            if (name == "backup.run" || name == "tasks.run") d += " " + RunDescription(name, args, s.role);
             auth.audit(ok ? "api" : "api_failed", s.user, ip, d);
         }
         Json j = Json::object(); j["ok"] = ok;
         if (ok) j["result"] = result; else j["error"] = err;
         r = JsonResp(200, j); r.applyAfter = later;
+    }
+
+    // For the audit trail of every start: who (the line has the user), his role, the source server and the VMs, the target server and folder.
+    // backup.run carries the element in the request; tasks.run takes it from the saved task (looked up by id or name).
+    static Str ElementDescription(const Json& el)
+    {
+        const Json& src = el.get("source"); const Json& tgt = el.get("target");
+        Str vms; const Json& v = src.get("vms"); for (size_t i = 0; i < v.size() && i < 20; ++i) { if (i) vms += ","; vms += v.at(i).str(); }
+        if (v.size() > 20) vms += Str::fmt(",...(%d)", (int)v.size());
+        return "source=" + src.get("server").str() + " vms=[" + vms + "] target=" + tgt.get("server").str() + " directory=" + tgt.get("directory").str() + Str::fmt(" keep=%d", (int)el.get("keep").integer(0));
+    }
+    Str RunDescription(const Str& cmd, const Json& args, const Str& role)
+    {
+        Str d = "role=" + role;
+        if (cmd == "backup.run") return d + " " + ElementDescription(args.get("element"));
+        Json tl, e2; Str er;
+        if (core->handle("tasks.list", Json::object(), tl, er)) {
+            Str want = args.get("id").str(), wantName = args.get("name").str();
+            for (size_t i = 0; i < tl.size(); ++i) {
+                const Json& t = tl.at(i);
+                if ((!want.empty() && t.get("id").str() == want) || (want.empty() && !wantName.empty() && t.get("name").str() == wantName)) {
+                    d += " task=" + t.get("name").str();
+                    const Json& els = t.get("elements");
+                    for (size_t k = 0; k < els.size() && k < 10; ++k) d += " [" + ElementDescription(els.at(k)) + "]";
+                    break;
+                }
+            }
+        }
+        return d;
     }
 
     // ---- admin ----

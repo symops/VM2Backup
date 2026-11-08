@@ -16,7 +16,7 @@ if command -v node >/dev/null 2>&1; then node "$ROOT/tools/testservers/web_ui_te
 echo "== in-process tests (group web) =="
 wine64 "$EXE" --only totp_rfc6238_vectors,policy_roles_bind_entries,auth_users_login_throttle_sessions,default_admin_created_once,auth_totp_recovery_2fa_rules,tls_certificate_and_server_basics,interfaces_choose_addresses_live,role_matrix_classifies_every_service_command,svcweb
 [ "$PYTHON" = 1 ] || exit 0
-RUN=$(mktemp -d /tmp/vm2b-web-run.XXXXXX)
+RUN=$(mktemp -d "${TMPDIR:-/tmp}/vm2b-web-run.XXXXXX")
 mkdir -p "$RUN/ctl" "$RUN/data"
 PORT=${VM2B_WEB_PORT:-$((24600 + $$ % 300))}
 WPATH() { printf 'Z:%s' "$(echo "$1" | sed 's|/|\\\\|g')"; }

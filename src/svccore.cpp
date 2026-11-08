@@ -657,6 +657,34 @@ static Json JobsJson(ServiceCore* s, Vec<Job*>& jobs, CRITICAL_SECTION& cs)
     return a;
 }
 
+static Str NormDirForCompare(const Str& d)
+{
+    Str x = d.trim().lower(); for (size_t i = 0; i < x.size(); ++i) if (x[i] == '/') x[i] = '\\';
+    while (x.size() > 3 && x[x.size() - 1] == '\\') x = x.substr(0, x.size() - 1);
+    return x;
+}
+
+bool ServiceCore::knownBackupDirectory(const Str& serverId, const Str& dirIn)
+{
+    Json srv; if (!m_cfg.server(serverId, true, srv)) return false;
+    const Str dir = NormDirForCompare(dirIn);
+    if (dir.empty() || dir.find("..") >= 0) return false;
+    bool known = false;
+    EnterCriticalSection(&m_cs);
+    for (size_t i = 0; i < m_catalog.size() && !known; ++i)
+        if (m_catalog.at(i).get("server").str() == serverId && NormDirForCompare(m_catalog.at(i).get("directory").str()) == dir) known = true;
+    LeaveCriticalSection(&m_cs);
+    if (known) return true;
+    Str base = NormDirForCompare(srv.get("directory").str());
+    if (base.empty()) return false;
+    if (dir == base) return true;
+    if (srv.get("type").str() == "local") {                  // one level below the default folder: the folder of a VM (what listTarget shows)
+        int cut = dir.rfind('\\');
+        if (cut > 0 && dir.substr(0, (size_t)cut) == base && dir.find('\\', (size_t)cut + 1) < 0) return true;
+    }
+    return false;
+}
+
 bool ServiceCore::listTarget(const Json& args, Json& result, Str& err)
 {
     Str serverId = args.get("server").str(), dir = args.get("directory").str();

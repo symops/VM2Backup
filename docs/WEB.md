@@ -83,22 +83,29 @@ netsh advfirewall firewall delete rule name="VM2Backup web"
 ## Users, roles, sessions
 
 * Password: >= 10 characters, not containing the user name; stored as PBKDF2-HMAC-SHA256, >= 300000 iterations (600000 by default),
-  16-byte random salt, constant-time comparison.  Unknown users cost the same time as known ones (no enumeration; one message).
+  16-byte random salt, constant-time comparison.  Unknown users cost the same time as known ones: for a missing user a control hash of the same shape (32 bytes) is verified with the same PBKDF2 iteration count, never an early exit (no enumeration; one message, one status code; test `security/login_time_does_not_reveal_unknown_users`).
 * TOTP (RFC 6238, SHA-1, 6 digits, 30 s, window +-1 step, a time step is accepted once - no replay); the secret is DPAPI-protected.
   10 one-time recovery codes (stored hashed).  `twofa`: `off` | `optional` (asked when enrolled) | `required`; the global
   `require_2fa_admins` overrides a personal `off` for admins.  A user who must use 2FA but has not enrolled is refused (after the
   password was right) with an explanation; an administrator enrols users on the Web access page (or through the local channel).
 * Roles: `viewer` = state, servers.list, tasks.list, tasks.next, jobs.list, history.list, history.get, backups.list;
-  `operator` = viewer + tasks.run, jobs.abort, backup.run, backups.verify; `admin` = everything the service offers (including restore to ESXi / vCenter, `net.drives` / `net.browse` and the site's own `web.*` commands) except
+  `operator` = viewer + tasks.run, jobs.abort, backups.verify; `admin` = everything the service offers (including restore to ESXi / vCenter, `net.drives` / `net.browse` and the site's own `web.*` commands) except
   `service.shutdown`.  Everything else is 403.
+  **Role matrix, what the roles below admin may do with folders and servers:** an operator starts only SAVED tasks (`tasks.run {id}`: the target, `keep`, segment size, speed and the servers come from the task an administrator saved),
+  aborts jobs and verifies backups; `backup.run` (a backup described by the request itself: any target server and folder, `keep` that deletes old copies, any registered server with its stored password) is **admin only**
+  (an operator gets 403; the "Backup virtual machines..." button is hidden for him).  `backups.list` and `backups.verify` of a viewer / operator with a `directory` work only for the folders the service already knows
+  (where its backups were written: `catalog.json`, plus the server's own default folder and its one-level sub-folders); any other folder is refused with an error, `backups.list` without `directory` lists the known ones.  An administrator is not restricted.
+  Every start (`backup.run`, `tasks.run`) is written to the audit log with the user, his role, the source server, the VM list, the target server and folder and `keep` (for `tasks.run` taken from the saved task).
 * Sessions: 256-bit random ids in memory, idle 20 min, absolute 12 h, cookie `__Host-vm2b; Path=/; Secure; HttpOnly; SameSite=Strict`
   (host-only), a per-session CSRF token sent in `X-CSRF-Token`.  A password / role change, 2FA change or user deletion ends the
   user's sessions at once.  `POST /api/password` changes the own password.
 * Rate limiting: per IP and per user name (existing or not): after each failure a growing wait (1, 2, 4 ... 60 s), after 8 failures
   15 minutes; while waiting the attempt is answered `429` + `Retry-After` **without being evaluated**.
-* Audit log `audit.log` (rotated at 5 MB) in the data folder: logins (ok / failed / blocked), logout, password and user changes,
+* Audit log `audit.log` (rotated at 5 MB, five files are kept: `audit.log`, `audit.1.log` ... `audit.4.log`) in the data folder: logins (ok / failed; blocked ones see below), logout, password and user changes,
   settings / certificate changes, every state-changing API call with user + IP (command and an id / name only - never arguments with
   secrets), refused calls.  `web.audit.tail {lines}` reads it.
+  A stream of refused (`429`) logins does not wash the log out: per address the first blocked attempt of a minute is written (`login_blocked`), the rest are counted and one line
+  `N blocked login attempts from <addr> in last minute` (`login_blocked_summary`) follows when the minute is over or the next audit event is written; at most 20 such lines a minute in all (the rest only in a common counter).
 
 ## What the server does against abuse
 
