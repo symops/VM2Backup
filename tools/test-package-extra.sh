@@ -26,10 +26,18 @@ cp "$B86/vm2blauncher.exe" "$P/VM2Backup-Setup.exe"; cp scripts/uninstall.cmd "$
 for A in x64 x86; do B=$B64; [ $A = x86 ] && B=$B86; cp "$B/VM2Backup.exe" "$B/VM2BackupService.exe" "$B/VM2Backup-Setup.exe" "$P/$A/"; cp scripts/uninstall.cmd "$P/$A/"; done
 (cd "$P" && find uninstall.cmd x64 x86 -type f | sort | xargs gcab -c -z ../payload.cab)
 python3 -I - "$W/dist" "$B86/vm2blauncher.exe" <<'PY'
-import struct, sys
+import hashlib, os, struct, sys
 d, l = sys.argv[1:3]
 cab = open(d + '/payload.cab', 'rb').read()
-open(d + '/Setup.exe', 'wb').write(open(l, 'rb').read() + cab + b'VM2BPKG1' + struct.pack('<Q', len(cab)))
+# the list of files with SHA-256 in front of the cabinet, as package.sh makes it (the launcher checks every extracted file against it)
+man = b''
+for root, _, files in sorted(os.walk(d + '/p')):
+    for f in sorted(files):
+        full = os.path.join(root, f); rel = os.path.relpath(full, d + '/p')
+        if rel == 'VM2Backup-Setup.exe': continue
+        data = open(full, 'rb').read()
+        man += ('%s %d %s\n' % (hashlib.sha256(data).hexdigest(), len(data), rel.replace('/', '\\'))).encode()
+open(d + '/Setup.exe', 'wb').write(open(l, 'rb').read() + man + b'VM2BHSH1' + struct.pack('<Q', len(man)) + cab + b'VM2BPKG1' + struct.pack('<Q', len(cab)))
 PY
 SETUP=$W/dist/Setup.exe
 C=$WINEPREFIX/drive_c

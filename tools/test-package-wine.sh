@@ -32,6 +32,7 @@ rm -rf "$PF"
 # (подписанный файл: сертификат лежит ПОСЛЕ хвоста, поэтому хвост проверяем у копии без подписи)
 osslsigncode remove-signature -in "$SETUP" -out "$W/setup-nosig.exe" >/dev/null 2>&1 || cp "$SETUP" "$W/setup-nosig.exe"
 check "the single file ends with the VM2BPKG1 trailer (before the signature, if signed)" "tail -c 16 '$W/setup-nosig.exe' | head -c 8 | grep -q VM2BPKG1"
+check "the single file carries the list of file hashes (VM2BHSH1) right in front of the cabinet" "python3 -c \"import sys; d = open(sys.argv[1], 'rb').read(); c = d.find(b'MSCF'); sys.exit(0 if d[c - 16:c - 8] == b'VM2BHSH1' else 1)\" '$W/setup-nosig.exe'"
 check "the single file is much bigger than the launcher (the payload is in it)" "[ \$(stat -c %s '$SETUP') -gt \$(( \$(stat -c %s '$B86/vm2blauncher.exe') + 200000 )) ]"
 
 for MODE in single unpacked; do
@@ -95,5 +96,27 @@ check "[damaged cabinet] silent install fails (return $RC, not 0)" "[ $RC -ne 0 
 check "[damaged cabinet] the reason is in VM2Backup-Setup.log: damaged or incomplete package" "grep -q 'damaged or incomplete' '$TEMPDIR/VM2Backup-Setup.log'"
 check "[damaged cabinet] the temporary extraction folder is gone" "[ -z \"\$(ls -d '$TEMPDIR'/VM2Backup-Setup-* 2>/dev/null)\" ]"
 check "[damaged cabinet] nothing was installed" "[ ! -e '$PF/VM2Backup.exe' ]"
+# БЕЗОПАСНОСТЬ (F7): файл пакета, чей хеш в списке не совпадает с распакованным, и имена с «..» / диском в cab не ставятся; ничего не пишется за пределы папки распаковки
+python3 - "$SETUP" "$W/badhash-setup.exe" "$W/dotdot-setup.exe" "$W/drive-setup.exe" <<'PY3'
+import sys
+d = bytearray(open(sys.argv[1], 'rb').read())
+c = d.find(b'MSCF'); foot = d.rfind(b'VM2BHSH1', 0, c); ml = int.from_bytes(d[foot + 8:foot + 16], 'little'); assert foot > 0 and ml > 0
+b = bytearray(d); b[foot - ml] = ord('0') if b[foot - ml] != ord('0') else ord('1')       # the first hash of the list is wrong
+open(sys.argv[2], 'wb').write(b)
+assert c > foot
+def patch(newname, out):
+    e = bytearray(d); i = e.find(b'\x00uninstall.cmd\x00', c)          # the root entry of the cabinet (the others have a folder in front of the name)
+    assert i > c
+    e[i + 1:i + 15] = newname + b'\x00' * (14 - len(newname)); open(out, 'wb').write(e)
+patch(b'..\\uninst.cmd', sys.argv[3]); patch(b'C:\\uninst.cmd', sys.argv[4])
+PY3
+for V in badhash dotdot drive; do
+    rm -f "$TEMPDIR/VM2Backup-Setup.log" "$TEMPDIR/uninst.cmd" "$W/../uninst.cmd" "$WINEPREFIX/drive_c/uninst.cmd"
+    $LOW timeout 120 wine "$W/$V-setup.exe" /install /silent; RC=$?
+    check "[$V] silent install is refused (return $RC, not 0)" "[ $RC -ne 0 ]"
+    check "[$V] the reason is in VM2Backup-Setup.log: damaged or incomplete package" "grep -q 'damaged or incomplete' '$TEMPDIR/VM2Backup-Setup.log'"
+    check "[$V] the temporary extraction folder is gone" "[ -z \"\$(ls -d '$TEMPDIR'/VM2Backup-Setup-* 2>/dev/null)\" ]"
+    check "[$V] nothing was installed and nothing was written outside the folder" "[ ! -e '$PF/VM2Backup.exe' ] && [ ! -e '$TEMPDIR/uninst.cmd' ] && [ ! -e '$WINEPREFIX/drive_c/uninst.cmd' ]"
+done
 echo "package test: $FAILS failure(s)"
 [ $FAILS -eq 0 ]

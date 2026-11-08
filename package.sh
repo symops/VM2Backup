@@ -48,19 +48,37 @@ for f in $D/uninstall.cmd $D/x64/uninstall.cmd $D/x86/uninstall.cmd; do
     iconv -f UTF-8 -t CP866 "$f" | sed 's/$/\r/' > "$f.tmp" && mv "$f.tmp" "$f"
 done
 
-# One file: the launcher + the package as a cabinet (MSZIP; Windows extracts it with SetupIterateCabinet) + a trailer
-# "VM2BPKG1" + the cabinet's size (little endian, 8 bytes). See src/vm2blauncher.cpp.
+# One file: the launcher + the list of the files with their SHA-256 + the package as a cabinet (MSZIP; Windows extracts it with SetupIterateCabinet) + a trailer
+# "VM2BPKG1" + the cabinet's size (little endian, 8 bytes).  The list sits right before the cabinet and ends with "VM2BHSH1" + its size (8 bytes): the launcher
+# compares every extracted file with it before the elevated installer starts (security review F7).  See src/vm2blauncher.cpp.
 (cd $D && find uninstall.cmd x64 x86 -type f | sort | xargs gcab -c -z ../payload.cab)
+(cd $D && find uninstall.cmd x64 x86 -type f | sort) > dist/payload.files
 python3 - <<'PY'
-import struct
+import hashlib, struct
 launcher = open('build/x86/vm2blauncher.exe', 'rb').read()
 cab = open('dist/payload.cab', 'rb').read()
-# the whole file is a multiple of 8 bytes (zeros between the launcher and the cabinet): the signing tool then adds no padding behind the trailer
-pad = b'\0' * (-(len(launcher) + len(cab) + 16) % 8)
-open('dist/VM2Backup-Setup.exe', 'wb').write(launcher + pad + cab + b'VM2BPKG1' + struct.pack('<Q', len(cab)))
+lines = []
+for name in open('dist/payload.files').read().split('\n'):
+    if not name: continue
+    data = open('dist/VM2Backup/' + name, 'rb').read()
+    lines.append('%s %d %s\n' % (hashlib.sha256(data).hexdigest(), len(data), name.replace('/', '\\')))
+man = ''.join(lines).encode('utf-8') + b''
+man_block = man + b'VM2BHSH1' + struct.pack('<Q', len(man))
+# the whole file is a multiple of 8 bytes (zeros between the launcher and the list): the signing tool then adds no padding behind the trailer
+pad = b'\0' * (-(len(launcher) + len(man_block) + len(cab) + 16) % 8)
+open('dist/VM2Backup-Setup.exe', 'wb').write(launcher + pad + man_block + cab + b'VM2BPKG1' + struct.pack('<Q', len(cab)))
 PY
+rm -f dist/payload.files
 rm -f dist/payload.cab
-[ "$SIGN" = 1 ] && tools/sign.sh --verify dist/VM2Backup-Setup.exe
+if [ "$SIGN" = 1 ]; then
+    tools/sign.sh --verify dist/VM2Backup-Setup.exe
+    # a signature that is not there is an error (a missing trusted root is not: osslsigncode then reports "failed" for a test certificate)
+    if osslsigncode verify -in dist/VM2Backup-Setup.exe 2>&1 | grep -q 'No signature found'; then echo "ERROR: dist/VM2Backup-Setup.exe has no signature after signing" >&2; exit 1; fi
+    echo "SIGNED release build: dist/VM2Backup-Setup.exe carries an Authenticode signature (osslsigncode verify found it)"
+else
+    # not an error: a development build (and, until a certificate exists, the release) is unsigned; the user then sees "Unknown publisher" in UAC (docs/SIGNING.md)
+    echo "WARNING: UNSIGNED release build - dist/VM2Backup-Setup.exe and the programs in it carry no Authenticode signature (set VM2B_SIGN_PFX, see docs/SIGNING.md)" >&2
+fi
 ls -la dist/VM2Backup-Setup.exe
 
 # Link maps of this build (a crash line in panel.log names module + offset; the map names the function), kept per version.
