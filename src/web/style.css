@@ -25,8 +25,8 @@ button.primary:hover:not(:disabled) { background: var(--blue-dark); }
 button.danger { color: var(--bad); }
 button:disabled { opacity: .5; cursor: default; }
 table.grid { border-collapse: collapse; width: 100%; font-size: 13px; }
-table.grid th { text-align: left; background: #f0f3f7; border-bottom: 2px solid var(--line); padding: 6px 8px; font-weight: 600; white-space: nowrap; position: sticky; top: 0; }
-table.grid td { padding: 6px 8px; border-bottom: 1px solid #e8ecf0; vertical-align: top; }
+table.grid th { text-align: left; background: #f0f3f7; border-bottom: 2px solid var(--line); padding: 6px 8px; font-weight: 600; position: sticky; top: 0; }
+table.grid td { padding: 6px 8px; border-bottom: 1px solid #e8ecf0; vertical-align: top; overflow-wrap: anywhere; }   /* long folder names and translated headers wrap instead of widening the table past the window */
 table.grid tr.row { cursor: pointer; }
 table.grid tr.row:hover { background: #f5f9fe; }
 table.grid tr.sel { background: var(--blue-light); }
@@ -53,7 +53,9 @@ table.grid tr.sel { background: var(--blue-light); }
 .dialog .df .err { flex: 1; color: var(--bad); font-size: 13px; }
 .f { display: flex; align-items: center; margin-bottom: 9px; gap: 10px; }
 .f > label { width: 150px; flex: none; color: var(--muted); }
+.f > label.chk { width: auto; flex: 1 1 auto; min-width: 0; color: var(--text); }   /* the caption of a check box takes the whole row, not the 150 px label column */
 .f > input[type=text], .f > input[type=password], .f > input[type=number], .f > input[type=time], .f > input[type=datetime-local], .f > select, .f > textarea { flex: 1; min-width: 0; padding: 5px 7px; border: 1px solid #b7c2ce; border-radius: 3px; font: inherit; }
+.f > input[type=number] { min-width: 70px; }   /* a long note in the same row (ja) must not squeeze a number box to nothing */
 .f .note, .note { color: var(--muted); font-size: 12px; }
 .vmlist { border: 1px solid var(--line); max-height: 180px; overflow: auto; padding: 4px 8px; flex: 1; }
 .vmlist label { display: block; padding: 2px 0; }

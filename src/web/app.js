@@ -44,8 +44,8 @@ function createApp(env) {
 
     // ---------- permissions (the service enforces them; this only hides what would be refused) ----------
     var VIEWER = ['state', 'servers.list', 'tasks.list', 'tasks.next', 'jobs.list', 'history.list', 'history.get', 'backups.list'];
-    var OPERATOR = VIEWER.concat(['tasks.run', 'jobs.abort', 'backup.run', 'backups.verify']);
-    var ADMIN = OPERATOR.concat(['scheduler.set', 'settings.get', 'settings.set', 'servers.save', 'servers.delete', 'servers.unblock', 'servers.test', 'servers.vms', 'tasks.save', 'tasks.copy', 'tasks.delete', 'history.clear', 'backups.restore', 'backups.restore_esxi', 'esxi.restore_options', 'esxi.unlock_vm', 'net.drives', 'net.browse', 'fs.browse', 'backups.delete', 'resumable.discard',
+    var OPERATOR = VIEWER.concat(['tasks.run', 'jobs.abort', 'backups.verify']);
+    var ADMIN = OPERATOR.concat(['backup.run', 'scheduler.set', 'settings.get', 'settings.set', 'servers.save', 'servers.delete', 'servers.unblock', 'servers.test', 'servers.vms', 'tasks.save', 'tasks.copy', 'tasks.delete', 'history.clear', 'backups.restore', 'backups.restore_esxi', 'esxi.restore_options', 'esxi.unlock_vm', 'net.drives', 'net.browse', 'fs.browse', 'backups.delete', 'resumable.discard',
         'web.status', 'web.settings.get', 'web.settings.set', 'web.interfaces.list', 'web.cert.generate', 'web.cert.import', 'web.users.list', 'web.users.save', 'web.users.delete', 'web.users.totp_enroll', 'web.users.totp_confirm', 'web.users.totp_disable', 'web.audit.tail']);
     function can(cmd) {
         if (S.role === 'admin') return ADMIN.indexOf(cmd) >= 0;
@@ -378,7 +378,7 @@ function createApp(env) {
     }
     function num(v, min) { return h('input', { type: 'number', value: v === undefined ? '' : String(v), min: min }); }
     function txt(v, type) { return h('input', { type: type || 'text', value: v === undefined || v === null ? '' : String(v) }); }
-    function chk(label, v) { var c = h('input', { type: 'checkbox', checked: !!v }); var l = h('label', null, c, ' ' + T(label)); l.input = c; return l; }
+    function chk(label, v) { var c = h('input', { type: 'checkbox', checked: !!v }); var l = h('label', { class: 'chk' }, c, ' ' + T(label)); l.input = c; return l; }
 
     function passwordDialog() {
         var cur = txt('', 'password'), n1 = txt('', 'password'), n2 = txt('', 'password');
