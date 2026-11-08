@@ -228,7 +228,7 @@ One volume (no resuming)	Un volume (senza ripresa)
 Only for a network folder that asks for a user name	Solo per una cartella di rete che richiede un nome utente
 Open	Apri
 Owner	Proprietario
-Parallel jobs	Processi paralleli
+Parallel jobs	Attività parallele
 Parallel jobs: 1 to 16.	Processi paralleli: da 1 a 16.
 Passive mode	Modalità passiva
 Password	Password
@@ -271,7 +271,7 @@ Retries after a lost connection	Tentativi dopo una perdita di connessione
 Role	Ruolo
 Run now	Esegui ora
 Running	In esecuzione
-Running jobs	Processi in esecuzione
+Running jobs	Attività in esecuzione
 SCP (SSH)	SCP (SSH)
 SFTP (no longer supported)	SFTP (non più supportato)
 Sat	Sab
@@ -437,7 +437,7 @@ Without it, the memory files of the other snapshots, the side branches of the sn
 Write these one-time codes down now: they are shown only once.	Annotare ora questi codici monouso: vengono mostrati una sola volta.
 Yes	Sì
 Your session has ended. Sign in again.	La sessione è terminata. Accedere di nuovo.
-admin	admin
+admin	amministratore
 backup	backup
 cdrom	ottica
 days	giorni
@@ -490,8 +490,8 @@ viewer	osservatore
 {0} datastore(s), {1} folder(s), {2} resource pool(s) found.	{0} datastore, {1} cartella/e, {2} pool di risorse trovati.
 {0} free of {1}	{0} liberi su {1}
 {0} skipped: credentials rejected	{0} saltato/i: credenziali rifiutate
-{0} virtual machine(s)	{0} macchina/e virtuale/i
-{0} volume(s)	{0} volume/i
+{0} virtual machine(s)	Macchine virtuali: {0}
+{0} volume(s)	Volumi: {0}
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: circa {1} MB/s per core della CPU; i backup sono circa il {2}% più grandi che al livello 5.
 {0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: circa {1} MB/s per core della CPU; i backup sono circa il {2}% più piccoli che al livello 5.
 {0}: about {1} MB/s per CPU core; the baseline size (levels 0-4 are larger, 6-9 smaller).	{0}: circa {1} MB/s per core; la dimensione di riferimento (i livelli 0-4 sono più grandi, 6-9 più piccoli).

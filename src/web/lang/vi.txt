@@ -29,7 +29,7 @@ All	Tất cả
 All interfaces	Tất cả giao diện
 All results	Tất cả kết quả
 Allow a copy of a running VM (the copy is consistent only at the crash level)	Cho phép sao chép VM đang chạy (bản sao chỉ nhất quán ở mức crash)
-Also back up the existing snapshots of the VM	Sao lưu cả các bản chụp (snapshot) hiện có của máy ảo
+Also back up the existing snapshots of the VM	Sao lưu cả các snapshot hiện có của máy ảo
 An administrator needs two-factor authentication when it is required in the security settings.	Quản trị viên cần xác thực hai yếu tố khi cài đặt bảo mật yêu cầu.
 Apply	Áp dụng
 Archive	Lưu trữ
@@ -167,8 +167,8 @@ Held for backup	Đang giữ để sao lưu
 History entries kept	Số mục lịch sử được giữ
 Host	Máy chủ
 Host key	Khóa máy chủ
-Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Sao lưu nóng: VM tiếp tục chạy trong khi sao chép. Bản sao nhất quán ở mức sự cố (như sau khi mất điện) trừ khi VMware Tools có thể làm tĩnh hệ thống tệp của máy khách; cơ sở dữ liệu và máy chủ thư có thể cần khôi phục sau khi phục hồi. VM chạy chậm hơn khi bản chụp tồn tại, bản chụp lớn dần trên kho dữ liệu và không gì ngăn các quản trị viên khác thay đổi, tắt hoặc xóa VM trong thời gian đó. Không có tùy chọn này, VM được tắt và khóa trong suốt quá trình sao lưu, rồi được bật lại sau đó.
-If the guest does not shut down, power it off (like pulling the plug)	Nếu máy khách không tắt, ngắt nguồn VM (như rút phích cắm)
+Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Sao lưu nóng: VM tiếp tục chạy trong khi sao chép. Bản sao nhất quán ở mức sự cố (như sau khi mất điện) trừ khi VMware Tools có thể làm tĩnh hệ thống tệp của hệ điều hành khách; cơ sở dữ liệu và máy chủ thư có thể cần khôi phục sau khi phục hồi. VM chạy chậm hơn khi bản chụp tồn tại, bản chụp lớn dần trên kho dữ liệu và không gì ngăn các quản trị viên khác thay đổi, tắt hoặc xóa VM trong thời gian đó. Không có tùy chọn này, VM được tắt và khóa trong suốt quá trình sao lưu, rồi được bật lại sau đó.
+If the guest does not shut down, power it off (like pulling the plug)	Nếu hệ điều hành khách không tắt, ngắt nguồn VM (như rút phích cắm)
 Imported	Đã nhập
 Include the memory of the virtual machine in the snapshot	Đưa bộ nhớ của máy ảo vào snapshot
 Job "{0}" finished: {1}	Tác vụ "{0}" đã kết thúc: {1}
@@ -243,7 +243,7 @@ Press Load to read the datacenters, datastores, folders and resource pools of th
 Private key file	Tệp khóa riêng
 Private key text	Văn bản khóa riêng
 Problem	Sự cố
-Quiesce the guest file system (needs VMware Tools in the VM)	Quiesce hệ thống tệp của máy khách (cần VMware Tools trong VM)
+Quiesce the guest file system (needs VMware Tools in the VM)	Quiesce hệ thống tệp của hệ điều hành khách (cần VMware Tools trong VM)
 Recovery code	Mã khôi phục
 Recovery codes	Mã khôi phục
 Recovery codes left	Số mã khôi phục còn lại
@@ -338,7 +338,7 @@ The connection test failed or has not finished. Save the server anyway?	Kiểm t
 The connection works.	Kết nối hoạt động.
 The credentials of this server were not rejected.	Thông tin đăng nhập của máy chủ này chưa bị từ chối.
 The datastore "{0}" has {1} free, the backup holds up to {2}. Restore anyway?	Datastore "{0}" còn trống {1}, bản sao lưu chiếm tối đa {2}. Vẫn khôi phục?
-The default is 300; a longer wait helps a guest that needs minutes to stop its services.	Mặc định là 300; chờ lâu hơn giúp máy khách cần vài phút để dừng các dịch vụ.
+The default is 300; a longer wait helps a guest that needs minutes to stop its services.	Mặc định là 300; chờ lâu hơn giúp hệ điều hành khách cần vài phút để dừng các dịch vụ.
 The figures are approximate (typical data). More CPU cores make compression faster.	Các số liệu chỉ là ước tính (dữ liệu điển hình). Nhiều lõi CPU hơn giúp nén nhanh hơn.
 The file is larger than 1 MB.	Tệp lớn hơn 1 MB.
 The list is cut: only the first entries are shown.	Danh sách bị cắt bớt: chỉ hiển thị các mục đầu tiên.
@@ -391,7 +391,7 @@ Two-factor	Xác thực hai yếu tố
 Type	Loại
 Unfinished (resumable)	Chưa hoàn tất (có thể tiếp tục)
 Unit	Đơn vị
-Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.	Dữ liệu chưa lưu của máy khách sẽ mất và hệ thống tệp của nó có thể cần kiểm tra ở lần khởi động tiếp theo. Không có tùy chọn này, bản sao lưu của VM mà máy khách không tắt (không có VMware Tools, máy khách bị treo) sẽ thất bại và VM được trả lại nguyên vẹn.
+Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.	Dữ liệu chưa lưu của hệ điều hành khách sẽ mất và hệ thống tệp của nó có thể cần kiểm tra ở lần khởi động tiếp theo. Không có tùy chọn này, bản sao lưu của VM mà hệ điều hành khách không tắt (không có VMware Tools, hệ điều hành khách bị treo) sẽ thất bại và VM được trả lại nguyên vẹn.
 Up	Lên
 Upload	Tải lên
 Upload PFX...	Tải lên PFX...
@@ -424,7 +424,7 @@ Virtual machines...	Máy ảo...
 Volume size	Kích thước volume
 Volume size, MiB (0 = one volume)	Kích thước volume, MiB (0 = một volume)
 Volumes	Volume
-Wait for the guest to shut down, seconds	Chờ máy khách tắt, giây
+Wait for the guest to shut down, seconds	Chờ hệ điều hành khách tắt, giây
 Wait until the choices of the server are loaded.	Chờ cho đến khi các lựa chọn của máy chủ được tải xong.
 Waiting	Đang chờ
 Warning	Cảnh báo
@@ -433,11 +433,11 @@ Web access	Truy cập web
 Wed	T4
 Weekly	Hằng tuần
 Windows maps drives per user. The service sees only the drives mapped for users who are logged on and its own. The drive letter itself cannot be used by the service: its UNC path is stored, and the credentials must be entered.	Windows ánh xạ ổ đĩa theo từng người dùng. Dịch vụ chỉ thấy các ổ đĩa được ánh xạ cho những người dùng đang đăng nhập và của chính nó. Dịch vụ không thể dùng ký tự ổ đĩa: đường dẫn UNC của nó được lưu, và phải nhập thông tin xác thực.
-Without it, the memory files of the other snapshots, the side branches of the snapshot tree and the snapshot list are left out; the disks the current state depends on are always copied.	Nếu không chọn, các tệp bộ nhớ của những bản chụp khác, các nhánh phụ của cây bản chụp và danh sách bản chụp sẽ không được sao chép; các đĩa mà trạng thái hiện tại phụ thuộc vào luôn được sao chép.
+Without it, the memory files of the other snapshots, the side branches of the snapshot tree and the snapshot list are left out; the disks the current state depends on are always copied.	Nếu không chọn, các tệp bộ nhớ của những snapshot khác, các nhánh phụ của cây snapshot và danh sách snapshot sẽ không được sao chép; các đĩa mà trạng thái hiện tại phụ thuộc vào luôn được sao chép.
 Write these one-time codes down now: they are shown only once.	Hãy ghi lại các mã dùng một lần này ngay: chúng chỉ hiển thị một lần.
 Yes	Có
 Your session has ended. Sign in again.	Phiên của bạn đã kết thúc. Hãy đăng nhập lại.
-admin	admin
+admin	quản trị viên
 backup	sao lưu
 cdrom	ổ quang
 days	ngày

@@ -9,7 +9,7 @@ A new certificate was created. Your browser will ask you to trust it again.	새 
 A new user needs a password.	새 사용자에게는 암호가 필요합니다.
 A path on the server computer	서버 컴퓨터의 경로
 A path on the server computer (the service reads it)	서버 컴퓨터의 경로(서비스가 읽음)
-A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	실행 중인 ESXi / vCenter VM은 임시 스냅숏에서 복사되며, 이후 스냅숏은 삭제됩니다. VMware Tools가 없으면 정지(quiesce) 스냅숏이 실패합니다. 이런 VM은 정지를 끄십시오.
+A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	실행 중인 ESXi / vCenter VM은 임시 스냅샷에서 복사되며, 이후 스냅샷은 삭제됩니다. VMware Tools가 없으면 정지(quiesce) 스냅샷이 실패합니다. 이런 VM은 정지를 끄십시오.
 A vCenter locks the VM against power-on and changes for the whole backup. A standalone ESXi host does not allow that (DisableMethods is not supported): there the VM is shut down and marked as held, and another administrator can still power it on or change it; the next run notices that and starts the copy over.	vCenter는 백업 전체 동안 VM의 전원 켜기와 변경을 잠급니다. 독립형 ESXi 호스트는 이를 허용하지 않습니다(DisableMethods가 지원되지 않음). 그곳에서는 VM이 종료되고 보류 중으로 표시될 뿐이며, 다른 관리자가 전원을 켜거나 변경할 수 있습니다. 다음 실행이 이를 알아채고 복사를 처음부터 다시 시작합니다.
 A virtual machine with this name already exists on the server. Enter another name; an existing machine is never overwritten.	이 이름의 가상 컴퓨터가 서버에 이미 있습니다. 다른 이름을 입력하십시오. 기존 컴퓨터는 덮어쓰지 않습니다.
 Abort	중단
@@ -170,7 +170,7 @@ Host key	호스트 키
 Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	핫 백업: 복사하는 동안 VM이 계속 실행됩니다. VMware Tools가 게스트 파일 시스템을 정지하지 못하면 복사본은 충돌 일관성(정전 후와 같음) 수준입니다. 데이터베이스와 메일 서버는 복원 후 복구가 필요할 수 있습니다. 스냅샷이 있는 동안 VM이 느려지고, 스냅샷이 데이터스토어에서 커지며, 그동안 다른 관리자가 VM을 변경하거나 끄거나 삭제하는 것을 막는 장치는 없습니다. 이 옵션이 없으면 VM은 백업 전체 동안 종료되고 잠기며, 끝난 뒤 다시 시작됩니다.
 If the guest does not shut down, power it off (like pulling the plug)	게스트가 종료되지 않으면 VM 전원을 끔(전원 플러그를 뽑는 것과 같음)
 Imported	가져옴
-Include the memory of the virtual machine in the snapshot	스냅숏에 가상 컴퓨터의 메모리 포함
+Include the memory of the virtual machine in the snapshot	스냅샷에 가상 컴퓨터의 메모리 포함
 Job "{0}" finished: {1}	작업 "{0}" 종료: {1}
 Keep last backups	유지할 최근 백업 수
 Keep the computer awake while the scheduler is on	스케줄러가 켜져 있는 동안 컴퓨터를 절전 모드로 전환하지 않음
@@ -300,7 +300,7 @@ Sign out	로그아웃
 Sign-in failed.	로그인하지 못했습니다.
 Size	크기
 Skipped: credentials rejected	건너뜀: 자격 증명이 거부됨
-Snapshot	스냅숏
+Snapshot	스냅샷
 Source	원본
 Source server	원본 서버
 Speed	속도
@@ -359,7 +359,7 @@ The service cannot see drive letters. Enter the UNC path of the share.	서비스
 The service cannot see drive letters. {0} is the network drive {1}: its UNC path is stored instead. Enter the user name and password that give access to it.	서비스는 드라이브 문자를 볼 수 없습니다. {0}은(는) 네트워크 드라이브 {1}이므로 대신 UNC 경로가 저장됩니다. 접근 권한이 있는 사용자 이름과 암호를 입력하십시오.
 The site always stays reachable on this computer (localhost): that is how a mistake here can be repaired.	사이트는 이 컴퓨터(localhost)에서 항상 접속할 수 있습니다. 이렇게 하면 여기서의 실수를 바로잡을 수 있습니다.
 The site is moving to port {0}. Open {1} and sign in again.	사이트가 포트 {0}(으)로 이동합니다. {1}을(를) 열고 다시 로그인하십시오.
-The snapshot settings apply to ESXi and vCenter sources only.	스냅숏 설정은 ESXi 및 vCenter 원본에만 적용됩니다.
+The snapshot settings apply to ESXi and vCenter sources only.	스냅샷 설정은 ESXi 및 vCenter 원본에만 적용됩니다.
 The speed limit cannot be negative.	속도 제한은 음수일 수 없습니다.
 The task may run only inside its windows. A window that ends before it starts goes over midnight.	작업은 시간대 안에서만 실행될 수 있습니다. 시작보다 먼저 끝나는 시간대는 자정을 넘깁니다.
 The task was copied.	작업이 복사되었습니다.
@@ -418,7 +418,7 @@ Verify the certificate	인증서 확인
 Version	버전
 Virtual Machine Backup	Virtual Machine Backup
 Virtual machine	가상 컴퓨터
-Virtual machine during the backup	백업 중인 가상 머신
+Virtual machine during the backup	백업 중인 가상 컴퓨터
 Virtual machines	가상 컴퓨터
 Virtual machines...	가상 컴퓨터...
 Volume size	볼륨 크기
@@ -437,7 +437,7 @@ Without it, the memory files of the other snapshots, the side branches of the sn
 Write these one-time codes down now: they are shown only once.	이 일회용 코드를 지금 적어 두십시오. 한 번만 표시됩니다.
 Yes	예
 Your session has ended. Sign in again.	세션이 종료되었습니다. 다시 로그인하십시오.
-admin	admin
+admin	관리자
 backup	백업
 cdrom	CD-ROM
 days	일
@@ -494,4 +494,4 @@ viewer	보기 전용
 {0} volume(s)	볼륨 {0}개
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: CPU 코어당 약 {1} MB/s, 백업이 수준 5보다 약 {2}% 큽니다.
 {0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: CPU 코어당 약 {1} MB/s, 백업이 수준 5보다 약 {2}% 작습니다.
-{0}: about {1} MB/s per CPU core; the baseline size (levels 0-4 are larger, 6-9 smaller).	{0}: CPU 코어당 약 {1} MB/s; 기준 크기(레벨 0-4는 더 크고 6-9는 더 작음).
+{0}: about {1} MB/s per CPU core; the baseline size (levels 0-4 are larger, 6-9 smaller).	{0}: CPU 코어당 약 {1} MB/s; 기준 크기(수준 0-4는 더 크고 6-9는 더 작음).

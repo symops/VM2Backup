@@ -28,7 +28,7 @@ After a lost connection the program reconnects and goes on; nothing finished is 
 All	Wszystkie
 All interfaces	Wszystkie interfejsy
 All results	Wszystkie wyniki
-Allow a copy of a running VM (the copy is consistent only at the crash level)	Zezwól na kopiowanie działającej maszyny (kopia jest spójna tylko na poziomie awaryjnym)
+Allow a copy of a running VM (the copy is consistent only at the crash level)	Zezwól na kopiowanie działającej maszyny (kopia jest spójna tylko na poziomie awarii)
 Also back up the existing snapshots of the VM	Kopiuj także istniejące migawki maszyny wirtualnej
 An administrator needs two-factor authentication when it is required in the security settings.	Administrator potrzebuje uwierzytelniania dwuskładnikowego, gdy jest ono wymagane w ustawieniach zabezpieczeń.
 Apply	Zastosuj
@@ -144,8 +144,8 @@ FTP	FTP
 FTP over explicit TLS (FTPES)	FTP przez jawny TLS (FTPES)
 FTP over implicit TLS (FTPS)	FTP przez niejawny TLS (FTPS)
 Failed	Niepowodzenie
-Fast	Szybka
-Fastest	Najszybsza
+Fast	Szybki
+Fastest	Najszybszy
 File	Plik
 Fingerprint	Odcisk palca
 Finish	Zakończ
@@ -167,7 +167,7 @@ Held for backup	Przetrzymywana dla kopii
 History entries kept	Przechowywane wpisy historii
 Host	Host
 Host key	Klucz hosta
-Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Kopia na gorąco: maszyna działa dalej podczas kopiowania. Kopia jest spójna na poziomie awarii (jak po zaniku zasilania), chyba że VMware Tools może zamrozić system plików gościa; bazy danych i serwery pocztowe mogą wymagać odzyskiwania po przywróceniu. Dopóki istnieje migawka, maszyna działa wolniej, migawka rośnie w magazynie danych i nic nie powstrzymuje innych administratorów przed zmianą, wyłączeniem lub usunięciem maszyny w międzyczasie. Bez tej opcji maszyna jest wyłączana i blokowana na czas całej kopii, a po niej uruchamiana ponownie.
+Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Kopia na gorąco: maszyna działa dalej podczas kopiowania. Kopia jest spójna na poziomie awarii (jak po zaniku zasilania), chyba że VMware Tools może wyciszyć system plików gościa; bazy danych i serwery pocztowe mogą wymagać odzyskiwania po przywróceniu. Dopóki istnieje migawka, maszyna działa wolniej, migawka rośnie w magazynie danych i nic nie powstrzymuje innych administratorów przed zmianą, wyłączeniem lub usunięciem maszyny w międzyczasie. Bez tej opcji maszyna jest wyłączana i blokowana na czas całej kopii, a po niej uruchamiana ponownie.
 If the guest does not shut down, power it off (like pulling the plug)	Jeśli gość się nie wyłączy, odłączyć zasilanie maszyny (jak wyciągnięcie wtyczki)
 Imported	Zaimportowano
 Include the memory of the virtual machine in the snapshot	Uwzględnij pamięć maszyny wirtualnej w migawce
@@ -191,7 +191,7 @@ Local Computer cannot be changed.	Komputera lokalnego nie można zmienić.
 Local Computer cannot be deleted.	Komputera lokalnego nie można usunąć.
 Longest wait before a reconnect, s	Najdłuższe oczekiwanie przed ponownym połączeniem, s
 Machine file	Plik maszyny
-Maximum	Maksymalna
+Maximum	Maksymalny
 Message	Komunikat
 Minimum TLS version	Minimalna wersja TLS
 Moderate	Umiarkowany

@@ -3,14 +3,14 @@
 (the default resource pool)	(пул рэсурсаў па змаўчанні)
 (the root VM folder)	(каранёвая папка ВМ)
 A PKCS#12 file (.pfx) with the certificate and its private key, 1 MB at most. Only the certificate itself is served, not the chain.	Файл PKCS#12 (.pfx) з сертыфікатам і закрытым ключом, не больш за 1 МБ. Аддаецца толькі сам сертыфікат, без ланцужка.
-A VM that is held for a backup is shut down and locked by VM2Backup until the copy is finished or cancelled.	ВМ, якую ўтрымліваюць для бэкапу, выключана і заблакавана VM2Backup, пакуль копія не завершана або не скасавана.
+A VM that is held for a backup is shut down and locked by VM2Backup until the copy is finished or cancelled.	ВМ, якую ўтрымліваюць для капіравання, выключана і заблакавана VM2Backup, пакуль копія не завершана або не скасавана.
 A mapped drive letter (Z:) cannot be used: the service does not see it. Choose "Network drive..." to use its UNC path, or enter the UNC path.	Літару сеткавага дыска (Z:) выкарыстоўваць нельга: служба яе не бачыць. Абярыце «Сеткавы дыск...», каб узяць яго UNC-шлях, або ўвядзіце UNC-шлях.
 A new certificate was created. Your browser will ask you to trust it again.	Створаны новы сертыфікат. Браўзер зноў папросіць яму давяраць.
 A new user needs a password.	Новаму карыстальніку патрэбны пароль.
 A path on the server computer	Шлях на камп'ютары сервера
 A path on the server computer (the service reads it)	Шлях на камп'ютары сервера (яго чытае служба)
 A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	ВМ ESXi / vCenter, якая працуе, капіруецца з часовага здымка, які потым выдаляецца. Без VMware Tools здымак са замарожваннем файлавай сістэмы не ўдаецца: для такіх ВМ адключыце замарожванне.
-A vCenter locks the VM against power-on and changes for the whole backup. A standalone ESXi host does not allow that (DisableMethods is not supported): there the VM is shut down and marked as held, and another administrator can still power it on or change it; the next run notices that and starts the copy over.	vCenter блакуе ВМ ад уключэння і зменаў на ўвесь час бэкапу. Асобны хост ESXi гэтага не дазваляе (DisableMethods не падтрымліваецца): там ВМ выключаецца і пазначаецца як утрымліваная, а іншы адміністратар усё ж можа яе ўключыць або змяніць; наступны запуск гэта заўважыць і пачне копію нанова.
+A vCenter locks the VM against power-on and changes for the whole backup. A standalone ESXi host does not allow that (DisableMethods is not supported): there the VM is shut down and marked as held, and another administrator can still power it on or change it; the next run notices that and starts the copy over.	vCenter блакуе ВМ ад уключэння і зменаў на ўвесь час капіравання. Асобны хост ESXi гэтага не дазваляе (DisableMethods не падтрымліваецца): там ВМ выключаецца і пазначаецца як утрымліваная, а іншы адміністратар усё ж можа яе ўключыць або змяніць; наступны запуск гэта заўважыць і пачне копію нанова.
 A virtual machine with this name already exists on the server. Enter another name; an existing machine is never overwritten.	Віртуальная машына з такой назвай ужо ёсць на серверы. Увядзіце іншую назву; існуючая машына ніколі не перазапісваецца.
 Abort	Перарваць
 Add Scheduled Task	Дадаць заданне ў расклад
@@ -39,7 +39,7 @@ At least 10 characters, not containing the user name.	Не менш за 10 сі
 Audit log	Журнал аўдыту
 Auto	Аўта
 Back	Назад
-Back up while the VM is running (hot backup)	Рабіць бэкап на ўключанай ВМ (гарачы бэкап)
+Back up while the VM is running (hot backup)	Капіраваць, пакуль ВМ працуе (гарачае капіраванне)
 Backup Explorer	Аглядальнік копій
 Backup of {0}	Копія {0}
 Backup started.	Рэзервовае капіраванне запушчана.
@@ -144,8 +144,8 @@ FTP	FTP
 FTP over explicit TLS (FTPES)	FTP праз яўны TLS (FTPES)
 FTP over implicit TLS (FTPS)	FTP праз нязяўны TLS (FTPS)
 Failed	Памылка
-Fast	Хуткае
-Fastest	Найхутчэйшае
+Fast	Хуткі
+Fastest	Найхутчэйшы
 File	Файл
 Fingerprint	Адбітак
 Finish	Гатова
@@ -163,16 +163,16 @@ Give the server a name.	Дайце серверу назву.
 Give the task a title.	Дайце заданню назву.
 Go	Перайсці
 HTML report...	HTML-справаздача...
-Held for backup	Утрымліваецца для бэкапу
-History entries kept	Запісаў гісторыі захоўваць
+Held for backup	Утрымліваецца для капіравання
+History entries kept	Колькі запісаў гісторыі захоўваць
 Host	Вузел
 Host key	Ключ вузла
-Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Гарачы бэкап: ВМ працягвае працаваць падчас капіравання. Копія ўзгоднена толькі на ўзроўні збою (як пасля адключэння харчавання), калі VMware Tools не могуць замарозіць файлавую сістэму госця; базам даных і паштовым серверам пасля аднаўлення можа спатрэбіцца аднаўленне. Пакуль існуе здымак, ВМ працуе павольней, здымак расце на сховішчы, і нішто не замінае іншым адміністратарам змяняць, выключаць або выдаляць ВМ. Без гэтай опцыі ВМ выключаецца і блакуецца на ўвесь час бэкапу, а пасля яго запускаецца зноў.
-If the guest does not shut down, power it off (like pulling the plug)	Калі гость не выключыўся, выключыць ВМ па харчаванні (як выцягнуць шнур)
+Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Гарачае капіраванне: ВМ працягвае працаваць падчас капіравання. Копія ўзгоднена толькі на ўзроўні збою (як пасля адключэння харчавання), калі VMware Tools не могуць замарозіць файлавую сістэму госця; пасля аднаўлення базам даных і паштовым серверам можа спатрэбіцца праверка або аднаўленне цэласнасці. Пакуль існуе здымак, ВМ працуе павольней, здымак расце на сховішчы даных, і нішто не замінае іншым адміністратарам змяняць, выключаць або выдаляць ВМ. Без гэтай опцыі ВМ выключаецца і блакуецца на ўвесь час капіравання, а пасля яго запускаецца зноў.
+If the guest does not shut down, power it off (like pulling the plug)	Калі гость не выключыўся, адключыць харчаванне ВМ (як выцягнуць шнур з разеткі)
 Imported	Імпартавана
 Include the memory of the virtual machine in the snapshot	Уключыць у здымак памяць віртуальнай машыны
 Job "{0}" finished: {1}	Заданне «{0}» завершана: {1}
-Keep last backups	Захоўваць апошніх копій
+Keep last backups	Колькі апошніх копій захоўваць
 Keep the computer awake while the scheduler is on	Не даваць камп'ютару засынаць, пакуль уключаны планавальнік
 Key passphrase	Парольная фраза ключа
 Kind	Выгляд
@@ -191,7 +191,7 @@ Local Computer cannot be changed.	Лакальны камп'ютар змяні�
 Local Computer cannot be deleted.	Лакальны камп'ютар нельга выдаліць.
 Longest wait before a reconnect, s	Самая доўгая паўза перад паўторным падключэннем, с
 Machine file	Файл машыны
-Maximum	Максімальнае
+Maximum	Максімальны
 Message	Паведамленне
 Minimum TLS version	Мінімальная версія TLS
 Moderate	Умераны
@@ -248,7 +248,7 @@ Recovery code	Код аднаўлення
 Recovery codes	Коды аднаўлення
 Recovery codes left	Засталося кодаў аднаўлення
 Refresh	Абнавіць
-Release the VM "{0}"? The VM2Backup lock is removed and a VM that was running before the backup is powered on. A paused backup of this VM then starts over.	Вызваліць ВМ «{0}»? Блакіроўка VM2Backup будзе знятая, а ВМ, якая працавала да бэкапу, будзе ўключана. Прыпынены бэкап гэтай ВМ пасля гэтага пачнецца нанова.
+Release the VM "{0}"? The VM2Backup lock is removed and a VM that was running before the backup is powered on. A paused backup of this VM then starts over.	Вызваліць ВМ «{0}»? Блакіроўка VM2Backup будзе знятая, а ВМ, якая працавала да капіравання, будзе ўключана. Прыпыненае капіраванне гэтай ВМ пасля гэтага пачнецца нанова.
 Release the VM (unlock and restore power)	Вызваліць ВМ (зняць блакіроўку і вярнуць харчаванне)
 Released.	Вызвалена.
 Remove	Прыбраць
@@ -284,7 +284,7 @@ Scheduler	Планавальнік
 Secret	Сакрэт
 Security	Бяспека
 Select	Абраць
-Select a VM that is held for a backup.	Выберыце ВМ, якую ўтрымліваюць для бэкапу.
+Select a VM that is held for a backup.	Выберыце ВМ, якую ўтрымліваюць для капіравання.
 Select a drive first.	Спачатку абярыце дыск.
 Select a row first.	Спачатку абярыце радок.
 Self-signed	Самападпісаны
@@ -391,7 +391,7 @@ Two-factor	Двухфактарная праверка
 Type	Тып
 Unfinished (resumable)	Не завершана (можна працягнуць)
 Unit	Адзінка
-Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.	Незахаваныя даныя госця будуць страчаны, а яго файлавай сістэме пры наступным запуску можа спатрэбіцца праверка. Без гэтай опцыі бэкап ВМ, госць якой не выключаецца (няма VMware Tools, госць завіс), завяршаецца памылкай, а ВМ вяртаецца некранутай.
+Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.	Незахаваныя даныя госця будуць страчаны, а яго файлавай сістэме пры наступным запуску можа спатрэбіцца праверка. Без гэтай опцыі капіраванне ВМ, госць якой не выключаецца (няма VMware Tools, госць завіс), завяршаецца памылкай, а ВМ вяртаецца некранутай.
 Up	Уверх
 Upload	Загрузіць
 Upload PFX...	Загрузіць PFX...
@@ -418,7 +418,7 @@ Verify the certificate	Правяраць сертыфікат
 Version	Версія
 Virtual Machine Backup	Рэзервовае капіраванне віртуальнай машыны
 Virtual machine	Віртуальная машына
-Virtual machine during the backup	Віртуальная машына падчас бэкапу
+Virtual machine during the backup	Віртуальная машына падчас капіравання
 Virtual machines	Віртуальныя машыны
 Virtual machines...	Віртуальныя машыны...
 Volume size	Памер тома
@@ -451,7 +451,7 @@ every {0} {1}	кожныя {0} {1}
 fixed	жорсткі
 folder	папка
 from {0}	з {0}
-held for backup since {0}	утрымліваецца для бэкапу з {0}
+held for backup since {0}	утрымліваецца для капіравання з {0}
 hours	гадз
 last	апошні
 limit {0} Mbit/s	мяжа {0} Mbit/s

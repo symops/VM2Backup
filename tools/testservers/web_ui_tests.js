@@ -620,10 +620,10 @@ function makeEnv(router, lang) {
         let got = null; app.vmBackupDialog({ element: el, onOk: (e) => { got = e; } }); await sleep(60);
         const hot = labelInput(hotTxt), q = labelInput(qTxt), mem = labelInput(memTxt), his = labelInput(hisTxt), frc = labelInput(frcTxt);
         ok(hot && q && mem && his && frc, lang + ': the hot checkbox, quiesce, memory, history and force-off boxes exist');
-        const warn = find(ov(), x => x.className.indexOf('note') >= 0 && x.textContent.indexOf(lang === 'ru' ? 'Горячий бэкап' : 'Hot backup') === 0)[0];
+        const warn = find(ov(), x => x.className.indexOf('note') >= 0 && x.textContent.indexOf(lang === 'ru' ? 'Горячее копирование' : 'Hot backup') === 0)[0];
         ok(warn && warn.textContent === T('Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.'), lang + ': the warning text under the checkbox');
         ok(warn && warn.className.indexOf('bad') >= 0, lang + ': the warning is shown in the warning colour');
-        if (lang === 'ru') ok(warn && /[А-Яа-я]/.test(warn.textContent) && /Горячий бэкап/.test(warn.textContent), 'ru: the warning is in Russian');
+        if (lang === 'ru') ok(warn && /[А-Яа-я]/.test(warn.textContent) && /Горячее копирование/.test(warn.textContent), 'ru: the warning is in Russian');
         // default = cold: hot off; quiesce / memory unavailable, the shutdown options visible, history available in both modes
         ok(hot.checked === false && q.disabled === true && mem.disabled === true && his.disabled === false, lang + ': cold by default: quiesce / memory are blocked, history is open');
         ok(frc.disabled === false && row(frc).style.display !== 'none', lang + ': cold: the force-off option is visible and enabled');

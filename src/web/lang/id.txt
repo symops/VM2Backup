@@ -167,7 +167,7 @@ Held for backup	Ditahan untuk pencadangan
 History entries kept	Entri riwayat yang disimpan
 Host	Host
 Host key	Kunci host
-Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Pencadangan panas: VM tetap berjalan selama penyalinan. Salinan konsisten terhadap crash (seperti setelah listrik padam) kecuali VMware Tools dapat mengkuiesce sistem berkas tamu; basis data dan server surel mungkin perlu pemulihan setelah restore. VM berjalan lebih lambat selama snapshot ada, snapshot membesar di datastore, dan tidak ada yang mencegah administrator lain mengubah, mematikan, atau menghapus VM selama itu. Tanpa opsi ini VM dimatikan dan dikunci selama seluruh pencadangan, lalu dinyalakan kembali.
+Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Pencadangan panas: VM tetap berjalan selama penyalinan. Salinan konsisten terhadap crash (seperti setelah listrik padam) kecuali VMware Tools dapat melakukan quiesce pada sistem berkas tamu; basis data dan server surel mungkin perlu pemulihan setelah restore. VM berjalan lebih lambat selama snapshot ada, snapshot membesar di datastore, dan tidak ada yang mencegah administrator lain mengubah, mematikan, atau menghapus VM selama itu. Tanpa opsi ini VM dimatikan dan dikunci selama seluruh pencadangan, lalu dinyalakan kembali.
 If the guest does not shut down, power it off (like pulling the plug)	Jika tamu tidak mati, matikan daya VM (seperti mencabut kabel)
 Imported	Diimpor
 Include the memory of the virtual machine in the snapshot	Sertakan memori mesin virtual dalam snapshot
@@ -243,7 +243,7 @@ Press Load to read the datacenters, datastores, folders and resource pools of th
 Private key file	Berkas kunci privat
 Private key text	Teks kunci privat
 Problem	Masalah
-Quiesce the guest file system (needs VMware Tools in the VM)	Quiesce sistem berkas guest (memerlukan VMware Tools di VM)
+Quiesce the guest file system (needs VMware Tools in the VM)	Quiesce sistem berkas tamu (memerlukan VMware Tools di VM)
 Recovery code	Kode pemulihan
 Recovery codes	Kode pemulihan
 Recovery codes left	Sisa kode pemulihan
@@ -437,7 +437,7 @@ Without it, the memory files of the other snapshots, the side branches of the sn
 Write these one-time codes down now: they are shown only once.	Catat kode sekali pakai ini sekarang: kode ini hanya ditampilkan sekali.
 Yes	Ya
 Your session has ended. Sign in again.	Sesi Anda telah berakhir. Masuk lagi.
-admin	admin
+admin	administrator
 backup	cadangan
 cdrom	cdrom
 days	hari
@@ -494,4 +494,4 @@ viewer	penampil
 {0} volume(s)	{0} volume
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: sekitar {1} MB/s per inti CPU; cadangan sekitar {2}% lebih besar daripada tingkat 5.
 {0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: sekitar {1} MB/s per inti CPU; cadangan sekitar {2}% lebih kecil daripada tingkat 5.
-{0}: about {1} MB/s per CPU core; the baseline size (levels 0-4 are larger, 6-9 smaller).	{0}: sekitar {1} MB/dtk per inti CPU; ukuran dasar (level 0-4 lebih besar, 6-9 lebih kecil).
+{0}: about {1} MB/s per CPU core; the baseline size (levels 0-4 are larger, 6-9 smaller).	{0}: sekitar {1} MB/s per inti CPU; ukuran dasar (tingkat 0-4 lebih besar, 6-9 lebih kecil).

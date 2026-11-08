@@ -144,8 +144,8 @@ FTP	FTP
 FTP over explicit TLS (FTPES)	FTP sobre TLS explícito (FTPES)
 FTP over implicit TLS (FTPS)	FTP sobre TLS implícito (FTPS)
 Failed	Falha
-Fast	Rápida
-Fastest	Mais rápida
+Fast	Rápido
+Fastest	Mais rápido
 File	Arquivo
 Fingerprint	Impressão digital
 Finish	Concluir
@@ -168,7 +168,7 @@ History entries kept	Entradas de histórico mantidas
 Host	Host
 Host key	Chave do host
 Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Backup a quente: a VM continua em execução durante a cópia. A cópia é consistente com falhas (como após uma queda de energia), a menos que o VMware Tools consiga silenciar o sistema de arquivos do convidado; bancos de dados e servidores de e-mail podem precisar de recuperação após uma restauração. A VM fica mais lenta enquanto o snapshot existir, o snapshot cresce no datastore e nada impede que outros administradores alterem, desliguem ou excluam a VM nesse meio-tempo. Sem esta opção, a VM é desligada e bloqueada durante todo o backup e ligada novamente depois.
-If the guest does not shut down, power it off (like pulling the plug)	Se o convidado não desligar, desligar a VM da energia (como puxar o cabo)
+If the guest does not shut down, power it off (like pulling the plug)	Se o convidado não desligar, cortar a energia da VM (como puxar o cabo)
 Imported	Importado
 Include the memory of the virtual machine in the snapshot	Incluir a memória da máquina virtual no instantâneo
 Job "{0}" finished: {1}	A tarefa "{0}" terminou: {1}
@@ -437,7 +437,7 @@ Without it, the memory files of the other snapshots, the side branches of the sn
 Write these one-time codes down now: they are shown only once.	Anote agora estes códigos de uso único: eles são exibidos apenas uma vez.
 Yes	Sim
 Your session has ended. Sign in again.	Sua sessão terminou. Entre novamente.
-admin	admin
+admin	administrador
 backup	backup
 cdrom	óptico
 days	dias

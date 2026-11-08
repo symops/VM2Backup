@@ -167,7 +167,7 @@ Held for backup	Yedekleme için tutuluyor
 History entries kept	Saklanan geçmiş girdileri
 Host	Ana bilgisayar
 Host key	Ana bilgisayar anahtarı
-Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Sıcak yedekleme: VM kopyalama sırasında çalışmaya devam eder. VMware Tools konuk dosya sistemini sessize alamazsa kopya çökme tutarlıdır (güç kesintisi sonrası gibi); veritabanları ve posta sunucuları geri yüklemeden sonra kurtarma gerektirebilir. Anlık görüntü var olduğu sürece VM daha yavaş çalışır, anlık görüntü veri deposunda büyür ve diğer yöneticilerin bu arada VM'yi değiştirmesini, kapatmasını veya silmesini hiçbir şey engellemez. Bu seçenek olmadan VM, tüm yedekleme boyunca kapatılır ve kilitlenir, sonra yeniden başlatılır.
+Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Sıcak yedekleme: VM kopyalama sırasında çalışmaya devam eder. VMware Tools konuk dosya sistemini sessize alamazsa kopya yalnızca çökme tutarlılığındadır (güç kesintisi sonrası gibi); veritabanları ve posta sunucuları geri yüklemeden sonra kurtarma gerektirebilir. Anlık görüntü var olduğu sürece VM daha yavaş çalışır, anlık görüntü veri deposunda büyür ve diğer yöneticilerin bu arada VM'yi değiştirmesini, kapatmasını veya silmesini hiçbir şey engellemez. Bu seçenek olmadan VM, tüm yedekleme boyunca kapatılır ve kilitlenir, sonra yeniden başlatılır.
 If the guest does not shut down, power it off (like pulling the plug)	Konuk kapanmazsa VM'nin gücünü kes (fişi çekmek gibi)
 Imported	İçe aktarıldı
 Include the memory of the virtual machine in the snapshot	Sanal makinenin belleğini anlık görüntüye dahil et
@@ -391,7 +391,7 @@ Two-factor	İki aşamalı
 Type	Tür
 Unfinished (resumable)	Tamamlanmadı (devam ettirilebilir)
 Unit	Birim
-Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.	Konuğun kaydedilmemiş verileri kaybolur ve dosya sistemi bir sonraki açılışta denetim gerektirebilir. Bu seçenek olmadan, konuğu kapanmayan bir VM'nin (VMware Tools yok, konuk takılı) yedeklemesi başarısız olur ve VM dokunulmadan geri verilir.
+Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.	Konuğun kaydedilmemiş verileri kaybolur ve dosya sistemi bir sonraki açılışta denetim gerektirebilir. Bu seçenek olmadan, konuğu kapanmayan bir VM'nin (VMware Tools yok, konuk yanıt vermiyor) yedeklemesi başarısız olur ve VM dokunulmadan geri verilir.
 Up	Yukarı
 Upload	Yükle
 Upload PFX...	PFX yükle...
@@ -494,4 +494,4 @@ viewer	görüntüleyici
 {0} volume(s)	{0} birim
 {0}: about {1} MB/s per CPU core; backups are about {2}% larger than at level 5.	{0}: CPU çekirdeği başına yaklaşık {1} MB/s; yedekler 5. düzeye göre yaklaşık %{2} daha büyüktür.
 {0}: about {1} MB/s per CPU core; backups are about {2}% smaller than at level 5.	{0}: CPU çekirdeği başına yaklaşık {1} MB/s; yedekler 5. düzeye göre yaklaşık %{2} daha küçüktür.
-{0}: about {1} MB/s per CPU core; the baseline size (levels 0-4 are larger, 6-9 smaller).	{0}: CPU çekirdeği başına yaklaşık {1} MB/sn; temel boyut (0-4. seviyeler daha büyük, 6-9 daha küçük).
+{0}: about {1} MB/s per CPU core; the baseline size (levels 0-4 are larger, 6-9 smaller).	{0}: CPU çekirdeği başına yaklaşık {1} MB/s; temel boyut (0-4. düzeyler daha büyük, 6-9. düzeyler daha küçük).

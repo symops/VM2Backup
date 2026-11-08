@@ -144,8 +144,8 @@ FTP	FTP
 FTP over explicit TLS (FTPES)	FTP sobre TLS explícito (FTPES)
 FTP over implicit TLS (FTPS)	FTP sobre TLS implícito (FTPS)
 Failed	Error
-Fast	Rápida
-Fastest	La más rápida
+Fast	Rápido
+Fastest	El más rápido
 File	Archivo
 Fingerprint	Huella digital
 Finish	Finalizar
@@ -167,8 +167,8 @@ Held for backup	Retenida para copia
 History entries kept	Entradas de historial conservadas
 Host	Host
 Host key	Clave de host
-Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Copia en caliente: la VM sigue funcionando durante la copia. La copia es consistente ante fallos (como tras un corte de energía), salvo que VMware Tools pueda inmovilizar el sistema de archivos del invitado; las bases de datos y los servidores de correo pueden necesitar recuperación tras una restauración. La VM va más lenta mientras exista la instantánea, la instantánea crece en el almacén de datos y nada impide que otros administradores cambien, apaguen o eliminen la VM mientras tanto. Sin esta opción, la VM se apaga y se bloquea durante toda la copia y se vuelve a encender después.
-If the guest does not shut down, power it off (like pulling the plug)	Si el invitado no se apaga, apagar la VM (como desenchufarla)
+Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Copia en caliente: la VM sigue funcionando durante la copia. La copia es consistente ante fallos (como tras un corte de energía), salvo que VMware Tools pueda inmovilizar el sistema de archivos del invitado; las bases de datos y los servidores de correo pueden necesitar recuperación tras una restauración. La VM funciona más despacio mientras exista la instantánea, la instantánea crece en el almacén de datos y nada impide que otros administradores cambien, apaguen o eliminen la VM mientras tanto. Sin esta opción, la VM se apaga y se bloquea durante toda la copia y se vuelve a encender después.
+If the guest does not shut down, power it off (like pulling the plug)	Si el invitado no se apaga, cortar la alimentación de la VM (como desenchufarla)
 Imported	Importada
 Include the memory of the virtual machine in the snapshot	Incluir la memoria de la máquina virtual en la instantánea
 Job "{0}" finished: {1}	La tarea «{0}» finalizó: {1}
@@ -191,7 +191,7 @@ Local Computer cannot be changed.	El equipo local no se puede cambiar.
 Local Computer cannot be deleted.	El equipo local no se puede eliminar.
 Longest wait before a reconnect, s	Espera máxima antes de reconectar, s
 Machine file	Archivo de la máquina
-Maximum	Máxima
+Maximum	Máximo
 Message	Mensaje
 Minimum TLS version	Versión mínima de TLS
 Moderate	Moderado
@@ -437,7 +437,7 @@ Without it, the memory files of the other snapshots, the side branches of the sn
 Write these one-time codes down now: they are shown only once.	Anote ahora estos códigos de un solo uso: solo se muestran una vez.
 Yes	Sí
 Your session has ended. Sign in again.	Su sesión ha terminado. Vuelva a iniciar sesión.
-admin	admin
+admin	administrador
 backup	copia
 cdrom	óptica
 days	días

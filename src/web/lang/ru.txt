@@ -3,14 +3,14 @@
 (the default resource pool)	(пул ресурсов по умолчанию)
 (the root VM folder)	(корневая папка ВМ)
 A PKCS#12 file (.pfx) with the certificate and its private key, 1 MB at most. Only the certificate itself is served, not the chain.	Файл PKCS#12 (.pfx) с сертификатом и закрытым ключом, не более 1 МБ. Отдаётся только сам сертификат, без цепочки.
-A VM that is held for a backup is shut down and locked by VM2Backup until the copy is finished or cancelled.	ВМ, удерживаемая для бэкапа, выключена и заблокирована VM2Backup, пока копия не завершится или не будет отменена.
+A VM that is held for a backup is shut down and locked by VM2Backup until the copy is finished or cancelled.	ВМ, удерживаемая для копирования, выключена и заблокирована VM2Backup, пока копия не завершится или не будет отменена.
 A mapped drive letter (Z:) cannot be used: the service does not see it. Choose "Network drive..." to use its UNC path, or enter the UNC path.	Букву сетевого диска (Z:) использовать нельзя: служба её не видит. Выберите «Сетевой диск...», чтобы взять его UNC-путь, или введите UNC-путь.
 A new certificate was created. Your browser will ask you to trust it again.	Создан новый сертификат. Браузер снова попросит ему доверять.
 A new user needs a password.	Новому пользователю нужен пароль.
 A path on the server computer	Путь на компьютере сервера
 A path on the server computer (the service reads it)	Путь на компьютере сервера (его читает служба)
-A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	Работающая ВМ ESXi / vCenter копируется с временного снимка, который потом удаляется. Без VMware Tools снимок с заморозкой файловой системы не удаётся: для таких ВМ отключите заморозку.
-A vCenter locks the VM against power-on and changes for the whole backup. A standalone ESXi host does not allow that (DisableMethods is not supported): there the VM is shut down and marked as held, and another administrator can still power it on or change it; the next run notices that and starts the copy over.	vCenter блокирует ВМ от включения и изменений на всё время бэкапа. Отдельный хост ESXi этого не позволяет (DisableMethods не поддерживается): там ВМ выключается и помечается как удерживаемая, а другой администратор всё же может её включить или изменить; следующий запуск это заметит и начнёт копию заново.
+A running ESXi / vCenter VM is copied from a temporary snapshot, which is removed afterwards. Without VMware Tools the quiesced snapshot fails: switch quiescing off for such VMs.	Работающая ВМ ESXi / vCenter копируется с временного снимка, который потом удаляется. Без VMware Tools не удаётся создать снимок с заморозкой файловой системы: для таких ВМ отключите заморозку.
+A vCenter locks the VM against power-on and changes for the whole backup. A standalone ESXi host does not allow that (DisableMethods is not supported): there the VM is shut down and marked as held, and another administrator can still power it on or change it; the next run notices that and starts the copy over.	vCenter блокирует ВМ от включения и изменений на всё время копирования. Отдельный хост ESXi этого не позволяет (DisableMethods не поддерживается): там ВМ выключается и помечается как удерживаемая, а другой администратор всё же может её включить или изменить; следующий запуск это заметит и начнёт копию заново.
 A virtual machine with this name already exists on the server. Enter another name; an existing machine is never overwritten.	Виртуальная машина с таким именем уже есть на сервере. Введите другое имя; существующая машина никогда не перезаписывается.
 Abort	Прервать
 Add Scheduled Task	Добавить задачу в расписание
@@ -39,7 +39,7 @@ At least 10 characters, not containing the user name.	Не менее 10 сим�
 Audit log	Журнал аудита
 Auto	Авто
 Back	Назад
-Back up while the VM is running (hot backup)	Делать бэкап на включённой ВМ (горячий бэкап)
+Back up while the VM is running (hot backup)	Копировать при включённой ВМ (горячее копирование)
 Backup Explorer	Обозреватель копий
 Backup of {0}	Копия {0}
 Backup started.	Резервное копирование запущено.
@@ -67,7 +67,7 @@ Choose at least one day in every time window.	Выберите хотя бы о�
 Choose at least one day of the week.	Выберите хотя бы один день недели.
 Choose at least one virtual machine.	Выберите хотя бы одну виртуальную машину.
 Choose the ESXi or vCenter server to restore to.	Выберите сервер ESXi или vCenter для восстановления.
-Choose the datacenter.	Выберите центр обработки данных.
+Choose the datacenter.	Выберите центр данных.
 Choose the datastore.	Выберите хранилище данных.
 Choose the date and time.	Выберите дату и время.
 Choose the file.	Выберите файл.
@@ -144,8 +144,8 @@ FTP	FTP
 FTP over explicit TLS (FTPES)	FTP через явный TLS (FTPES)
 FTP over implicit TLS (FTPS)	FTP через неявный TLS (FTPS)
 Failed	Ошибка
-Fast	Быстрое
-Fastest	Самое быстрое
+Fast	Быстрый
+Fastest	Самый быстрый
 File	Файл
 Fingerprint	Отпечаток
 Finish	Готово
@@ -163,16 +163,16 @@ Give the server a name.	Дайте серверу имя.
 Give the task a title.	Дайте задаче название.
 Go	Перейти
 HTML report...	HTML-отчёт...
-Held for backup	Удерживается для бэкапа
-History entries kept	Записей истории хранить
+Held for backup	Удерживается для копирования
+History entries kept	Сколько записей истории хранить
 Host	Узел
 Host key	Ключ узла
-Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Горячий бэкап: ВМ продолжает работать во время копирования. Копия согласована только на уровне сбоя (как после отключения питания), если VMware Tools не могут заморозить файловую систему гостя; базам данных и почтовым серверам после восстановления может понадобиться восстановление. Пока существует снимок, ВМ работает медленнее, снимок растёт на хранилище, и ничто не мешает другим администраторам менять, выключать или удалять ВМ. Без этой опции ВМ выключается и блокируется на всё время бэкапа, а после него запускается снова.
-If the guest does not shut down, power it off (like pulling the plug)	Если гость не выключился, выключить ВМ по питанию (как выдернуть шнур)
+Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Горячее копирование: ВМ продолжает работать во время копирования. Копия согласована только на уровне сбоя (как после отключения питания), если VMware Tools не могут заморозить файловую систему гостя; после восстановления базам данных и почтовым серверам может потребоваться проверка или восстановление целостности. Пока существует снимок, ВМ работает медленнее, снимок растёт в хранилище данных, и ничто не мешает другим администраторам менять, выключать или удалять ВМ. Без этой опции ВМ выключается и блокируется на всё время копирования, а после него запускается снова.
+If the guest does not shut down, power it off (like pulling the plug)	Если гость не выключился, отключить питание ВМ (как выдернуть шнур из розетки)
 Imported	Импортирован
 Include the memory of the virtual machine in the snapshot	Включить в снимок память виртуальной машины
 Job "{0}" finished: {1}	Задание «{0}» завершено: {1}
-Keep last backups	Хранить последних копий
+Keep last backups	Сколько последних копий хранить
 Keep the computer awake while the scheduler is on	Не давать компьютеру засыпать, пока включён планировщик
 Key passphrase	Парольная фраза ключа
 Kind	Вид
@@ -191,7 +191,7 @@ Local Computer cannot be changed.	Локальный компьютер изме
 Local Computer cannot be deleted.	Локальный компьютер нельзя удалить.
 Longest wait before a reconnect, s	Самая длинная пауза перед переподключением, с
 Machine file	Файл машины
-Maximum	Максимальное
+Maximum	Максимальный
 Message	Сообщение
 Minimum TLS version	Минимальная версия TLS
 Moderate	Умеренный
@@ -239,7 +239,7 @@ Paused	Приостановлено
 Pinned fingerprint	Закреплённый отпечаток
 Port	Порт
 Power on after restore	Включить после восстановления
-Press Load to read the datacenters, datastores, folders and resource pools of the server.	Нажмите «Загрузить», чтобы прочитать центры обработки данных, хранилища данных, папки и пулы ресурсов сервера.
+Press Load to read the datacenters, datastores, folders and resource pools of the server.	Нажмите «Загрузить», чтобы прочитать центры данных, хранилища данных, папки и пулы ресурсов сервера.
 Private key file	Файл закрытого ключа
 Private key text	Текст закрытого ключа
 Problem	Проблема
@@ -248,7 +248,7 @@ Recovery code	Код восстановления
 Recovery codes	Коды восстановления
 Recovery codes left	Осталось кодов восстановления
 Refresh	Обновить
-Release the VM "{0}"? The VM2Backup lock is removed and a VM that was running before the backup is powered on. A paused backup of this VM then starts over.	Освободить ВМ «{0}»? Блокировка VM2Backup будет снята, а ВМ, которая работала до бэкапа, будет включена. Приостановленный бэкап этой ВМ после этого начнётся заново.
+Release the VM "{0}"? The VM2Backup lock is removed and a VM that was running before the backup is powered on. A paused backup of this VM then starts over.	Освободить ВМ «{0}»? Блокировка VM2Backup будет снята, а ВМ, которая работала до копирования, будет включена. Приостановленное копирование этой ВМ после этого начнётся заново.
 Release the VM (unlock and restore power)	Освободить ВМ (снять блокировку и вернуть питание)
 Released.	Освобождена.
 Remove	Убрать
@@ -284,7 +284,7 @@ Scheduler	Планировщик
 Secret	Секрет
 Security	Безопасность
 Select	Выбрать
-Select a VM that is held for a backup.	Выберите ВМ, удерживаемую для бэкапа.
+Select a VM that is held for a backup.	Выберите ВМ, удерживаемую для копирования.
 Select a drive first.	Сначала выберите диск.
 Select a row first.	Сначала выберите строку.
 Self-signed	Самоподписанный
@@ -323,7 +323,7 @@ Switch the scheduler on	Включить планировщик
 TLS 1.0 (weak)	TLS 1.0 (слабый)
 TLS 1.0 and 1.1 are weak. Use them only for old hosts (ESXi 6.0 / 6.5) that offer nothing newer.	TLS 1.0 и 1.1 слабые. Используйте их только для старых узлов (ESXi 6.0 / 6.5), которые не предлагают ничего новее.
 TLS 1.1 (weak)	TLS 1.1 (слабый)
-Target	Хранилище
+Target	Назначение
 Target server	Целевой сервер
 Task	Задача
 Task History	История задач
@@ -365,7 +365,7 @@ The task may run only inside its windows. A window that ends before it starts go
 The task was copied.	Задача скопирована.
 The volume size cannot be negative.	Размер тома не может быть отрицательным.
 The waits must be between 1 and 86400 seconds.	Паузы должны быть от 1 до 86400 секунд.
-There is no ESXi or vCenter server yet. Add one on the Datacenter page first.	Сервера ESXi или vCenter пока нет. Сначала добавьте его на странице «Центр обработки данных».
+There is no ESXi or vCenter server yet. Add one on the Datacenter page first.	Сервера ESXi или vCenter пока нет. Сначала добавьте его на странице «Центр данных».
 This backup is encrypted: enter its password.	Эта копия зашифрована: введите её пароль.
 This browser cannot read files.	Этот браузер не умеет читать файлы.
 This browser cannot save files.	Этот браузер не умеет сохранять файлы.
@@ -391,7 +391,7 @@ Two-factor	Двухфакторная проверка
 Type	Тип
 Unfinished (resumable)	Не завершена (можно продолжить)
 Unit	Единица
-Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.	Несохранённые данные гостя будут потеряны, а его файловой системе при следующем запуске может потребоваться проверка. Без этой опции бэкап ВМ, гость которой не выключается (нет VMware Tools, гость завис), завершается ошибкой, а ВМ возвращается нетронутой.
+Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.	Несохранённые данные гостя будут потеряны, а его файловой системе при следующем запуске может потребоваться проверка. Без этой опции копирование ВМ, гость которой не выключается (нет VMware Tools, гость завис), завершается ошибкой, а ВМ возвращается нетронутой.
 Up	Вверх
 Upload	Загрузить
 Upload PFX...	Загрузить PFX...
@@ -418,7 +418,7 @@ Verify the certificate	Проверять сертификат
 Version	Версия
 Virtual Machine Backup	Резервное копирование виртуальной машины
 Virtual machine	Виртуальная машина
-Virtual machine during the backup	Виртуальная машина во время бэкапа
+Virtual machine during the backup	Виртуальная машина во время копирования
 Virtual machines	Виртуальные машины
 Virtual machines...	Виртуальные машины...
 Volume size	Размер тома
@@ -451,7 +451,7 @@ every {0} {1}	каждые {0} {1}
 fixed	жёсткий
 folder	папка
 from {0}	с {0}
-held for backup since {0}	удерживается для бэкапа с {0}
+held for backup since {0}	удерживается для копирования с {0}
 hours	ч
 last	последний
 limit {0} Mbit/s	предел {0} Мбит/с
@@ -468,7 +468,7 @@ on {0} at {1}	в {0} в {1}
 once at {0}	однократно {0}
 operator	оператор
 optional	необязательно
-optional: the datacenter used when a backup does not name one	необязательно: центр обработки данных, если копия не указывает свой
+optional: the datacenter used when a backup does not name one	необязательно: центр данных, если копия не указывает свой
 other	прочий
 read	прочитано
 removable	съёмный
@@ -484,7 +484,7 @@ stored	сохранён
 task	задача
 the service	служба
 transferred	передано
-vCenter only; empty = the one of the server	только vCenter; пусто = центр обработки данных сервера
+vCenter only; empty = the one of the server	только vCenter; пусто = центр данных сервера
 verify	проверка
 viewer	наблюдатель
 {0} datastore(s), {1} folder(s), {2} resource pool(s) found.	Найдено: хранилищ данных — {0}, папок — {1}, пулов ресурсов — {2}.

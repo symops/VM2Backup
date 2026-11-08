@@ -168,7 +168,7 @@ History entries kept	Entrées d'historique conservées
 Host	Hôte
 Host key	Clé d'hôte
 Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Sauvegarde à chaud : la VM continue de fonctionner pendant la copie. La copie est cohérente après incident (comme après une coupure de courant), sauf si VMware Tools peut mettre le système de fichiers de l'invité en quiescence ; les bases de données et serveurs de messagerie peuvent nécessiter une récupération après une restauration. La VM est plus lente tant que l'instantané existe, l'instantané grossit sur le datastore et rien n'empêche d'autres administrateurs de modifier, d'éteindre ou de supprimer la VM entre-temps. Sans cette option, la VM est arrêtée et verrouillée pendant toute la sauvegarde, puis redémarrée.
-If the guest does not shut down, power it off (like pulling the plug)	Si l'invité ne s'arrête pas, éteindre la VM (comme débrancher la prise)
+If the guest does not shut down, power it off (like pulling the plug)	Si l'invité ne s'arrête pas, couper l'alimentation de la VM (comme débrancher la prise)
 Imported	Importé
 Include the memory of the virtual machine in the snapshot	Inclure la mémoire de la machine virtuelle dans l'instantané
 Job "{0}" finished: {1}	La tâche « {0} » est terminée : {1}
@@ -391,7 +391,7 @@ Two-factor	Deux facteurs
 Type	Type
 Unfinished (resumable)	Inachevée (reprenable)
 Unit	Unité
-Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.	Les données non enregistrées de l'invité sont perdues et son système de fichiers peut nécessiter une vérification au prochain démarrage. Sans cette option, la sauvegarde d'une VM dont l'invité ne s'arrête pas (pas de VMware Tools, invité bloqué) échoue et la VM est rendue intacte.
+Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.	Les données non enregistrées de l'invité sont perdues et son système de fichiers peut nécessiter une vérification au prochain démarrage. Sans cette option, la sauvegarde d'une VM dont l'invité ne s'arrête pas (pas de VMware Tools, invité bloqué) échoue et la VM est restituée telle quelle.
 Up	Haut
 Upload	Téléverser
 Upload PFX...	Téléverser un PFX...
@@ -437,7 +437,7 @@ Without it, the memory files of the other snapshots, the side branches of the sn
 Write these one-time codes down now: they are shown only once.	Notez ces codes à usage unique maintenant : ils ne sont affichés qu'une seule fois.
 Yes	Oui
 Your session has ended. Sign in again.	Votre session est terminée. Reconnectez-vous.
-admin	admin
+admin	administrateur
 backup	sauvegarde
 cdrom	optique
 days	jours

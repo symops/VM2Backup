@@ -437,7 +437,7 @@ Without it, the memory files of the other snapshots, the side branches of the sn
 Write these one-time codes down now: they are shown only once.	この 1 回限りのコードを今すぐ書き留めてください。表示されるのは一度だけです。
 Yes	はい
 Your session has ended. Sign in again.	セッションが終了しました。再度サインインしてください。
-admin	admin
+admin	管理者
 backup	バックアップ
 cdrom	CD-ROM
 days	日

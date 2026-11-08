@@ -167,7 +167,7 @@ Held for backup	Für Backup gehalten
 History entries kept	Aufbewahrte Verlaufseinträge
 Host	Host
 Host key	Hostschlüssel
-Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Hot-Backup: Die VM läuft während des Kopierens weiter. Die Kopie ist absturzkonsistent (wie nach einem Stromausfall), sofern VMware Tools das Gastdateisystem nicht stilllegen können; Datenbanken und Mailserver benötigen nach einer Wiederherstellung eventuell eine Wiederherstellung der Konsistenz. Solange der Snapshot existiert, läuft die VM langsamer, der Snapshot wächst auf dem Datastore, und nichts hindert andere Administratoren daran, die VM zwischenzeitlich zu ändern, auszuschalten oder zu löschen. Ohne diese Option wird die VM für die gesamte Dauer des Backups heruntergefahren und gesperrt und danach wieder gestartet.
+Hot backup: the VM keeps running during the copy. The copy is crash-consistent (as after a power failure) unless VMware Tools can quiesce the guest; databases and mail servers may need recovery after a restore. The VM runs slower while the snapshot exists, the snapshot grows on the datastore, and nothing stops other administrators from changing, powering off or deleting the VM meanwhile. Without this option the VM is shut down and locked for the whole backup, and started again afterwards.	Hot-Backup: Die VM läuft während des Kopierens weiter. Die Kopie ist absturzkonsistent (wie nach einem Stromausfall), sofern VMware Tools das Gastdateisystem nicht stilllegen können; Datenbanken und Mailserver benötigen nach einer Wiederherstellung eventuell eine Crash-Recovery. Solange der Snapshot existiert, läuft die VM langsamer, der Snapshot wächst auf dem Datastore, und nichts hindert andere Administratoren daran, die VM zwischenzeitlich zu ändern, auszuschalten oder zu löschen. Ohne diese Option wird die VM für die gesamte Dauer des Backups heruntergefahren und gesperrt und danach wieder gestartet.
 If the guest does not shut down, power it off (like pulling the plug)	Wenn der Gast nicht herunterfährt, die VM ausschalten (wie Netzstecker ziehen)
 Imported	Importiert
 Include the memory of the virtual machine in the snapshot	Den Arbeitsspeicher der virtuellen Maschine in den Snapshot aufnehmen
@@ -391,7 +391,7 @@ Two-factor	Zwei-Faktor
 Type	Typ
 Unfinished (resumable)	Unvollständig (fortsetzbar)
 Unit	Einheit
-Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.	Nicht gespeicherte Daten des Gastes gehen verloren, und sein Dateisystem muss beim nächsten Start eventuell geprüft werden. Ohne diese Option schlägt das Backup einer VM fehl, deren Gast nicht herunterfährt (kein VMware Tools, hängender Gast), und die VM wird unverändert zurückgegeben.
+Unsaved data of the guest is lost and its file system may need a check at the next start. Without this option a backup of a VM whose guest does not shut down (no VMware Tools, a hung guest) fails and the VM is given back untouched.	Nicht gespeicherte Daten des Gastes gehen verloren, und sein Dateisystem muss beim nächsten Start eventuell geprüft werden. Ohne diese Option schlägt das Backup einer VM fehl, deren Gast nicht herunterfährt (keine VMware Tools, hängender Gast), und die VM wird unverändert zurückgegeben.
 Up	Nach oben
 Upload	Hochladen
 Upload PFX...	PFX hochladen...
@@ -437,7 +437,7 @@ Without it, the memory files of the other snapshots, the side branches of the sn
 Write these one-time codes down now: they are shown only once.	Notieren Sie diese Einmalcodes jetzt: Sie werden nur einmal angezeigt.
 Yes	Ja
 Your session has ended. Sign in again.	Ihre Sitzung ist beendet. Melden Sie sich erneut an.
-admin	admin
+admin	Administrator
 backup	Sicherung
 cdrom	optisch
 days	Tage
