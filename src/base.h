@@ -109,8 +109,8 @@ public:
     int find(const char* s, size_t from = 0) const { size_t n = strlen(s); if (!n) return (int)from; for (size_t i = from; i + n <= m_n; ++i) if (memcmp(m_p + i, s, n) == 0) return (int)i; return -1; }
     int rfind(char c) const { for (size_t i = m_n; i-- > 0;) if (m_p[i] == c) return (int)i; return -1; }
     Str substr(size_t pos, size_t n = (size_t)-1) const { if (pos > m_n) pos = m_n; if (n > m_n - pos) n = m_n - pos; return Str(m_p ? m_p + pos : "", n); }
-    bool starts_with(const char* s) const { size_t n = strlen(s); return m_n >= n && memcmp(m_p, s, n) == 0; }
-    bool ends_with(const char* s) const { size_t n = strlen(s); return m_n >= n && memcmp(m_p + m_n - n, s, n) == 0; }
+    bool starts_with(const char* s) const { size_t n = strlen(s); return m_n >= n && (n == 0 || memcmp(m_p, s, n) == 0); }
+    bool ends_with(const char* s) const { size_t n = strlen(s); return m_n >= n && (n == 0 || memcmp(m_p + m_n - n, s, n) == 0); }
     Str lower() const { Str r(*this); for (size_t i = 0; i < r.m_n; ++i) if (r.m_p[i] >= 'A' && r.m_p[i] <= 'Z') r.m_p[i] += 32; return r; }
     Str trim() const { size_t a = 0, b = m_n; while (a < b && (unsigned char)m_p[a] <= ' ') ++a; while (b > a && (unsigned char)m_p[b - 1] <= ' ') --b; return substr(a, b - a); }
     Str replace_all(const char* from, const char* to) const;

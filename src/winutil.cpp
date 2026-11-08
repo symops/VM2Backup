@@ -57,7 +57,7 @@ bool MakeDirs(const Str& path, Str& err)
     while (p.size() > 3 && p.ends_with("\\")) p = p.substr(0, p.size() - 1);
     if (DirExists(p)) return true;
     int cut = p.rfind('\\');
-    if (cut > 2 && !(cut == 2 && p[1] == ':')) { if (!MakeDirs(p.substr(0, (size_t)cut), err)) return false; }
+    if (cut > 2) { if (!MakeDirs(p.substr(0, (size_t)cut), err)) return false; }
     if (p.size() == 2 && p[1] == ':') return DirExists(p);
     if (!CreateDirectoryW(FilePath(p), nullptr) && GetLastError() != ERROR_ALREADY_EXISTS) { err = LastErrorText("cannot create folder", p); return false; }
     return true;

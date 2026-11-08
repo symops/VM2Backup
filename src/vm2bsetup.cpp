@@ -223,7 +223,7 @@ bool DoInstall()
 {
     Say(TR("- Installing VM2Backup -"));
     wchar_t dir[MAX_PATH], oldDir[MAX_PATH];
-    wcscpy(dir, g_dir);
+    wcsncpy(dir, g_dir, MAX_PATH - 1); dir[MAX_PATH - 1] = 0;
     if (!dir[0] && !ProgramDir(dir)) { Say(TR("Error: cannot find the Program Files folder.")); return false; }
     if (!ValidDir(dir)) { Say(TR("Error: the installation folder is not valid (a full path such as C:\\Programs\\VM2Backup is needed).")); return false; }
     bool hadOld = GetRegStr(HKEY_LOCAL_MACHINE, kUninstallKey, L"InstallLocation", oldDir, MAX_PATH) && oldDir[0] && _wcsicmp(oldDir, dir) != 0;
@@ -316,7 +316,7 @@ bool DoRemove()
     if (desk[0]) DeleteFileW(desk);
     if (menu[0]) DeleteFileW(menu);
     RegDeleteKeyW(HKEY_LOCAL_MACHINE, kUninstallKey);
-    if (g_regDir[0] ? (wcscpy(dir, g_regDir), true) : ProgramDir(dir)) {
+    if (g_regDir[0] ? (wcsncpy(dir, g_regDir, MAX_PATH - 1), dir[MAX_PATH - 1] = 0, true) : ProgramDir(dir)) {
         wchar_t self[MAX_PATH], want[MAX_PATH];
         GetModuleFileNameW(nullptr, self, MAX_PATH);
         _snwprintf(want, MAX_PATH, L"%s\\VM2Backup-Setup.exe", dir);
@@ -559,7 +559,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR cmd, int show)
             d += 5; while (*d == L' ') ++d;
             bool q = *d == L'"'; if (q) ++d;
             size_t n = 0;
-            while (d[n] && (q ? d[n] != L'"' : d[n] != L' ') && n < MAX_PATH - 1) { g_dir[n] = d[n]; ++n; }
+            while (n < MAX_PATH - 1 && d[n] && (q ? d[n] != L'"' : d[n] != L' ')) { g_dir[n] = d[n]; ++n; }
             g_dir[n] = 0;
         }
     }

@@ -180,3 +180,24 @@ depends on it. A new group with external resources registers its own teardown th
 Режим по умолчанию — холодный (`snapshot.hot_backup` отсутствует = false); тесты старых сценариев (`Env::cfg()` в `tests_esxi.cpp`, `Real::cfg()`) явно ставят `hot_backup: true`, холодные — `Env::coldCfg()`. Эмулятор: `ShutdownGuest`, `PowerOffVM_Task`, `PowerOnVM_Task`, `ReconfigVM_Task` (extraConfig / annotation),
 `DisableMethods` / `EnableMethods` (на «отдельном хосте» отвечают NotSupported, как настоящий ESXi 7.0.3; на vCenter работают; ошибка `esxi_lock` включает их и для хоста), управляющие команды `vmset` (Tools, длительность выключения), `foreign` (чужой вызов метода ВМ), `lock` (чужая блокировка).
 Реальные этапы: `tools/esxi7/cold-scenario.sh` + `esxireal_cold_stage_*`.
+
+## Статический анализ (`tools/codecheck.sh`)
+
+Навык `symo-codecheck`; скрипт `tools/codecheck.sh warn|csa|codeql` запускает три проверки, результаты кладёт в
+`.winvm-results/codecheck-<дата>/` (вне git, SARIF сжат xz). CodeQL-базы большие: скрипт удаляет их после анализа.
+
+* **Предупреждения компилятора** (`-Wall -Wextra` в `build.sh`, x64 и x86): цель - 0. Пустышки не глушатся.
+* **Clang Static Analyzer** (`csa`): остаются только ложные срабатывания, перечисленные ниже.
+* **CodeQL** `cpp-security-and-quality`: остаются только ложные / допустимые находки, перечисленные ниже.
+
+Что считается ложным и почему (не подавлено в коде, чтобы не засорять исходники; при следующем прогоне те же строки):
+
+* CSA `unix.Malloc` «утечка m_p» (около 60 мест, `config.cpp`, `esxi.cpp`, `http.cpp`, ...): анализатор не видит, что `Str`
+  владеет буфером (`~Str` делает `free`, перемещение обнуляет источник); утечки нет (разбор путей по коду).
+* CSA `unix.cstring.NullArg` в `Str::append`: `m_p == nullptr` только при `m_n == 0`, а при `n == 0` функция выходит раньше `memcpy`.
+* CSA `esxi.cpp:550/844` «null»: `call()` возвращает `true` только после `resp = &body->kids[0]`.
+* CSA `client.cpp:45`: `AsyncResult` освобождает окно-получатель `WM_APP_ASYNC`; при неудачном `PostMessage` - `delete r`.
+* CodeQL `unused-static-function` (713): тесты регистрируются макросом `VM2B_TEST` (статический объект); `non-constant-format`
+  в `vm2bsetup.cpp` / `main.cpp`: формат берётся из `TR("литерал")` (встроенные переводы), данных пользователя в нём нет;
+  `stack-address-escape` (`m_active = this`, указатели на функции) - не адрес стека; `schedule.cpp:256` - `mktime`,
+  а не сложение 365 суток; `world-writable` для `_wfopen` - на Windows нет понятия режима 0666.

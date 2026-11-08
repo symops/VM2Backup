@@ -31,11 +31,11 @@ private:
 
 struct TarEntry {
     Str path;                // UTF-8, '/' separated
-    u64 size;
-    i64 mtime;
-    u32 mode;
-    bool isDir;
-    bool skipped;            // a kind of entry we do not restore (link, device, ...); data is skipped
+    u64 size = 0;
+    i64 mtime = 0;
+    u32 mode = 0;
+    bool isDir = false;
+    bool skipped = false;            // a kind of entry we do not restore (link, device, ...); data is skipped
 };
 
 class TarReader {

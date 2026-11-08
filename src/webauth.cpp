@@ -628,7 +628,7 @@ void WebAuth::audit(const char* event, const Str& user, const Str& ip, const Str
 {
     Guard g(&m_cs);                                          // recursive: callers may hold it
     if (m_auditFile.empty()) return;
-    time_t tt = (time_t)now(); struct tm* tm = gmtime(&tt);
+    time_t tt = (time_t)now(); struct tm tmv; struct tm* tm = gmtime_s(&tmv, &tt) == 0 ? &tmv : nullptr;      // gmtime_s: no shared static buffer
     char ts[40] = "";
     if (tm) snprintf(ts, sizeof(ts), "%04d-%02d-%02dT%02d:%02d:%02dZ", tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
     Str line = Str(ts) + "\t" + event + "\t" + Sanitize(user, 64) + "\t" + Sanitize(ip, 64) + "\t" + Sanitize(detail) + "\r\n";
