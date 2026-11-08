@@ -3,6 +3,7 @@
 #   unsigned.exe       обычный пакет без подписи
 #   signed.exe         пакет, подписанный тестовым сертификатом (подписаны и все exe внутри: package.sh с VM2B_SIGN_PFX)
 #   tampered.exe       signed.exe с изменённым ПОСЛЕ подписи байтом внутри PE загрузчика (строка ресурса): подпись HashMismatch, пакет цел
+#   tampered-hash.exe  unsigned.exe со списком SHA-256 (VM2BHSH1), где испорчена одна цифра хеша: cab цел, подписи нет; лаунчер должен отвергнуть пакет (раунд 13, F7)
 #   tampered-cab.exe   signed.exe с изменённым байтом внутри самого пакета (cab): подпись не проходит И данные повреждены (установщик должен сказать об ошибке понятно)
 # Порядок: сначала подписанная сборка, потом обычная (dist остаётся обычным: именно он идёт в остальные фазы). Ключи и PFX остаются в .winvm/shared/pki (в .gitignore).
 #   tools/winvm-variants.sh
@@ -16,7 +17,7 @@ cp dist/VM2Backup-Setup.exe "$V/signed.exe"
 echo "== обычная сборка"
 ./package.sh > "${TMPDIR:-/tmp}/winvm-variants-plain.log" 2>&1
 cp dist/VM2Backup-Setup.exe "$V/unsigned.exe"
-python3 - "$V/signed.exe" "$V/tampered.exe" "$V/tampered-cab.exe" <<'PY'
+python3 - "$V/signed.exe" "$V/tampered.exe" "$V/tampered-cab.exe" "$V/unsigned.exe" "$V/tampered-hash.exe" <<'PY'
 import sys
 d = bytearray(open(sys.argv[1], 'rb').read())
 a = bytearray(d); i = a.find('VM2Backup setup'.encode('utf-16le')); assert i > 0; a[i] ^= 0x01        # строка внутри PE загрузчика
@@ -24,6 +25,10 @@ open(sys.argv[2], 'wb').write(a)
 b = bytearray(d); c = b.find(b'MSCF'); assert c > 0
 size = int.from_bytes(b[c + 8:c + 12], 'little'); j = c + size // 2; b[j] ^= 0xFF                      # середина cab (данные MSZIP)
 open(sys.argv[3], 'wb').write(b)
+u = bytearray(open(sys.argv[4], 'rb').read()); k = u.rfind(b'VM2BHSH1'); assert k > 0      # список лежит перед cab и кончается этой меткой; портим первую цифру первого хеша
+l = int.from_bytes(u[k + 8:k + 16], 'little'); s0 = k - l; assert u[s0:s0 + 1] in b'0123456789abcdef'
+u[s0] = ord('0') if u[s0] != ord('0') else ord('1')
+open(sys.argv[5], 'wb').write(u)
 PY
 ls -la "$V"
-for f in unsigned signed tampered tampered-cab; do printf '%s: ' $f; osslsigncode verify -in "$V/$f.exe" -CAfile "$PKI/test-root.pem" 2>&1 | grep -E 'Signature verification|MISMATCH|No signature' | head -1; done
+for f in unsigned signed tampered tampered-cab tampered-hash; do printf '%s: ' $f; osslsigncode verify -in "$V/$f.exe" -CAfile "$PKI/test-root.pem" 2>&1 | grep -E 'Signature verification|MISMATCH|No signature' | head -1; done

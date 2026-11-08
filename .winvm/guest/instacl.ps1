@@ -5,7 +5,7 @@
 #   * служба зарегистрирована из этого каталога и работает;
 #   * обновление поверх (после того как права намеренно испорчены icacls) снова закрывает каталог; смена каталога (C:\VM2B-acltest2) переносит установку,
 #     старый каталог убирается; удаление (/remove) работает; в конце ставится пакет в обычное место для следующих фаз.
-# Запускается фазой installer (tools/run-winvm.sh), после uninstall-update.cmd. ПОКА НЕ ПРОГОНЯЛСЯ на настоящей Windows (docs/WINDOWS-TESTS.md).
+# Запускается фазой installer (tools/run-winvm.sh), после uninstall-update.cmd. Прогнан на настоящей Windows 10 x86 в раунде 13 (docs/WINDOWS-TESTS.md): 46 из 46.
 . C:\vm2b\guest\lib.ps1
 $setup = 'C:\vm2b\setup\VM2Backup-Setup.exe'
 $d1 = 'C:\VM2B-acltest'; $d2 = 'C:\VM2B-acltest2'
@@ -27,7 +27,7 @@ function Risky-Aces($p) {
     }
     return $r
 }
-function Install-To($dir) { Start-Process -FilePath $setup -ArgumentList '/install', '/silent', '/dir', "`"$dir`"" -Wait -PassThru | ForEach-Object { $_.ExitCode } }
+function Install-To($dir) { $pp = Start-Process -FilePath $setup -ArgumentList '/install', '/silent', '/dir', "`"$dir`"" -Wait -PassThru; return $pp.ExitCode }      # (конвейер в ForEach-Object давал пустой код: найдено прогоном раунда 13)
 function Svc-Path() { (& sc.exe qc VM2BackupService 2>&1) -join ' ' }
 function As-User($script, $out, $dir) {
     Remove-Item $out -ErrorAction SilentlyContinue
@@ -53,6 +53,7 @@ Check 'the installer ends with 0 for a folder outside Program Files' ($rc -eq 0)
 Start-Sleep -Seconds 5
 $files = 'VM2Backup.exe', 'VM2BackupService.exe', 'VM2Backup-Setup.exe', 'uninstall.cmd'
 Check 'all files are in the folder' (@($files | Where-Object { Test-Path -LiteralPath "$d1\$_" }).Count -eq 4) ((Get-ChildItem $d1 -Name) -join ',')
+Write-Output ("INFO icacls of the folder: " + ((& icacls.exe $d1 2>&1) -join ' | ')); Write-Output ("INFO icacls of the service exe: " + ((& icacls.exe "$d1\VM2BackupService.exe" 2>&1) -join ' | '))
 Write-Output ("INFO folder: " + (Sddl $d1)); foreach ($f in $files) { Write-Output ("INFO ${f}: " + (Sddl "$d1\$f")) }
 $sd1 = Sddl $d1
 Check 'the folder DACL is protected (no inheritance from C:\)' ($sd1 -match 'D:P') $sd1
@@ -60,7 +61,7 @@ Check 'the folder: no write for Users / Everyone / Authenticated Users' ((Risky-
 Check 'the folder: Users have read and execute (the panel runs for them)' ($sd1 -match '\(A;[A-Z]*;(0x1200a9|GRGX|FRFX);;;BU\)') $sd1
 Check 'the folder: SYSTEM and Administrators have full access' (($sd1 -match '\(A;[A-Z]*;FA;;;SY\)') -and ($sd1 -match '\(A;[A-Z]*;FA;;;BA\)')) $sd1
 Check 'the folder owner is Administrators or SYSTEM' ($sd1 -match '^O:(BA|SY)') $sd1
-foreach ($f in $files) { $p = "$d1\$f"; Check "$f: protected DACL without write for ordinary users" (((Sddl $p) -match 'D:P') -and ((Risky-Aces $p).Count -eq 0)) (Sddl $p) }
+foreach ($f in $files) { $p = "$d1\$f"; Check "${f}: protected DACL without write for ordinary users" (((Sddl $p) -match 'D:P') -and ((Risky-Aces $p).Count -eq 0)) (Sddl $p) }
 Check 'the service is registered from this folder' ((Svc-Path) -match [regex]::Escape($d1)) (Svc-Path)
 Check 'the service is running' ((& sc.exe query VM2BackupService 2>&1) -join ' ' -match 'RUNNING') ''
 

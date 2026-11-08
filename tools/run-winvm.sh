@@ -24,6 +24,10 @@
 #   ftpsoak   (раунд 9) один набор FTP-серверов, один тест крутится по кругу FTPSOAK минут (по умолчанию 10; FTPSOAK_TEST - какой тест, FTPSOAK_LOG, FTPSOAK_STRICT=1 - строгий сервер, FTPSOAK_TAG)
 #   tzru      (раунд 9) русские пояса (Russian / Kaliningrad / Ekaterinburg / Russia Time Zone 11 = Камчатка; без летнего времени): группа winreal целиком в каждом поясе (в т.ч. смена пояса без перезапуска службы), затем возврат пояса
 #   tz        (раунд 8, ПОСЛЕДНЯЯ перед sac) пояса с переходом на летнее время (tzutil), часы гостя Set-Date при отключённом w32time: родные тесты расписания + настоящая служба (guest/tzreal.ps1)
+#   launcher  (раунд 13) лаунчер установщика F7: папка в %TEMP%, DACL, удержание файлов, испорченный хеш (guest/launcher.ps1)
+#   sec       (раунд 13) F2 / F3 / F5 на настоящей службе (guest/sec.ps1)
+#   levels    (раунд 13) уровни xz 0-9 и потоки на 32-битной Windows: время, размер, пики памяти службы, restore / verify (guest/levels.ps1)
+#   webshots  (раунд 13) сайт в Edge на госте: горячий режим, уровни сжатия, языки (guest/webshots.ps1)
 #   sac       (w11, ALWAYS LAST: cannot be undone) Smart App Control: try to switch it to On, restart, record what happens to the unsigned Setup and the service
 #   smartscreen  the Setup with Mark of the Web started like a double click, screenshots of what the user sees
 #   big       the 3 'big' autotests (4 GiB; VM2B_BIG=1)
@@ -478,6 +482,56 @@ if want tz; then
   for f in 25-tz-prep 25-tz-spring-eu 25-tz-spring-us 25-tz-autumn-lh 25-tz-restore; do tr -d '\r' < "$RES/$f.out" | grep -aE '^INFO' | cut -c1-260 | tee -a "$SUM"; done
   tally tz $(( RC0 + RCA + RCB + RCC + RCR )) 25-tz-prep 25-tz-spring-eu 25-tz-spring-us 25-tz-autumn-lh 25-tz-restore
   gj 25-tz-reboot 60 'echo done' > /dev/null; reboot_guest 25-tz-reboot-real || say "the guest did not return after the final restart"
+fi
+
+if want launcher; then
+  # раунд 13, F7: лаунчер на настоящей Windows (guest/launcher.ps1; варианты пакета: tools/winvm-variants.sh)
+  variants_ready
+  [ -f "$W/shared/pki/variants/tampered-hash.exe" ] || bash "$R/tools/winvm-variants.sh" > "$W/variants.log" 2>&1
+  gj 30-launcher 1800 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\launcher.ps1' > /dev/null; RC=$?
+  tr -d '\r' < "$RES/30-launcher.out" | grep -aE '^INFO' | cut -c1-400 | tee -a "$SUM"
+  tally launcher $RC 30-launcher
+fi
+
+if want sec; then
+  # раунд 13, F2 / F3 / F5 на настоящей службе (guest/sec.ps1)
+  gj 31-sec 3000 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\sec.ps1' > /dev/null; RC=$?
+  tr -d '\r' < "$RES/31-sec.out" | grep -aE '^INFO' | cut -c1-400 | tee -a "$SUM"
+  tally sec $RC 31-sec
+fi
+
+if want levels; then
+  # раунд 13: уровни xz 0-9 и потоки на 32-битной Windows, пики памяти службы (guest/levels.ps1).  LEVELS_GB - размер большого прогона (по умолчанию 10), LEVELS_BIG=0 - пропустить его
+  gj 32-levels-matrix 21600 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\levels.ps1 matrix' > /dev/null; RC=$?
+  tr -d '\r' < "$RES/32-levels-matrix.out" | grep -aE '^INFO' | cut -c1-400 | tee -a "$SUM"
+  tally levels-matrix $RC 32-levels-matrix
+  # архив 64-битной службы (хост: python3 -I tools/make_x64_archive.py, копия в .winvm/shared/x64arch) читает 32-битная
+  [ -d "$W/shared/x64arch" ] || { python3 -I "$R/tools/make_x64_archive.py" "${TMPDIR:-/tmp}/x64arch" 7 > /dev/null 2>&1 && mkdir -p "$W/shared/x64arch" && cp -r "${TMPDIR:-/tmp}/x64arch/store" "${TMPDIR:-/tmp}/x64arch/files.sha1" "$W/shared/x64arch/"; }
+  gj 32-levels-foreign 3600 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\levels.ps1 foreign %SRC%\x64arch' > /dev/null; RC=$?
+  tr -d '\r' < "$RES/32-levels-foreign.out" | grep -aE '^INFO' | cut -c1-400 | tee -a "$SUM"
+  tally levels-foreign $RC 32-levels-foreign
+  if [ "${LEVELS_BIG:-1}" = 1 ]; then
+    gj 32-levels-big 36000 "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\vm2b\\guest\\levels.ps1 big ${LEVELS_GB:-10}" > /dev/null; RC=$?
+    tr -d '\r' < "$RES/32-levels-big.out" | grep -aE '^INFO' | cut -c1-400 | tee -a "$SUM"
+    tally levels-big $RC 32-levels-big
+  fi
+fi
+
+if want webshots; then
+  # раунд 13: сайт в настоящем Edge на госте (guest/webshots.ps1, протокол DevTools): горячий режим, уровни сжатия, языки en ru de ja zh ko
+  mkdir -p "$RES/shots/web"
+  python3 -I - "$R" "$W/shared/pkg/webshots-lang.json" <<'PY'
+import sys, json; sys.path.insert(0, sys.argv[1] + '/tools'); import webui_strings as ws
+K = {'btn': 'Backup virtual machines...', 'tab': 'Snapshot', 'hot': 'Back up while the VM is running (hot backup)'}
+out = {}
+for lg in ('en', 'ru', 'de', 'ja', 'zh', 'ko'):
+    t = ws.read_lang(lg)[0] if lg != 'en' else {}
+    out[lg] = {k: (t.get(v) or v) for k, v in K.items()}
+json.dump(out, open(sys.argv[2], 'w', encoding='utf-8-sig'), ensure_ascii=False, indent=1)
+PY
+  gj 33-webshots 3000 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\webshots.ps1' > /dev/null; RC=$?
+  tr -d '\r' < "$RES/33-webshots.out" | grep -aE '^INFO' | cut -c1-400 | tee -a "$SUM"
+  tally webshots $RC 33-webshots
 fi
 
 if want sac; then
