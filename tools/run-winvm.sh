@@ -28,6 +28,7 @@
 #   sec       (раунд 13) F2 / F3 / F5 на настоящей службе (guest/sec.ps1)
 #   levels    (раунд 13) уровни xz 0-9 и потоки на 32-битной Windows: время, размер, пики памяти службы, restore / verify (guest/levels.ps1)
 #   webshots  (раунд 13) сайт в Edge на госте: горячий режим, уровни сжатия, языки (guest/webshots.ps1)
+#   uacyes    (раунд 13) настоящий запрос UAC, «Да» с хоста, повышенный установщик из удерживаемой папки (guest/uacyes.ps1)
 #   sac       (w11, ALWAYS LAST: cannot be undone) Smart App Control: try to switch it to On, restart, record what happens to the unsigned Setup and the service
 #   smartscreen  the Setup with Mark of the Web started like a double click, screenshots of what the user sees
 #   big       the 3 'big' autotests (4 GiB; VM2B_BIG=1)
@@ -539,6 +540,24 @@ PY
   gj 33-webshots 3000 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\webshots.ps1' > /dev/null; RC=$?
   tr -d '\r' < "$RES/33-webshots.out" | grep -aE '^INFO' | cut -c1-400 | tee -a "$SUM"
   tally webshots $RC 33-webshots
+fi
+
+if want uacyes; then
+  # раунд 13, F7: настоящий запрос UAC на защищённом рабочем столе, «Да» нажимает хост (qemu sendkey); повышенный установщик стартует из удерживаемой папки (guest/uacyes.ps1)
+  variants_ready
+  mkdir -p "$RES/shots/signing"
+  SG='powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\signing.ps1'
+  gj 22-uacyes-prep 300 "$SG prep" "$SG trust" "$SG uac on" > /dev/null
+  reboot_guest 22-uacyes-reboot-on || say "the guest did not return after the restart (UAC on)"
+  gj 22-uacyes-launch 300 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\uacyes.ps1 launch' > /dev/null; RC0=$?
+  sleep 3; "$W/shot.sh" "$RES/shots/signing/uacyes-1-prompt.png" >/dev/null 2>&1
+  docker exec vm2b-win sh -c 'echo "sendkey alt-y" | nc -U -q1 /tmp/m.sock' >/dev/null 2>&1; sleep 4
+  "$W/shot.sh" "$RES/shots/signing/uacyes-2-after-yes.png" >/dev/null 2>&1
+  gj 22-uacyes-check 600 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\uacyes.ps1 check' > /dev/null; RC=$?
+  "$W/shot.sh" "$RES/shots/signing/uacyes-3-done.png" >/dev/null 2>&1
+  gj 22-uacyes-reset 300 "$SG untrust" "$SG uac reset" > /dev/null; reboot_guest 22-uacyes-reboot-off || true
+  tr -d '\r' < "$RES/22-uacyes-launch.out" | grep -aE '^INFO' | cut -c1-300 | tee -a "$SUM"; tr -d '\r' < "$RES/22-uacyes-check.out" | grep -aE '^INFO' | cut -c1-300 | tee -a "$SUM"
+  tally uacyes $(( RC0 + RC )) 22-uacyes-launch 22-uacyes-check
 fi
 
 if want sac; then

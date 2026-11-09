@@ -150,7 +150,7 @@ public:
 
 // ---- the service -----------------------------------------------------------------------------------------------
 ServiceCore::ServiceCore() : m_sched(nullptr), m_stop(0), m_slots(nullptr), m_slotCount(0), m_lastTick(0), m_statePersisted(0), m_started(false) { InitializeCriticalSection(&m_cs); m_catalog = Json::array(); }
-ServiceCore::~ServiceCore() { stop(); DeleteCriticalSection(&m_cs); }
+ServiceCore::~ServiceCore() { stop(); joinAbandoned(0); if (m_abandoned.size() == 0) DeleteCriticalSection(&m_cs); }       // an abandoned job still running keeps the section (the process is ending)
 
 bool ServiceCore::start(const ServiceOptions& o, Str& err)
 {
@@ -174,21 +174,37 @@ bool ServiceCore::start(const ServiceOptions& o, Str& err)
     return true;
 }
 
-void ServiceCore::stop()
+int ServiceCore::stop()
 {
-    if (!m_started) return;
+    if (!m_started) return m_abandoned.size();
     m_started = false;
     InterlockedExchange(&m_stop, 1);                                 // running jobs stop at the next opportunity and keep their journals
     m_web.stop();
     m_ipc.stop();
     if (m_sched) { WaitForSingleObject(m_sched, 10000); CloseHandle(m_sched); m_sched = nullptr; }
     m_cfg.flushState();                                              // the scheduler's last_check values (kept in memory between writes)
-    for (int i = 0; i < 600 && runningJobs() > 0; ++i) Sleep(100);
+    for (int i = 0; i < m_opt.stopJobWaitMs / 100 && runningJobs() > 0; ++i) Sleep(100);
     EnterCriticalSection(&m_cs);
-    for (size_t i = 0; i < m_jobs.size(); ++i) { Job* j = m_jobs[i]; if (j->thread) WaitForSingleObject(j->thread, 5000); delete j; }
+    for (size_t i = 0; i < m_jobs.size(); ++i) {
+        Job* j = m_jobs[i];
+        if (j->thread && WaitForSingleObject(j->thread, (DWORD)m_opt.stopThreadWaitMs) != WAIT_OBJECT_0) {
+            Log(L"the job \"%s\" did not end in time: it is left to the end of the process (its journal is kept)", Wide(j->name).c_str());
+            m_abandoned.push_back(j); continue;
+        }
+        delete j;
+    }
     m_jobs.clear();
     LeaveCriticalSection(&m_cs);
     Log(L"service stopped");
+    return m_abandoned.size();
+}
+
+void ServiceCore::joinAbandoned(int ms)
+{
+    for (size_t i = m_abandoned.size(); i-- > 0;) {
+        Job* j = m_abandoned[i];
+        if (!j->thread || WaitForSingleObject(j->thread, (DWORD)ms) == WAIT_OBJECT_0) { delete j; m_abandoned.erase(i); }
+    }
 }
 
 int ServiceCore::runningJobs() const

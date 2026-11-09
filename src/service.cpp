@@ -97,10 +97,11 @@ static void WINAPI ServiceMain(DWORD, LPWSTR*)
     // Stopping can take a while (running jobs are asked to stop and keep their journals): the SCM is told every few seconds that we are alive, else a stop
     // that exceeds the first wait hint is reported as "did not respond".
     HANDLE keepAlive = CreateThread(nullptr, 0, KeepStopPending, nullptr, 0, nullptr);
-    core.stop();                                    // running jobs keep their journals and go on after the next start
+    int abandoned = core.stop();                    // running jobs keep their journals and go on after the next start
     InterlockedExchange(&g_stopped, 1);
     if (keepAlive) { WaitForSingleObject(keepAlive, 10000); CloseHandle(keepAlive); }
     SetState(SERVICE_STOPPED);
+    if (abandoned > 0) TerminateProcess(GetCurrentProcess(), 0);      // a job is still compressing a big block: the process ends without destroying what its thread uses
 }
 
 static BOOL WINAPI CtrlC(DWORD) { if (g_stopEvent) SetEvent(g_stopEvent); return TRUE; }
@@ -114,7 +115,7 @@ static int RunConsole()
     printf("VM2Backup service %s running; data in %s. Ctrl+C stops it.\n", VM2B_VER_STR, core.config().dataDir().c_str());
     fflush(stdout);
     WaitForSingleObject(g_stopEvent, INFINITE);
-    core.stop();
+    if (core.stop() > 0) TerminateProcess(GetCurrentProcess(), 0);
     return 0;
 }
 

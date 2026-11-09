@@ -232,3 +232,30 @@ VM2B_TEST("service", odd_names_backup_and_restore)
 }
 
 } // namespace vm2b
+
+namespace vm2b { namespace {
+// Round 13 (real Windows 10 x86, 10 GB through the level 7 default): the service did not end in 60 s because a big xz block of a slow machine compresses for minutes; the stop then freed the
+// job while its thread was still compressing -> "CRASH: exception 0xC0000005" right after "service stopped" (or a stop that never ended).  A job that does not end in time is
+// now abandoned (never freed), stop() reports it, and service.cpp ends the process.
+VM2B_TEST("service", stop_does_not_free_a_job_that_is_still_compressing)
+{
+    Svc s(c_, "svcstopbusy"); if (!s.up) return false;
+    s.opt.stopJobWaitMs = 100; s.opt.stopThreadWaitMs = 100; T_CHECK(s.restart());
+    Str root = s.tmp.sub("vms"); Bytes big = Random(c_, 80u << 20); WriteBytes(JoinPath(root, "vm\\disk-flat.vmdk"), big);   // level 7: the block is 48 MiB, the first one goes to a worker at once
+    Str srv = s.addDirServer(root);
+    Json st = Json::object(); st["level"] = 7; st["threads"] = 1; st["segment_mib"] = 0; s.ok("settings.set", st);
+    Json el = Svc::Element(srv, "vm", JoinPath(s.tmp.sub("store"), "{VM}"), "xz", 7); el["verify"] = false;
+    Str task = s.saveTask("Busy", el);
+    Json a = Json::object(); a["id"] = task; Json r = s.ok("tasks.run", a); T_CHECK(!r.get("job").str().empty());
+    DWORD t0 = GetTickCount(); bool compressing = false;
+    while (GetTickCount() - t0 < 30000 && !compressing) { Json jobs = s.ok("jobs.list", Json::object()); for (size_t i = 0; i < jobs.size(); ++i) if (jobs.at(i).get("status").str() == "Running") compressing = true; Sleep(50); }
+    T_CHECK(compressing); Sleep(4000);                   // 80 MiB are read in well under a second; the first 48 MiB block is in a worker, which needs ~10 s
+    s.cli.close();
+    int ab = s.core.stop();
+    c_.note("stop() returned %d abandoned job(s) with %d busy", ab, (int)(compressing ? 1 : 0));
+    T_CHECK(ab == 1 && s.core.abandonedJobs() == 1);       // old code: stop() was void and freed the job under its thread
+    s.core.joinAbandoned(120000);
+    T_CHECK(s.core.abandonedJobs() == 0);                  // the thread ended by itself and the job could be freed afterwards
+    return true;
+}
+} }

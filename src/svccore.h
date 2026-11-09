@@ -36,8 +36,10 @@ struct ServiceOptions {
     int tickMs;                                    // the scheduler's pace
     i64 (*clock)();                                // unix time; null = the real one (tests replace it)
     void (*onShutdown)();                          // called when a client sends service.shutdown (the shell stops the service)
+    int stopJobWaitMs;                             // service stop: how long running jobs get to end (default 60000); tests shorten it
+    int stopThreadWaitMs;                          // then: how long to wait for each job's thread before the job is abandoned (default 5000)
     int webDefault;                                // the web site on a first start: -1 = on (127.0.0.1:8443), unless the environment has VM2B_WEB_DEFAULT=0 (tests); 0 = off; 1 = on
-    ServiceOptions() : pipeSddl(nullptr), tickMs(1000), clock(nullptr), onShutdown(nullptr), webDefault(-1) {}
+    ServiceOptions() : pipeSddl(nullptr), tickMs(1000), clock(nullptr), onShutdown(nullptr), stopJobWaitMs(60000), stopThreadWaitMs(5000), webDefault(-1) {}
 };
 
 class Job;
@@ -47,7 +49,12 @@ public:
     ServiceCore();
     ~ServiceCore();
     bool start(const ServiceOptions& o, Str& err);
-    void stop();                                   // running jobs are stopped and kept for resuming
+    // Running jobs are stopped and kept for resuming.  Returns the number of jobs that did NOT end in time (a big xz block of a slow 32-bit machine compresses
+    // for minutes): such a job is never freed (its thread still uses it - freeing it crashed the service at the stop, found on the real Windows in round 13);
+    // the caller ends the process (service.cpp), the tests call joinAbandoned().
+    int stop();
+    int abandonedJobs() const { return m_abandoned.size(); }
+    void joinAbandoned(int ms);                    // waits for the threads of the abandoned jobs and frees those that ended
     bool handle(const Str& cmd, const Json& args, Json& result, Str& err) override;
     Config& config() { return m_cfg; }
     i64 now() const { return m_opt.clock ? m_opt.clock() : (i64)UnixNow(); }
@@ -83,7 +90,7 @@ private:
     void authOk(const Str& serverId);
 
     Config m_cfg; ServiceOptions m_opt; IpcServer m_ipc; WebServer m_web; HANDLE m_sched; volatile LONG m_stop;
-    mutable CRITICAL_SECTION m_cs; Vec<Job*> m_jobs; HANDLE m_slots; int m_slotCount;
+    mutable CRITICAL_SECTION m_cs; Vec<Job*> m_jobs; Vec<Job*> m_abandoned; HANDLE m_slots; int m_slotCount;
     Vec<Str> m_claims;                             // "server|folder|vm" of the backups running now: two jobs never write the same VM into the same folder at once
     Json m_catalog;                                // [{server, directory}] places where backups were made
     i64 m_lastTick, m_statePersisted; bool m_started;      // m_statePersisted: when the scheduler last wrote state.json (last_check is kept in memory in between)

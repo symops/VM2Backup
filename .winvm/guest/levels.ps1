@@ -6,7 +6,7 @@
 #   levels.ps1 foreign <папка tools/make_x64_archive.py>  - прочитать (verify + restore) архив, сделанный 64-битной службой на хосте, и сверить файлы
 param([string]$Mode = 'matrix', [string]$A1 = '', [string]$A2 = '')
 . C:\vm2b\guest\lib.ps1
-$src = 'C:\vm2b\lvldata'; $store = 'C:\vm2b\lvlstore'; $rest = 'C:\vm2b\lvlrest'
+$script:JobMax = 5400; $src = 'C:\vm2b\lvldata'; $store = 'C:\vm2b\lvlstore'; $rest = 'C:\vm2b\lvlrest'
 $svcExe = (Get-WmiObject Win32_Service -Filter "Name='VM2BackupService'").PathName; if ($svcExe -match '^"([^"]+)"') { $svcExe = $Matches[1] } else { $svcExe = ($svcExe -split ' /')[0].Trim() }
 function Web-Ready { for ($i = 0; $i -lt 120; $i++) { $w = New-Web 'https://127.0.0.1:8443'; $r = Web-Login $w; if ($r.Status -eq 200 -and $r.Json.ok) { return $w }; Start-Sleep -Milliseconds 700 }; return $null }
 function Job-Wait($w, $id, $sec) { for ($i = 0; $i -lt $sec; $i += 1) { $j = Api $w 'jobs.list' @{}; $mine = @($j.Result) | Where-Object { $_.id -eq $id }; if (-not $mine -or ($mine.status -ne 'Waiting' -and $mine.status -ne 'Running')) { return $(if ($mine) { $mine.status } else { 'Gone' }) }; Start-Sleep -Seconds 1 }; return 'timeout' }
@@ -72,7 +72,7 @@ function Run-Level($vm, $level, $threads, $srcRoot, $srcHash, $label, [switch]$B
     $svcPid = (Get-Process VM2BackupService).Id
     $sw = [Diagnostics.Stopwatch]::StartNew(); $r = Api $w 'tasks.run' @{ id = $tk.Result.id }
     if (-not $r.Result.job) { Write-Output "INFO tasks.run answer: $($r.Status) $($r.Text)" }
-    $st = Job-Wait $w $r.Result.job 5400; $sec = $sw.Elapsed.TotalSeconds
+    $st = Job-Wait $w $r.Result.job $script:JobMax; $sec = $sw.Elapsed.TotalSeconds
     $pk = Svc-Peaks; $alive = ($pk -and $pk.Pid -eq $svcPid)
     $h = Api $w 'history.list' @{ limit = 20 }; $he = @($h.Result) | Where-Object { $_.name -eq "lvl-$level-$threads" } | Select-Object -First 1
     $arch = (Get-ChildItem $dir -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '\.(json|manifest)$' } | Measure-Object Length -Sum).Sum
@@ -118,8 +118,9 @@ elseif ($Mode -eq 'big') {
     Remove-Item -Recurse -Force $src -ErrorAction SilentlyContinue; Mk-Data "$src\vmB" ([int]($gb * 1024 * 0.40)) ([int]($gb * 1024 * 0.25)) ([int]($gb * 1024 * 0.35))
     $tot = (Get-ChildItem "$src\vmB" -Recurse -File | Measure-Object Length -Sum).Sum; $hash = [LvlGen]::TreeHash("$src\vmB")
     Write-Output ("INFO source: {0:N0} MiB, {1}" -f ($tot / 1MB), $hash)
+    $script:JobMax = 20000      # 5,5 часа: 10 ГБ на медленной ВМ с уровнем 7 идут около 2 часов
     Run-Level 'vmB' 7 0 $src $hash 'big L7 Auto (default)'
-    foreach ($t in 4, 2, 1) { Run-Level 'vmB' 7 $t $src $hash "big L7 T$t" -BackupOnly }       # остальные потоки: только копия (время, размер, пики); verify / restore сделаны на Auto
+    # остальные варианты потоков на большом наборе не гоняем: 32-битный процесс режет их по бюджету памяти (см. таблицу matrix: 7 / T8 равен Auto)
 }
 elseif ($Mode -eq 'foreign') {
     # архив 64-битной службы (tools/make_x64_archive.py, папка $A1 на общей папке хоста: store\vmX + files.sha1); копируем на локальный диск и читаем 32-битной службой
