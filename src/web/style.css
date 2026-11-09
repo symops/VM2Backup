@@ -52,7 +52,7 @@ table.grid tr.sel { background: var(--blue-light); }
 .dialog .df { padding: 10px 14px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 8px; align-items: center; }
 .dialog .df .err { flex: 1; color: var(--bad); font-size: 13px; }
 .f { display: flex; align-items: center; margin-bottom: 9px; gap: 10px; }
-.f > label { width: 150px; flex: none; color: var(--muted); }
+.f > label { width: 150px; flex: none; color: var(--muted); overflow-wrap: anywhere; hyphens: auto; }   /* a long compound word (German "Geschwindigkeitsbegrenzung") must wrap inside the 150 px column, not run under the input (found in Edge on the real Windows, round 13) */
 .f > label.chk { width: auto; flex: 1 1 auto; min-width: 0; color: var(--text); }   /* the caption of a check box takes the whole row, not the 150 px label column */
 .f > input[type=text], .f > input[type=password], .f > input[type=number], .f > input[type=time], .f > input[type=datetime-local], .f > select, .f > textarea { flex: 1; min-width: 0; padding: 5px 7px; border: 1px solid #b7c2ce; border-radius: 3px; font: inherit; }
 .f > input[type=number] { min-width: 70px; }   /* a long note in the same row (ja) must not squeeze a number box to nothing */

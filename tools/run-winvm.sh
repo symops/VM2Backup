@@ -502,14 +502,21 @@ fi
 
 if want levels; then
   # раунд 13: уровни xz 0-9 и потоки на 32-битной Windows, пики памяти службы (guest/levels.ps1).  LEVELS_GB - размер большого прогона (по умолчанию 10), LEVELS_BIG=0 - пропустить его
-  gj 32-levels-matrix 21600 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\levels.ps1 matrix' > /dev/null; RC=$?
+  if [ "${LEVELS_ONLY_BIG:-0}" = 1 ]; then :      # LEVELS_ONLY_BIG=1: только большой прогон (LEVELS_GB)
+  elif [ -n "${LEVELS_LIST:-}" ]; then      # LEVELS_LIST='7:8 8:8 9:8 7:4 7:2 7:1' - только эти пары «уровень:потоки» вместо всей таблицы
+    gj 32-levels-matrix 36000 "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\vm2b\\guest\\levels.ps1 list \"$LEVELS_LIST\"" > /dev/null; RC=$?
+  else
+  gj 32-levels-matrix 36000 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\levels.ps1 matrix' > /dev/null; RC=$?
+  fi
   tr -d '\r' < "$RES/32-levels-matrix.out" | grep -aE '^INFO' | cut -c1-400 | tee -a "$SUM"
-  tally levels-matrix $RC 32-levels-matrix
+  [ "${LEVELS_ONLY_BIG:-0}" = 1 ] || tally levels-matrix $RC 32-levels-matrix
   # архив 64-битной службы (хост: python3 -I tools/make_x64_archive.py, копия в .winvm/shared/x64arch) читает 32-битная
+  if [ "${LEVELS_ONLY_BIG:-0}" != 1 ]; then
   [ -d "$W/shared/x64arch" ] || { python3 -I "$R/tools/make_x64_archive.py" "${TMPDIR:-/tmp}/x64arch" 7 > /dev/null 2>&1 && mkdir -p "$W/shared/x64arch" && cp -r "${TMPDIR:-/tmp}/x64arch/store" "${TMPDIR:-/tmp}/x64arch/files.sha1" "$W/shared/x64arch/"; }
   gj 32-levels-foreign 3600 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\levels.ps1 foreign %SRC%\x64arch' > /dev/null; RC=$?
   tr -d '\r' < "$RES/32-levels-foreign.out" | grep -aE '^INFO' | cut -c1-400 | tee -a "$SUM"
   tally levels-foreign $RC 32-levels-foreign
+  fi
   if [ "${LEVELS_BIG:-1}" = 1 ]; then
     gj 32-levels-big 36000 "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\vm2b\\guest\\levels.ps1 big ${LEVELS_GB:-10}" > /dev/null; RC=$?
     tr -d '\r' < "$RES/32-levels-big.out" | grep -aE '^INFO' | cut -c1-400 | tee -a "$SUM"

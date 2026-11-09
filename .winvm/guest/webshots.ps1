@@ -3,6 +3,7 @@
 #   диалог «Резервное копирование ВМ» на вкладке «Снимок» (горячий режим: флажок и предупреждение), страница «Проводник копий»; проверка, что ничто не вылезает за окно
 #   (нет горизонтальной прокрутки, подписи флажков переносятся). Снимки: results\shots\web\<язык>-<имя>.png. Служба должна работать (фаза web / install).
 . C:\vm2b\guest\lib.ps1
+try { [Console]::OutputEncoding = New-Object Text.UTF8Encoding($false) } catch {}      # журнал в UTF-8 (иначе переведённые подписи превращаются в «?»)
 $out = "$Share\results\shots\web"; New-Item -ItemType Directory -Force $out | Out-Null
 $langs = Get-Content "$Share\pkg\webshots-lang.json" -Raw -Encoding UTF8 | ConvertFrom-Json
 $edge = @("${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe", "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe", "$env:ProgramFiles\Google\Chrome\Application\chrome.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
@@ -61,7 +62,7 @@ foreach ($lg in @($langs.PSObject.Properties)) {
     # 1. Настройки: страница и диалог
     Js "document.querySelectorAll('.nav a')[4].click(); true" | Out-Null; Start-Sleep -Milliseconds 800
     Shot "$code-settings-page"; Write-Output ("INFO [$code] settings page rows: " + (Js "Array.from(document.querySelectorAll('.content tr, .content .row')).map(r=>r.textContent.trim().replace(/\s+/g,' ')).filter(t=>/xz|7|threads|поток|Thread/i.test(t)).slice(0,6).join(' | ')"))
-    $btn = Js "(() => { const bs = Array.from(document.querySelectorAll('.content button')); if (!bs.length) return -1; bs[0].click(); return bs.length; })()"
+    $btn = Js "(() => { const bs = Array.from(document.querySelectorAll('.content button')); if (!bs.length) return -1; bs[bs.length - 1].click(); return bs.length; })()"
     Start-Sleep -Milliseconds 700
     $dlg = Js "!!document.querySelector('.dialog')"
     Check "[$code] the Settings dialog opens" ($dlg -eq $true) "buttons=$btn"
@@ -73,6 +74,7 @@ foreach ($lg in @($langs.PSObject.Properties)) {
         Check "[$code] the level select has 10 entries 0..9 and 7 is selected by default" ($lvl -match '"n":10' -and $lvl -match '"sel":"7"') $lvl
         Shot "$code-settings-dialog"
         $ov = Js $overflowJs; Write-Output "INFO [$code] settings dialog overflow: $ov"
+        Check "[$code] the Settings dialog: no label is clipped (a long word wraps inside its column)" ($ov -notmatch 'LABEL') $ov
         Check "[$code] the Settings dialog: no horizontal scroll of the window" ($ov -match '"docScroll":(\d+),"win":(\d+)' -and [int]$Matches[1] -le [int]$Matches[2]) $ov
         Js "document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})); const c=document.querySelector('.dialog .close, .dialog button'); true" | Out-Null; Start-Sleep -Milliseconds 400
         if (Js "!!document.querySelector('.dialog')") { Js "(() => { const bs = Array.from(document.querySelectorAll('.dialog button')); if (bs.length) bs[bs.length-1].click(); return true; })()" | Out-Null; Start-Sleep -Milliseconds 400 }

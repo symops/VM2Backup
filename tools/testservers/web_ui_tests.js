@@ -71,6 +71,7 @@ function makeEnv(router, lang) {
     ok(!/<script(?![^>]*\bsrc=)[^>]*>/.test(html) && !/\son\w+\s*=/.test(html) && !/style=/.test(html), 'index.html: no inline script / handler / style');
     ok(!/https?:\/\//.test(html), 'index.html: nothing external');
     ok(!/url\(\s*['"]?https?:/.test(fs.readFileSync(path.join(webdir, 'style.css'), 'utf8')) && !/@import/.test(fs.readFileSync(path.join(webdir, 'style.css'), 'utf8')), 'style.css: nothing external');
+    ok(/\.f > label \{[^}]*overflow-wrap: anywhere/.test(fs.readFileSync(path.join(webdir, 'style.css'), 'utf8')), 'style.css: the 150 px label column wraps a long compound word (German "Geschwindigkeitsbegrenzung" was clipped under the input in Edge, round 13)');
     // 2. every UI string has a Russian translation
     const miss = cp.spawnSync('python3', ['-I', path.join(root, 'tools', 'webui_strings.py'), '--missing']);
     ok(miss.status === 0, 'all UI strings are translated: ' + miss.stdout);

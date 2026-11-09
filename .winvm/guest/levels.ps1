@@ -64,9 +64,9 @@ function Run-Level($vm, $level, $threads, $srcRoot, $srcHash, $label, [switch]$B
     $dir = "$store\$vm-L$level-T$threads"; Remove-Item -Recurse -Force $dir, $rest -ErrorAction SilentlyContinue
     $w = Svc-Restart; if (-not $w) { Check "$label : service restarted" $false ''; return }
     Api $w 'settings.set' @{ level = $level; threads = $threads; max_parallel = 1 } | Out-Null
-    foreach ($x in @((Api $w 'servers.list' @{}).Result)) { if ($x.name -eq 'lvl src') { Api $w 'servers.delete' @{ id = $x.id } | Out-Null } }
     foreach ($x in @((Api $w 'tasks.list' @{}).Result)) { if ($x.name -like 'lvl-*') { Api $w 'tasks.delete' @{ id = $x.id } | Out-Null } }
-    $sv = Api $w 'servers.save' @{ server = @{ type = 'directory'; name = 'lvl src'; path = $srcRoot } }; $sid = $sv.Result.id
+    foreach ($x in @((Api $w 'servers.list' @{}).Result)) { if ($x.name -eq 'lvl src') { Api $w 'servers.delete' @{ id = $x.id } | Out-Null } }
+    $sv = Api $w 'servers.save' @{ server = @{ type = 'directory'; name = 'lvl src'; path = $srcRoot } }; $sid = $sv.Result.id; if (-not $sid) { Write-Output "INFO servers.save: $($sv.Text)" }
     $el = @{ source = @{ server = $sid; vms = @($vm) }; target = @{ server = 'local'; directory = "$dir\{VM}" }; compress = @{ codec = 'xz' }; encrypt = @{ enabled = $false }; verify = $false; keep = 0; segment_mib = 0 }
     $tk = Api $w 'tasks.save' @{ task = @{ name = "lvl-$level-$threads"; enabled = $true; elements = @($el) } }
     $svcPid = (Get-Process VM2BackupService).Id
