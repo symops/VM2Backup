@@ -560,6 +560,17 @@ if want uacyes; then
   tally uacyes $(( RC0 + RC )) 22-uacyes-launch 22-uacyes-check
 fi
 
+if want tzeu; then
+  # раунд 13: повтор одного сценария перехода (весна, W. Europe) на настоящей службе: в основном прогоне часы гостя вернулись к реальному времени посреди сценария (среда), см. docs/WINDOWS-TESTS.md
+  TZT='powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\tzreal.ps1'
+  gj 25-tz-prep 300 "$TZT prep" > /dev/null; RC0=$?
+  gj 25-tz-spring-eu 1800 "$TZT scenario \"W. Europe Standard Time\" \"2027-03-28 01:56:30\" 02:05 18 spring-eu" > /dev/null; RCA=$?
+  gj 25-tz-restore 300 "$TZT restore" > /dev/null; RCR=$?
+  for f in 25-tz-prep 25-tz-spring-eu 25-tz-restore; do tr -d '\r' < "$RES/$f.out" | grep -aE '^INFO' | cut -c1-260 | tee -a "$SUM"; done
+  tally tzeu $(( RC0 + RCA + RCR )) 25-tz-prep 25-tz-spring-eu 25-tz-restore
+  gj 25-tz-reboot 60 'echo done' > /dev/null; reboot_guest 25-tz-reboot-real || true
+fi
+
 if want sac; then
   # Smart App Control: ПОСЛЕДНЯЯ фаза (включённый SAC нельзя выключить без сброса Windows; ВМ удаляется сразу после). Включение - через настоящий интерфейс
   # «Безопасность Windows» (переключатель On, UI Automation), потом проверка вариантов установщика и продукта (guest/sac.ps1), без доверия к тестовому корню и с ним.

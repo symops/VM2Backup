@@ -16,6 +16,7 @@ Check 'operator account created' ($sv.Status -eq 200) $sv.Text
 $src = 'C:\vm2b\secsrc'; $store = 'C:\vm2b\secstore'; $evil = 'C:\vm2b\sec-evil'
 Remove-Item -Recurse -Force $src, $store, $evil -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force "$src\vmS" | Out-Null
 [IO.File]::WriteAllBytes("$src\vmS\a.vmdk", (New-Object byte[] 300000))
+foreach ($x in @((Api $adm 'tasks.list' @{}).Result)) { if ($x.name -eq 'sec-task') { Api $adm 'tasks.delete' @{ id = $x.id } | Out-Null } }
 foreach ($x in @((Api $adm 'servers.list' @{}).Result)) { if ($x.name -eq 'sec src') { Api $adm 'servers.delete' @{ id = $x.id } | Out-Null } }
 $sid = (Api $adm 'servers.save' @{ server = @{ type = 'directory'; name = 'sec src'; path = $src } }).Result.id
 $mkEl = { param($dir, $keep) @{ source = @{ server = $sid; vms = @('vmS') }; target = @{ server = 'local'; directory = "$dir\{VM}" }; compress = @{ codec = 'xz'; level = 1 }; encrypt = @{ enabled = $false }; verify = $false; keep = $keep; segment_mib = 0 } }
@@ -79,9 +80,9 @@ $size1 = (Get-Item $audit).Length; $lines1 = @(Get-Content $audit -ErrorAction S
 Write-Output "INFO F5: audit.log $size0 -> $size1 bytes, $lines0 -> $lines1 lines"
 Check 'F5: 200 failed logins add at most 12 lines to the audit log (not 200)' (($lines1 - $lines0) -le 12) "$lines0 -> $lines1"
 Check 'F5: the flood was answered with 401 / 429 only' (@($codes.Keys | Where-Object { $_ -ne '401' -and $_ -ne '429' }).Count -eq 0) ($codes.Keys -join ',')
-# после потока блокировка адреса растёт (по замыслу): ждём retry_after, который называет сам сервер, до 10 минут
+# после потока блокировка адреса растёт (по замыслу): ждём retry_after, который называет сам сервер, до 20 минут (потолок блокировки адреса 900 с)
 $adm2 = $null; $waited = 0; $t0 = Get-Date
-while (((Get-Date) - $t0).TotalSeconds -lt 600 -and -not $adm2) {
+while (((Get-Date) - $t0).TotalSeconds -lt 1200 -and -not $adm2) {
     $w2 = New-Web 'https://127.0.0.1:8443'; $r2 = Web-Login $w2
     if ($r2.Status -eq 200 -and $r2.Json.ok) { $adm2 = $w2 } else { $ra = 5; if ($r2.Text -match '"retry_after":(\d+)') { $ra = [int]$Matches[1] + 1 }; if ($waited -eq 0) { Write-Output "INFO F5: after the flood the address is locked: status $($r2.Status), retry_after $ra s" }; $waited++; Start-Sleep -Seconds $ra }
 }
