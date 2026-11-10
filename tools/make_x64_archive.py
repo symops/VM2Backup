@@ -24,7 +24,8 @@ with open(OUT + '/files.sha1', 'w') as f:
     for n in sorted(os.listdir(OUT + '/src/vmX'), key=str.lower): f.write('%s %s\n' % (n.lower(), hashlib.sha1(open(OUT + '/src/vmX/' + n, 'rb').read()).hexdigest()))
 json.dump({'web': {'ctl_dir': wp(OUT + '/ctl'), 'data_dir': wp(OUT + '/data'), 'kdf': 2000}}, open(OUT + '/servers.json', 'w'))
 env = dict(os.environ, WINEDEBUG='-all')
-host = subprocess.Popen(['wine64', ROOT + '/build/x64/vm2bautotest.exe', '--servers', OUT + '/servers.json', '--only', 'host_for_python_clients'], env=env, stdout=open(OUT + '/wine.log', 'w'), stderr=subprocess.STDOUT)
+SVC = os.environ.get('VM2B_ARCHIVE_ARCH', 'x64')      # раунд 14: архив можно сделать и 32-битной службой (x86 под Wine) для чтения 64-битной на настоящей Windows
+host = subprocess.Popen(['wine64' if SVC == 'x64' else 'wine', ROOT + '/build/%s/vm2bautotest.exe' % SVC, '--servers', OUT + '/servers.json', '--only', 'host_for_python_clients'], env=env, stdout=open(OUT + '/wine.log', 'w'), stderr=subprocess.STDOUT)
 for _ in range(600):
     if os.path.exists(OUT + '/ctl/ready.txt'): break
     time.sleep(0.2)

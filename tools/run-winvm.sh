@@ -29,7 +29,7 @@
 #   levels    (раунд 13) уровни xz 0-9 и потоки на 32-битной Windows: время, размер, пики памяти службы, restore / verify (guest/levels.ps1)
 #   webshots  (раунд 13) сайт в Edge на госте: горячий режим, уровни сжатия, языки (guest/webshots.ps1)
 #   uacyes    (раунд 13) настоящий запрос UAC, «Да» с хоста, повышенный установщик из удерживаемой папки (guest/uacyes.ps1)
-#   sac       (w11, ALWAYS LAST: cannot be undone) Smart App Control: try to switch it to On, restart, record what happens to the unsigned Setup and the service
+#   rulocale  (раунд 14) русская Windows: каталог установки с кириллицей, журнал Windows, консоль CP866, десятичная запятая (guest/rulocale.ps1)\n#   sac       (w11, ALWAYS LAST: cannot be undone) Smart App Control: try to switch it to On, restart, record what happens to the unsigned Setup and the service
 #   smartscreen  the Setup with Mark of the Web started like a double click, screenshots of what the user sees
 #   big       the 3 'big' autotests (4 GiB; VM2B_BIG=1)
 #   winbig    6 GiB sparse vmdk through the whole pipeline (xz level 1), peak memory
@@ -119,7 +119,7 @@ say "executor initialised"
 # нет маршрута.  Маршрут через контейнер (он шлюз гостя, брандмауэр гостя выключен) снимается в destroy.sh; тест `ftp_passive_active_and_listing_variants` при этом просит сервер
 # принять «чужой» адрес (SITE FAULT foreign), продукт не ослаблен.  Если маршрута нет, активная часть падает честно («did not connect back»), а не пропускается.
 if [ -n "$GUESTIP" ]; then
-  CIP=$(docker inspect -f '{{.NetworkSettings.IPAddress}}' vm2b-win 2>/dev/null)
+  CIP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' vm2b-win 2>/dev/null)      # раунд 14: новый docker не знает поля .NetworkSettings.IPAddress
   if [ -n "$CIP" ] && ip route replace "$GUESTIP/32" via "$CIP" 2>/dev/null; then say "route to the guest $GUESTIP via the container $CIP (active FTP)"; else say "no route to the guest (active FTP will fail with 'did not connect back')"; fi
 fi
 
@@ -513,8 +513,10 @@ if want levels; then
   [ "${LEVELS_ONLY_BIG:-0}" = 1 ] || tally levels-matrix $RC 32-levels-matrix
   # архив 64-битной службы (хост: python3 -I tools/make_x64_archive.py, копия в .winvm/shared/x64arch) читает 32-битная
   if [ "${LEVELS_ONLY_BIG:-0}" != 1 ]; then
-  [ -d "$W/shared/x64arch" ] || { python3 -I "$R/tools/make_x64_archive.py" "${TMPDIR:-/tmp}/x64arch" 7 > /dev/null 2>&1 && mkdir -p "$W/shared/x64arch" && cp -r "${TMPDIR:-/tmp}/x64arch/store" "${TMPDIR:-/tmp}/x64arch/files.sha1" "$W/shared/x64arch/"; }
-  gj 32-levels-foreign 3600 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\levels.ps1 foreign %SRC%\x64arch' > /dev/null; RC=$?
+  # раунд 14: на x64 читаем архив 32-битной службы (x86 под Wine), на x86 - архив 64-битной
+  if [ "$OS" = x86 ]; then FA=x64arch; FARCH=x64; else FA=x86arch; FARCH=x86; fi
+  [ -d "$W/shared/$FA" ] || { VM2B_ARCHIVE_ARCH=$FARCH python3 -I "$R/tools/make_x64_archive.py" "${TMPDIR:-/tmp}/$FA" 7 > /dev/null 2>&1 && mkdir -p "$W/shared/$FA" && cp -r "${TMPDIR:-/tmp}/$FA/store" "${TMPDIR:-/tmp}/$FA/files.sha1" "$W/shared/$FA/"; }
+  gj 32-levels-foreign 3600 "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\vm2b\\guest\\levels.ps1 foreign %SRC%\\$FA" > /dev/null; RC=$?
   tr -d '\r' < "$RES/32-levels-foreign.out" | grep -aE '^INFO' | cut -c1-400 | tee -a "$SUM"
   tally levels-foreign $RC 32-levels-foreign
   fi
@@ -551,7 +553,10 @@ if want uacyes; then
   reboot_guest 22-uacyes-reboot-on || say "the guest did not return after the restart (UAC on)"
   gj 22-uacyes-launch 300 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\uacyes.ps1 launch' > /dev/null; RC0=$?
   sleep 3; "$W/shot.sh" "$RES/shots/signing/uacyes-1-prompt.png" >/dev/null 2>&1
-  docker exec vm2b-win sh -c 'echo "sendkey alt-y" | nc -U -q1 /tmp/m.sock' >/dev/null 2>&1; sleep 4
+  # Раунд 14: у dockur сокет монитора другой (/run/shm/monitor.sock), а на русской раскладке Alt+Y не совпадает с кнопкой «Да».  Enter тоже не годится: на русской Windows 10 в запросе UAC
+  # по умолчанию выбрана кнопка «Нет» (снимок uacyes-1-prompt.png), и Enter её нажимает (первая попытка раунда 14: служба не перезапущена).  Поэтому Shift+Tab (фокус на «Да»), снимок, Enter.
+  MK() { docker exec vm2b-win sh -c "S=/tmp/m.sock; [ -S \$S ] || S=/run/shm/monitor.sock; echo 'sendkey $1' | nc -U -q1 \$S" >/dev/null 2>&1; }
+  if [ "$OS" = x86 ]; then MK alt-y; else MK shift-tab; sleep 1; "$W/shot.sh" "$RES/shots/signing/uacyes-1b-focus-yes.png" >/dev/null 2>&1; MK ret; fi; sleep 4
   "$W/shot.sh" "$RES/shots/signing/uacyes-2-after-yes.png" >/dev/null 2>&1
   gj 22-uacyes-check 600 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\uacyes.ps1 check' > /dev/null; RC=$?
   "$W/shot.sh" "$RES/shots/signing/uacyes-3-done.png" >/dev/null 2>&1
@@ -569,6 +574,13 @@ if want tzeu; then
   for f in 25-tz-prep 25-tz-spring-eu 25-tz-restore; do tr -d '\r' < "$RES/$f.out" | grep -aE '^INFO' | cut -c1-260 | tee -a "$SUM"; done
   tally tzeu $(( RC0 + RCA + RCR )) 25-tz-prep 25-tz-spring-eu 25-tz-restore
   gj 25-tz-reboot 60 'echo done' > /dev/null; reboot_guest 25-tz-reboot-real || true
+fi
+
+if want rulocale; then
+  # раунд 14: русская Windows: установка в каталог с кириллицей, журнал Windows, консоль CP866 (/reset-web), десятичная запятая (guest/rulocale.ps1)
+  gj 33-rulocale 1200 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\rulocale.ps1' > /dev/null; RC=$?
+  tr -d '\r' < "$RES/33-rulocale.out" | grep -aE '^INFO' | cut -c1-300 | tee -a "$SUM"
+  tally rulocale $RC 33-rulocale
 fi
 
 if want sac; then

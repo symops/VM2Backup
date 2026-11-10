@@ -9,7 +9,10 @@ param([string]$Mode = 'matrix', [string]$A1 = '', [string]$A2 = '')
 $script:JobMax = 5400; $src = 'C:\vm2b\lvldata'; $store = 'C:\vm2b\lvlstore'; $rest = 'C:\vm2b\lvlrest'
 $svcExe = (Get-WmiObject Win32_Service -Filter "Name='VM2BackupService'").PathName; if ($svcExe -match '^"([^"]+)"') { $svcExe = $Matches[1] } else { $svcExe = ($svcExe -split ' /')[0].Trim() }
 function Web-Ready { for ($i = 0; $i -lt 120; $i++) { $w = New-Web 'https://127.0.0.1:8443'; $r = Web-Login $w; if ($r.Status -eq 200 -and $r.Json.ok) { return $w }; Start-Sleep -Milliseconds 700 }; return $null }
-function Job-Wait($w, $id, $sec) { for ($i = 0; $i -lt $sec; $i += 1) { $j = Api $w 'jobs.list' @{}; $mine = @($j.Result) | Where-Object { $_.id -eq $id }; if (-not $mine -or ($mine.status -ne 'Waiting' -and $mine.status -ne 'Running')) { return $(if ($mine) { $mine.status } else { 'Gone' }) }; Start-Sleep -Seconds 1 }; return 'timeout' }
+# Раунд 14: ответ API с ошибкой (таймаут, 401, 429, обрыв при перегрузке ВМ) раньше выглядел как «задание исчезло» (Gone) и обрывал замер посреди копии. Теперь такой ответ - повтор (до 300 подряд), с записью причины.
+function Job-Wait($w, $id, $sec) { $bad = 0; for ($i = 0; $i -lt $sec; $i += 1) { $j = Api $w 'jobs.list' @{}
+    if ($j.Status -ne 200 -or $null -eq $j.Json -or -not ($j.Json.PSObject.Properties.Name -contains 'result')) { $bad++; if ($bad -eq 1 -or $bad % 50 -eq 0) { Write-Output ("INFO jobs.list answer is not usable (try {0}): status {1} {2}" -f $bad, $j.Status, ([string]$j.Text).Substring(0, [Math]::Min(120, ([string]$j.Text).Length))) }; if ($bad -gt 300) { return 'ApiError' }; Start-Sleep -Seconds 2; continue }
+    $bad = 0; $mine = @($j.Result) | Where-Object { $_.id -eq $id }; if (-not $mine -or ($mine.status -ne 'Waiting' -and $mine.status -ne 'Running')) { return $(if ($mine) { $mine.status } else { 'Gone' }) }; Start-Sleep -Seconds 1 }; return 'timeout' }
 Add-Type -TypeDefinition @"
 using System; using System.IO; using System.Text; using System.Security.Cryptography; using System.Collections.Generic;
 public static class LvlGen {
@@ -104,6 +107,8 @@ if ($Mode -eq 'matrix') {
     Write-Output ("INFO source: {0:N0} MiB, {1}" -f ($tot / 1MB), $hash)
     foreach ($lv in 0..9) { Run-Level 'vmM' $lv 0 $src $hash "matrix L$lv Auto" }
     foreach ($lv in 7, 8, 9) { foreach ($t in 1, 2, 4, 8) { Run-Level 'vmM' $lv $t $src $hash "matrix L$lv T$t" } }
+    # Раунд 14: явные 16 и 32 потока на 4 процессорах (режет ли их бюджет памяти; в 64-битном процессе бюджет Auto 2560 МиБ)
+    foreach ($t in 16, 32) { Run-Level 'vmM' 7 $t $src $hash "matrix L7 T$t" }
 }
 elseif ($Mode -eq 'list') {
     # отдельные пары «уровень:потоки» (A1 = '7:8 7:4 9:8'), те же данные, что в matrix; сначала самые опасные для памяти
@@ -127,13 +132,13 @@ elseif ($Mode -eq 'foreign') {
     $loc = 'C:\vm2b\x64arch'; Remove-Item -Recurse -Force $loc, $rest -ErrorAction SilentlyContinue; Copy-Item -Recurse $A1 $loc
     $w = Svc-Restart
     $bl = Api $w 'backups.list' @{ server = 'local'; directory = "$loc\store\vmX" }; $b = @($bl.Result.backups)[0]
-    Check 'foreign (x64) archive is listed by the 32-bit service' ($null -ne $b) $bl.Text
+    Check 'foreign archive (other bitness) is listed by the 32-bit service' ($null -ne $b) $bl.Text
     if ($b) {
         Write-Output ("INFO foreign archive entry: " + ($b | ConvertTo-Json -Compress -Depth 4))
         $vr = Api $w 'backups.verify' @{ server = 'local'; directory = $b.directory; archive = $b.archive }; $vs = Job-Wait $w $vr.Result.job 3600
-        Check 'foreign (x64) archive: backups.verify on 32 bits' ($vs -eq 'Success' -or $vs -eq 'Gone') $vs
+        Check 'foreign archive (other bitness): backups.verify on 32 bits' ($vs -eq 'Success' -or $vs -eq 'Gone') $vs
         $rr = Api $w 'backups.restore' @{ server = 'local'; directory = $b.directory; archive = $b.archive; dest = $rest }; $rs = Job-Wait $w $rr.Result.job 3600
-        Check 'foreign (x64) archive: backups.restore on 32 bits' ($rs -eq 'Success' -or $rs -eq 'Gone') $rs
+        Check 'foreign archive (other bitness): backups.restore on 32 bits' ($rs -eq 'Success' -or $rs -eq 'Gone') $rs
         $pk = Svc-Peaks; Write-Output ("INFO foreign archive peaks: WS {0} MiB, commit {1} MiB" -f $pk.WS, $pk.Commit)
         $vmdir = Get-ChildItem $rest -Directory | Select-Object -First 1; $bad = 0; $n = 0
         foreach ($line in (Get-Content "$loc\files.sha1")) { $f = $line -split ' '; $p = Join-Path $vmdir.FullName $f[0]; $n++

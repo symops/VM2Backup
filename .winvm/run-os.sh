@@ -24,7 +24,7 @@ if [ "$1" = x86 ]; then
     -v "$W/x86:/x:ro" -v "$W/shared:/shared" -v "$W/storage-x86:/s" -v "$ISOD/WIN10X86.iso:/boot.iso:ro" \
     --entrypoint bash dockurr/windows /x/qemu-run.sh
 else
-  docker run -d --name vm2b-win -e RAM_SIZE=$RAM -e CPU_CORES=4 -e DISK_SIZE=32G \
+  docker run -d --name vm2b-win -e RAM_SIZE=$RAM -e CPU_CORES=4 -e DISK_SIZE=${DISK_SIZE:-32G} \
     --device=/dev/kvm --device=/dev/net/tun --cap-add NET_ADMIN --stop-timeout 120 \
     -p 127.0.0.1:8008:8006 -p 127.0.0.1:5908:5900 \
     -v "$W/storage-$1:/storage" -v "$W/shared:/shared" -v "$W/oem:/oem" -v "$ISOD/$ISO:/boot.iso:ro" dockurr/windows

@@ -16,6 +16,7 @@
 #include "version.h"
 #include "winutil.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 using namespace vm2b;
 
@@ -228,8 +229,23 @@ static int ResetWeb()
     return 0;
 }
 
+// Раунд 14 (настоящая русская Windows 10): консоль с кодовой страницей 866 / 1251 показывала UTF-8 байты пути с кириллицей («C:\╨Ф╨░╨╜╨╜╤Л╨╡») в выводе /console и /reset-web.
+// Сообщения этой программы - UTF-8; если вывод идёт в настоящую консоль, на время работы включаем её кодовую страницу UTF-8 и возвращаем прежнюю при выходе
+// (в файл и в конвейер пишутся те же UTF-8 байты, как раньше; у службы под SCM консоли нет).
+static UINT g_oldConsoleCp = 0;
+static void RestoreConsoleCp() { if (g_oldConsoleCp) SetConsoleOutputCP(g_oldConsoleCp); }
+static void Utf8Console()
+{
+    DWORD m = 0; HANDLE o = GetStdHandle(STD_OUTPUT_HANDLE), e = GetStdHandle(STD_ERROR_HANDLE);
+    bool con = (o && o != INVALID_HANDLE_VALUE && GetConsoleMode(o, &m)) || (e && e != INVALID_HANDLE_VALUE && GetConsoleMode(e, &m));
+    if (!con) return;
+    UINT cp = GetConsoleOutputCP();
+    if (cp && cp != CP_UTF8 && SetConsoleOutputCP(CP_UTF8)) { g_oldConsoleCp = cp; atexit(RestoreConsoleCp); }
+}
+
 int wmain(int argc, wchar_t** argv)
 {
+    Utf8Console();
     bool resetWeb = false, console = false, install = false, uninstall = false, start = false, stop = false, manual = false, service = false;
     char buf[1024];
     for (int i = 1; i < argc; ++i) {
