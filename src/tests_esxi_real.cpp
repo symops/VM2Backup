@@ -759,6 +759,16 @@ static bool Body_esxireal_fs_run(Ctx& c_)
         cfg["snapshot"] = s; cfg["tools_wait"] = 300;
     }
     if (j.has("task_timeout")) cfg["task_timeout"] = j.get("task_timeout").integer();
+    if (j.get("restore_only").boolean()) {   // only the restore of the newest copy in `store` (kept by an earlier run with "keep_store": true): the user of this run needs the restore privileges only
+        Target* t0 = LocalAtR(store); Vec<Manifest> ms; Str le; T_CHECK(ListBackups(*t0, &vm, ms, le)); T_CHECK(!ms.empty()); if (ms.empty()) { delete t0; return false; }
+        EsxiRestoreOptions ro; ro.vmName = j.get("restore_name").str("vm2b-rtx"); ro.datacenter = r.dc; ro.datastore = j.get("restore_datastore").str(); ro.folder = j.get("restore_folder").str();
+        ro.pool = j.get("restore_pool").str(); ro.host = j.get("restore_host").str(); ro.powerOn = j.get("power_on").boolean();
+        ReadOptions rd; rd.stateDir = JoinPath(out, tag + "-state"); Str se; MakeDirs(rd.stateDir, se); EsxiRestoreResult res; Str rr; Pr pr2; double h0 = UnixNow();
+        bool rok = RestoreToEsxi(*t0, ms.back().archive, r.cfg(), ro, pw, rd, &pr2, &res, rr);
+        c_.note("FSRUN %s: восстановление на хост (%s) %s за %.1f с: ВМ %s, vmx %s, датастор %s; ошибка: %s; предупреждение: %s", tag.c_str(), ro.vmName.c_str(), rok ? "готово" : "ОТКАЗ", UnixNow() - h0, res.vmName.c_str(), res.vmxPath.c_str(),
+                res.datastore.c_str(), rr.c_str(), res.warning.c_str());
+        delete t0; return rok;
+    }
     RemoveTree(store); Str me; MakeDirs(out, me);
     BackupOptions o; o.kdfIterations = 3000; o.verify = false; o.password = pw; o.codec.level = level; o.allowLive = !cold;
     if (segMb > 0) o.segmentBytes = (u64)segMb << 20;
@@ -806,7 +816,7 @@ static bool Body_esxireal_fs_run(Ctx& c_)
         if (!want.empty()) { T_CHECK(!rok); T_CHECK(Has(rr, want.c_str())); } else T_CHECK(rok);
     }
     if (j.get("options").boolean()) { Json o2; Str oe; bool b = EsxiRestoreTargets(r.cfg(), r.dc, o2, oe); c_.note("OPTIONS %s %s", b ? o2.dump().c_str() : "ОШИБКА", oe.c_str()); T_CHECK(b); }
-    delete t; if (!j.get("keep_store").boolean()) RemoveTree(store);
+    delete t; if (!j.get("keep_store").boolean() && !j.get("restore_only").boolean()) RemoveTree(store);
     return true;
 }
 } // namespace

@@ -1219,10 +1219,14 @@ private:
         int r = text.find('"', (size_t)q + 1); if (r < 0) return false;
         val = text.substr((size_t)q + 1, (size_t)(r - q - 1)); return true;
     }
-    bool readSmall(const Str& ds, const Str& path, Bytes& out, bool allowHtml = false, size_t limit = (size_t)1 << 20) {
+    static Str FileDeniedMessage(int status, const Str& ds) {
+        return Str::fmt("the datastore file access was refused (HTTP %d) for the datastore \"", status) + ds + "\": the user most likely lacks the datastore privilege Datastore.FileManagement on it "
+               "(the server names no privilege for file requests): give the user a role with it (docs/ESXI.md, the roles of the backup user)";
+    }
+    bool readSmall(const Str& ds, const Str& path, Bytes& out, bool allowHtml = false, size_t limit = (size_t)1 << 20, bool relogged = false) {
         HttpHeaders h; HttpResponse r;
         if (!FolderRequest(*m_files, "GET", EsxiFolderUrl(ds, path, m_dc), h, r, m_host, m_port)) return failHttp(*m_files);
-        if (r.status == 401 || r.status == 403) { m_files->close(); m_loggedIn = false; if (!ensureSession()) return false; return readSmall(ds, path, out, allowHtml, limit); }
+        if (r.status == 401 || r.status == 403) { m_files->close(); if (relogged) return fail(FileDeniedMessage(r.status, ds)); m_loggedIn = false; if (!ensureSession()) return fail(FileDeniedMessage(r.status, ds)); return readSmall(ds, path, out, allowHtml, limit, true); }
         if (r.status != 200) { m_files->close(); return fail(Str::fmt("reading [%s] %s: HTTP %d", ds.c_str(), path.c_str(), r.status), r.status >= 500); }
         if (!allowHtml && r.headers.value("Content-Type").lower().find("text/html") >= 0) { m_files->close(); return fail("reading [" + ds + "] " + path + ": the server answered with an HTML page instead of the file", true); }
         out.clear(); Bytes b; b.resize(65536);
@@ -1388,8 +1392,9 @@ private:
         for (int attempt = 0; attempt < 2; ++attempt) {
             HttpHeaders h; HttpResponse r;
             if (!FolderRequest(*m_files, "HEAD", EsxiFolderUrl(f.ds, f.path, m_dc), h, r, m_host, m_port)) return failHttp(*m_files);
-            if ((r.status == 401 || r.status == 403) && attempt == 0 && !relogged) { relogged = true; m_loggedIn = false; if (!login()) return false; continue; }
-            if (r.status == 404) return fail("the file is missing on the datastore: " + f.name);
+            if ((r.status == 401 || r.status == 403) && attempt == 0 && !relogged) { relogged = true; m_loggedIn = false; if (!login()) return fail(FileDeniedMessage(r.status, f.ds)); continue; }
+            if (r.status == 401 || r.status == 403) return fail(FileDeniedMessage(r.status, f.ds));
+            if (r.status == 404) return fail("the file is missing on the datastore (or the user lacks the datastore privilege Datastore.Browse, with which the server hides files): " + f.name);
             if (r.status == 200) {
                 if (IsBinaryType(f.type) && r.headers.value("Content-Type").lower().find("text/html") >= 0) return fail("the datastore answered with an HTML page instead of the file: " + f.name, true);
                 if (r.contentLength >= 0) {
@@ -1908,9 +1913,10 @@ bool Impl::pack(TarWriter& tar, Progress* pr, Str& warning)
                 }
                 if ((r.status == 401 || r.status == 403) && !relogged) {
                     relogged = true; m_files->close(); m_loggedIn = false;
-                    if (!ensureSession()) return false;
+                    if (!ensureSession()) return fail(FileDeniedMessage(r.status, f.ds));
                     continue;
                 }
+                if (r.status == 401 || r.status == 403) { m_files->close(); return fail(FileDeniedMessage(r.status, f.ds)); }
                 if ((r.status == 503 || r.status == 500 || r.status == 502 || r.status == 504) && attempt < 2) { m_files->close(); Sleep(500); continue; }
                 have = true;
             }
@@ -2000,7 +2006,12 @@ void Impl::end(bool keepForResume)
             if (attempt) Sleep(1000);
             if (ensureSession() && removeSnapshot(m_snapRef)) ok = true;
         }
-        if (!ok) m_leaked = m_snapName;
+        if (!ok) {
+            m_leaked = m_snapName;
+            Str why = err.empty() ? Str("no answer") : err;
+            if (!m_endWarn.empty()) m_endWarn += "; ";
+            m_endWarn += "the snapshot " + m_snapName + " could not be removed from the VM (" + why + "): it stays on the VM and the next backup will try to remove it first";
+        }
     }
     m_snapRef.clear(); m_snapName.clear(); m_begun = false; m_list.clear();
     LiveRegister(m_runToken, false);
@@ -2076,7 +2087,11 @@ public:
             m_s->m_dcCfg = m_dcName;
             Inventory inv; if (!loadInventory(inv, false)) return failFrom();
             m_dcId = inv.dcId;
-            if (!dirExists(m_mainDs, m_dir)) { m_inited = false; return fail("the folder of the unfinished restore is gone from the datastore: remove the restore state and start again"); }
+            if (!dirExists(m_mainDs, m_dir)) {
+                m_inited = false;
+                if (m_made.empty()) return initFromMeta();                    // the earlier run made nothing (it was refused before: a missing privilege, no room): simply start again
+                return fail("the folder of the unfinished restore is gone from the datastore: remove the restore state and start again");
+            }
         }
         return true;
     }

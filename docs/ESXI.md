@@ -529,6 +529,9 @@ xz1 M = 2311 (отличается 52 935 блоков), пароль + xz 5 M =
 Итог: quiesce через настоящие Tools даёт **файловую систему без журнала-восстановления** и **все данные до снимка, включая не сброшенные гостем** (класс l: 63 из 63); без quiesce копия crash-consistent: журнал надо воспроизводить, часть данных кэша потеряна.
 Заморозка в гостях такого стенда долгая: в `serial` гостя `freeze` -> `thaw` проходят за 6-18 секунд (синхронный диск поверх qcow2).
 
+**Восстановленная копия загружается** (`hot-q1b`: та же копия с quiesce, восстановление на хост `RestoreToEsxi`, 1 312 с, затем ВМ включена): на `serial` восстановленной ВМ гость сам печатает `Filesystem features` диска данных **без `needs_recovery`**, `Filesystem state: clean`, `EXT4-fs (sdb): mounted filesystem ... r/w with ordered data mode` (**без «recovery»**),
+`FSVERIFY s: n=400 min=5023 max=5422 gaps=0 bad=0 | l: n=400 min=5023 max=5422 gaps=0 bad=0` (все файлы до снимка целы и совпадают по CRC и содержимому, обеих классов), записей после снимка нет (следующая запись писателя 5423 = максимум + 1), `e2fsck -fn` без замечаний.
+
 **(3) Ошибки quiesce, найденные на настоящем хосте.**
 * **ВМ без VMware Tools** (`vm2b-on`, `quiesce=true`): настоящий ESXi 7.0.3 принимает запрос БЕЗ ошибки и делает снимок без заморозки; продукт не писал предупреждения (источник знал только об ошибке снимка), а копия оставалась crash-consistent под видом
   consistent. Исправлено: перед снимком с quiesce читается `guest.toolsRunningStatus`; если Tools не работают, в отчёте предупреждение «VMware Tools is not running in the guest: the snapshot is taken without quiescing (the host does not report an error for it), the copy is crash-consistent»
@@ -569,3 +572,39 @@ xz1 M = 2311 (отличается 52 935 блоков), пароль + xz 5 M =
 
 32-битного переполнения нигде нет: размеры > 2^32 в manifest и tar (проверено побитовым совпадением), `Content-Length` и `HEAD` > 4 ГиБ на `PUT /folder` и `GET /folder`, `Range`-продолжение с позиции больше 4 ГиБ, `DatastoreFile`; ошибок продукта пункт B не нашёл.
 Время копии определяется чтением хоста через HTTP (около 8 МБ/с во вложенном ESXi), а не размером дисков: толстые диски читаются целиком, разреженные нули читаются так же (HTTP `/folder` отдаёт нули thin-диска).
+
+## Проверено на настоящем vCenter 7.0.3 (раунд 3, 13.11.2026): права ниже администратора
+
+Стенд: VCSA 7.0.3.02500 (build 24927011, отдельная qemu-ВМ, 12 ГиБ) + ОДИН вложенный ESXi 7.0.3 (4 ГиБ, 2 vCPU), датацентр `vm2b-dc`; пользователи SSO `vm2b-viewer`, `vm2b-backup`, `vm2b-hot`, `vm2b-restore` (локальные, `dir-cli`), роли и назначения
+`tools/esxi7/roles.py`, автоматический поиск `tools/esxi7/roles-find.py` (роль растёт по одной привилегии за прогон: продукт сам называет недостающую в ошибке), прогон `roles-try.sh`. Все роли назначены на КОРНЕВУЮ папку с наследованием (`propagate = true`);
+ниже «где» — `Global.*` проверяются ТОЛЬКО на корневой папке (проверка блокировки от 07.11.2026), остальные права достаточно на корне с наследованием. Журналы: `.winvm-results/esxi7-round3-20261112/` (вне git).
+
+### Роли-шаблоны (проверены на настоящем vCenter: каждая выполняла описанную работу без предупреждений о правах)
+
+| Роль | Привилегии (идентификаторы vSphere) | Что умеет |
+|---|---|---|
+| **Viewer** (только чтение) | `System.Anonymous`, `System.View`, `System.Read` | вход и список ВМ (`vcreal_connect_and_list`: «VMware vCenter Server 7.0.3 build-24927011»); любая копия отказывает с названием права (ниже) |
+| **Backup (cold)** — холодный режим, в том числе включённая ВМ | Viewer + `VirtualMachine.Config.AdvancedConfig`, `VirtualMachine.Config.Annotation` (метка «удерживается для копии» в `.vmx` и аннотации), `Datastore.Browse`, `Datastore.FileManagement` (чтение файлов ВМ через `/folder`), `VirtualMachine.Interact.PowerOff`, `VirtualMachine.Interact.PowerOn` (выключить и вернуть включённую ВМ), `Global.DisableMethods`, `Global.EnableMethods` (блокировка методов на ВМ; ТОЛЬКО на корневой папке, без них копия идёт с меткой без блокировки) | холодная копия выключенной и включённой ВМ (проверено на `vm2b-off`, `vm2b-hist` и работающей `vm2b-on` с принудительным выключением: 344 с, предупреждение только «VMware Tools is not running in the guest...») |
+| **Backup (hot)** — горячий режим (снимок + клон диска) | Viewer + `Datastore.Browse`, `Datastore.FileManagement`, `VirtualMachine.State.CreateSnapshot`, `VirtualMachine.State.RemoveSnapshot` | горячая копия `vm2b-on` без `VirtualMachine.Config.*` и без привилегий `Provisioning`: снимок, `CopyVirtualDisk` клона (привилегии на хранилище достаточны: `Datastore.FileManagement`), чтение клона, удаление клона и снимка; 35 с; снимков и клонов после копии нет |
+| **Restore** — восстановление в vCenter | Viewer + `Datastore.Browse`, `Datastore.FileManagement` (создание папки, `PUT /folder`), `VirtualMachine.Inventory.Register`, `Resource.AssignVMToPool` | `RegisterVM_Task` восстановленной ВМ в папку и пул (`vm2b-rtE`, ~30 с); `Datastore.AllocateSpace` не понадобился (проверено без него) |
+
+Пользователь продукта для обоих режимов копии получает объединение Backup (cold) и Backup (hot); роль Restore обычно выдаётся отдельному учётному записи.
+
+### Что отказывает без права и как об этом говорит продукт (опыт раунда: `roles-find.py`)
+
+| Роль / шаг | Вызов | Ответ сервера | Текст ошибки продукта |
+|---|---|---|---|
+| только Viewer, холодная копия | `ReconfigVM_Task` (метка) | `NoPermission`, `privilegeId = VirtualMachine.Config.AdvancedConfig`, затем `VirtualMachine.Config.Annotation` | «the VM could not be marked as held for the backup: the user lacks the privilege "VirtualMachine.Config.AdvancedConfig"...» |
+| без `Datastore.FileManagement` | `GET /folder` | **HTTP 401** (имя права не названо, повторный `Login` с cookie отвечает `InvalidLoginReasonRegisterFailed`) | **до раунда: «login failed: the user name or password was refused by the server» (неверная диагностика)**; теперь «the datastore file access was refused (HTTP 401) for the datastore "datastore1": the user most likely lacks the datastore privilege Datastore.FileManagement on it (the server names no privilege for file requests)...» |
+| `Datastore.FileManagement` без `Datastore.Browse` | `HEAD /folder` | HTTP 404 (сервер прячет файлы) | «the file is missing on the datastore (or the user lacks the datastore privilege Datastore.Browse, with which the server hides files)» |
+| нет `Global.EnableMethods` / `Global.DisableMethods` | `EnableMethods` / `DisableMethods` | `NoPermission`, `privilegeId = Global.*` | копия идёт; предупреждение «the lock "..." could not be removed (the user lacks the privilege "Global.EnableMethods"...)» |
+| включённая ВМ, нет `PowerOff` | `ShutdownGuest` / `PowerOffVM_Task` | `NoPermission` | «the guest cannot be shut down (the user lacks the privilege "VirtualMachine.Interact.PowerOff"...)» |
+| нет `PowerOn` | `PowerOnVM_Task` после копии | `NoPermission` | предупреждение «the VM could not be powered on again: the user lacks the privilege "VirtualMachine.Interact.PowerOn" ... (it was running before the backup)» (ВМ остаётся выключенной!) |
+| горячая, нет `CreateSnapshot` | `CreateSnapshot_Task` | `NoPermission` | «creating the snapshot was refused by the server: the user lacks the privilege "VirtualMachine.State.CreateSnapshot" (...). Give the user a role with this privilege» |
+| горячая, нет `RemoveSnapshot` | `RemoveSnapshot_Task` | `NoPermission` | **до раунда: ничего (копия «успешна», снимок молча остаётся на ВМ)**; теперь предупреждение «the snapshot VM2Backup-... could not be removed from the VM (removing the snapshot failed: the user lacks the privilege "VirtualMachine.State.RemoveSnapshot" ...): it stays on the VM and the next backup will try to remove it first» |
+| восстановление, нет `Datastore.FileManagement` | `MakeDirectory` | `NoPermission` | «cannot create the folder [datastore1] vm2b-rtD on the datastore: the user lacks the privilege "Datastore.FileManagement"» |
+| нет `Resource.AssignVMToPool` / `VirtualMachine.Inventory.Register` | `RegisterVM_Task` | `NoPermission` | «registering the VM failed: the user lacks the privilege "Resource.AssignVMToPool"» / «...VirtualMachine.Inventory.Register» (папка ВМ и загруженные файлы при этом удаляются) |
+
+**Найдено и исправлено по ходу:** (1) `NoPermission` не называл право: теперь `privilegeId` из `detail` (SOAP-сбой) и из `info.error.fault` (задача) попадает в текст; (2) неверный «login failed» при HTTP 401 / 403 от `/folder` (и бесконечная рекурсия `readSmall` при повторном 401 после успешного входа); (3) молчаливый остаток снимка при отказе `RemoveSnapshot`;
+(4) повторная попытка восстановления после отказа по правам (состояние возобновления сохранено, папка не была создана) говорила «the folder of the unfinished restore is gone...: remove the restore state and start again»: теперь, если прежний запуск ничего не создал, восстановление просто начинается заново.
+Эмулятор и регрессии: `no_permission` (`esxi_snapshot_failure_paths`, kind 6: текст называет право и роль), `remove_fail` теперь проверяет предупреждение «could not be removed from the VM».

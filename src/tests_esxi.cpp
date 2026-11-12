@@ -870,7 +870,7 @@ VM2B_TEST("esxi", esxi_snapshot_failure_paths)
             T_CHECK(!ok); T_CHECK(Contains(err, "timed out")); T_CHECK(ctl.leaked() == 0);
         } else if (kind == 4) {
             T_CHECK(ok);                                                          // the copy is fine, only the cleanup failed
-            T_CHECK(ctl.leaked() == 1); T_CHECK(!static_cast<EsxiSource*>(src)->endProblem().empty());
+            T_CHECK(ctl.leaked() == 1); T_CHECK(!static_cast<EsxiSource*>(src)->endProblem().empty()); T_CHECK(Contains(warn, "could not be removed from the VM"));
             Json fn = Json::object(); fn["remove_fail"] = Json();
             Json o3; ctl.call("faults", fn, o3);
             delete src; src = NewEsxiSource(cfg, err); Manifest m2; Str w2; Pr pr2;
