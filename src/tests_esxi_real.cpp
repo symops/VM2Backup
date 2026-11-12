@@ -735,4 +735,83 @@ VM2B_TEST("esxireal", esxireal_cold_stage_status)
     return true;
 }
 
+// ---------------------------------------------------------------------------------------------------------------------------------------------------
+// Раунд 3 (docs/ESXI.md, «Проверено на настоящем ESXi 7.0.3 (раунд 3)»): гость с настоящей файловой системой и quiesce, диски больше 4 ГиБ, несколько датасторов.
+// Все три имени теста идут по одному телу; параметры задаёт ключ "esxi_fs" (его пишут tools/esxi7/fs-*.sh), результаты проверяют скрипты рядом (sha256 на хосте, ext4 образа).
+//   "esxi_fs": { "vm", "mode": "hot"|"cold", "quiesce": bool, "store": путь, "out": путь, "tag", "password", "level", "segment_mb", "mbit", "pause_mb", "flats": [имена flat],
+//                "verify": bool (по умолчанию true), "restore_name" (пусто = на хост не восстанавливать), "restore_datastore", "restore_folder", "restore_pool", "restore_host",
+//                "power_on": bool, "expect_error": подстрока (восстановление на хост ОБЯЗАНО отказать с ней), "options": bool (напечатать esxi.restore_options), "force_off": bool }
+namespace {
+static bool Body_esxireal_fs_run(Ctx& c_)
+{
+    { const char* ek = getenv("VM2B_REAL_KEY"); if (ek && *ek) g_realKey = ek; }
+    Real r; if (!Load(c_, r)) return true;
+    if (!c_.servers.has("esxi_fs")) { c_.skip("нет ключа \"esxi_fs\" (tools/esxi7/fs-run.sh)"); return true; }
+    const Json& j = c_.servers.get("esxi_fs");
+    Str vm = j.get("vm").str("vm2b-fs"), mode = j.get("mode").str("hot"), store = j.get("store").str(), out = j.get("out").str(), tag = j.get("tag").str("t"), pw = j.get("password").str();
+    bool cold = mode == "cold", quiesce = j.get("quiesce").boolean(), verify = j.has("verify") ? j.get("verify").boolean() : true;
+    int level = (int)j.get("level").integer(1), segMb = (int)j.get("segment_mb").integer(0), pauseMb = (int)j.get("pause_mb").integer(0);
+    double mbit = j.get("mbit").num(0);
+    T_CHECK(!store.empty()); T_CHECK(!out.empty());
+    Json cfg = r.cfg(Str(), quiesce);
+    if (cold) {
+        Json s = Json::object(); s["quiesce"] = false; s["memory"] = false; s["history"] = true; s["force_off"] = j.get("force_off").boolean(); s["shutdown_timeout"] = 1500;
+        cfg["snapshot"] = s; cfg["tools_wait"] = 300;
+    }
+    if (j.has("task_timeout")) cfg["task_timeout"] = j.get("task_timeout").integer();
+    RemoveTree(store); Str me; MakeDirs(out, me);
+    BackupOptions o; o.kdfIterations = 3000; o.verify = false; o.password = pw; o.codec.level = level; o.allowLive = !cold;
+    if (segMb > 0) o.segmentBytes = (u64)segMb << 20;
+    RateLimiter lim; if (mbit > 0) { lim.setMbit(mbit); o.limiter = &lim; }
+    Target* t = LocalAtR(store); Manifest man; Str warn, err;
+    double t0 = UnixNow();
+    if (pauseMb > 0) {                      // копия приостанавливается после pause_mb МБ (с сохранением) и продолжается вторым запуском
+        Str e1; VmSource* src = NewEsxiSource(cfg, e1); T_CHECK(src != nullptr); if (!src) { delete t; return false; }
+        Pr pr; pr.abortAt = true; pr.keep = true; pr.limit = (u64)pauseMb << 20; Manifest m1; Str w1;
+        bool ok1 = BackupVm(*src, vm, *t, o, &pr, m1, w1, err);
+        c_.note("FSRUN %s: пауза после %d МБ: %s (%s) за %.1f с, предупреждения: %s", tag.c_str(), pauseMb, ok1 ? "копия УЖЕ готова" : "приостановлена", err.c_str(), UnixNow() - t0, w1.c_str());
+        T_CHECK(!ok1); delete src;
+        Vec<ResumeInfo> ri; Str le; ListResumable(*t, &vm, ri, le); T_CHECK(ri.size() == 1); c_.note("FSRUN %s: возобновляемых копий %d", tag.c_str(), (int)ri.size());
+        err.clear();
+    }
+    Str e2; VmSource* src = NewEsxiSource(cfg, e2); T_CHECK(src != nullptr); if (!src) { delete t; return false; }
+    GPr pr; double t1 = UnixNow();
+    bool ok = BackupVm(*src, vm, *t, o, &pr, man, warn, err); double t2 = UnixNow();
+    c_.note("FSRUN %s: копия %s за %.1f с (%.1f мин), первый байт диска через %.1f с, %llu байт (в архиве %llu), томов %d, возобновлений %d, повторов %d; предупреждение: %s", tag.c_str(),
+            ok ? "готова" : "НЕ УДАЛАСЬ", t2 - t1, (t2 - t1) / 60.0, pr.tFirst > 0 ? pr.tFirst - t1 : 0.0, (unsigned long long)man.rawSize, (unsigned long long)man.size, (int)man.segments.size(),
+            pr.resumes, pr.retries, warn.c_str());
+    if (!ok) c_.note("ошибка: %s", err.c_str());
+    delete src; T_CHECK(ok);
+    if (!ok) { delete t; return false; }
+    if (pauseMb > 0) T_CHECK(pr.resumes >= 1);
+    if (verify) {
+        Str ve; double v0 = UnixNow(); bool vok = VerifyBackup(*t, man.archive, pw, nullptr, nullptr, ve); c_.note("FSRUN %s: verify %s за %.1f с %s", tag.c_str(), vok ? "прошёл" : "НЕ ПРОШЁЛ", UnixNow() - v0, ve.c_str()); T_CHECK(vok);
+        if (!pw.empty()) { Str e3; T_CHECK(!VerifyBackup(*t, man.archive, "wrong", nullptr, nullptr, e3)); }
+    }
+    Str dest = JoinPath(out, tag); RemoveTree(dest);
+    { Str re; Manifest rm; double r0 = UnixNow(); bool rok = RestoreBackup(*t, man.archive, dest, pw, nullptr, &rm, re);
+      c_.note("FSRUN %s: восстановление в папку %s за %.1f с %s", tag.c_str(), rok ? "готово" : "НЕ УДАЛОСЬ", UnixNow() - r0, re.c_str()); T_CHECK(rok);
+      const Json& fl = j.get("flats");
+      for (size_t i = 0; i < fl.size(); ++i) { u64 sz = 0; Str h = HashFileReal(JoinPath(JoinPath(dest, EsxiArchivePrefix(vm)), fl.at(i).str()), sz);
+          c_.note("SHA %s %s %llu", fl.at(i).str().c_str(), h.c_str(), (unsigned long long)sz); } }
+    Str rn = j.get("restore_name").str();
+    if (!rn.empty()) {
+        EsxiRestoreOptions ro; ro.vmName = rn; ro.datacenter = r.dc; ro.datastore = j.get("restore_datastore").str(); ro.folder = j.get("restore_folder").str(); ro.pool = j.get("restore_pool").str();
+        ro.host = j.get("restore_host").str(); ro.powerOn = j.get("power_on").boolean();
+        ReadOptions rd; rd.stateDir = JoinPath(out, tag + "-state"); Str se; MakeDirs(rd.stateDir, se); EsxiRestoreResult res; Str rr; Pr pr2; double h0 = UnixNow();
+        bool rok = RestoreToEsxi(*t, man.archive, r.cfg(), ro, pw, rd, &pr2, &res, rr);
+        Str want = j.get("expect_error").str();
+        c_.note("FSRUN %s: восстановление на хост (%s datastore=\"%s\") %s за %.1f с: ВМ %s, vmx %s, датастор %s; ошибка: %s; предупреждение: %s", tag.c_str(), rn.c_str(), ro.datastore.c_str(), rok ? "готово" : "ОТКАЗ",
+                UnixNow() - h0, res.vmName.c_str(), res.vmxPath.c_str(), res.datastore.c_str(), rr.c_str(), res.warning.c_str());
+        if (!want.empty()) { T_CHECK(!rok); T_CHECK(Has(rr, want.c_str())); } else T_CHECK(rok);
+    }
+    if (j.get("options").boolean()) { Json o2; Str oe; bool b = EsxiRestoreTargets(r.cfg(), r.dc, o2, oe); c_.note("OPTIONS %s %s", b ? o2.dump().c_str() : "ОШИБКА", oe.c_str()); T_CHECK(b); }
+    delete t; if (!j.get("keep_store").boolean()) RemoveTree(store);
+    return true;
+}
+} // namespace
+VM2B_TEST("esxireal", esxireal_guest_fs_copy) { g_realKey = "esxi_real"; return Body_esxireal_fs_run(c_); }
+VM2B_TEST("esxireal", esxireal_big_disks) { g_realKey = "esxi_real"; return Body_esxireal_fs_run(c_); }
+VM2B_TEST("esxireal", esxireal_multi_datastore) { g_realKey = "esxi_real"; return Body_esxireal_fs_run(c_); }
+
 } // namespace vm2b

@@ -555,7 +555,7 @@ def vm_prop(vm, path):
             raise Fault('InvalidProperty', 'The property config.keyId is not valid for VirtualMachine')
         return '<val xsi:type="CryptoKeyId"><keyId>0e1c3f9a-5b6d-4a44-9c1e-77f6e3a3d001</keyId><providerId><id>mock-kms</id></providerId></val>' if getattr(vm, 'encrypted', False) else None
     if path == 'guest.toolsRunningStatus':
-        return '<val xsi:type="VirtualMachineToolsRunningStatus">%s</val>' % ('guestToolsRunning' if vm.power == 'poweredOn' and getattr(vm, 'tools', 'running') == 'running' else 'guestToolsNotRunning')
+        return '<val xsi:type="VirtualMachineToolsRunningStatus">%s</val>' % ('guestToolsRunning' if vm.power == 'poweredOn' and getattr(vm, 'tools', 'running') == 'running' and fault_get('quiesce_fail') != 'silent' else 'guestToolsNotRunning')
     if path == 'config.annotation':
         return '<val xsi:type="xsd:string">%s</val>' % x(getattr(vm, 'annotation', ''))
     if path == 'config.extraConfig':
@@ -595,8 +595,9 @@ def task_prop(t, path):
         res = '<result type="%s" xsi:type="ManagedObjectReference">%s</result>' % (t['result'][0], x(t['result'][1]))
     if st == 'error':
         f = t['error']
-        err = ('<error xsi:type="LocalizedMethodFault"><fault xsi:type="%s"><faultMessage><key>%s</key><message>%s</message></faultMessage></fault>'
-               '<localizedMessage>%s</localizedMessage></error>' % (f[0], f[0], x(f[1]), x(f[1])))
+        fmsg, _, fpriv = f[1].partition('|')       # NoPermission: "text|Privilege.Id" (a real host names the privilege in the fault)
+        err = ('<error xsi:type="LocalizedMethodFault"><fault xsi:type="%s"><faultMessage><key>%s</key><message>%s</message></faultMessage>%s</fault>'
+               '<localizedMessage>%s</localizedMessage></error>' % (f[0], f[0], x(fmsg), ('<privilegeId>%s</privilegeId>' % x(fpriv)) if fpriv else '', x(fmsg)))
     return ('<val xsi:type="TaskInfo"><key>%s</key><task type="Task">%s</task><name>%s</name><descriptionId>%s</descriptionId><entity type="VirtualMachine">%s</entity>'
             '<entityName>%s</entityName><state>%s</state><cancelled>%s</cancelled><cancelable>true</cancelable>%s%s<reason xsi:type="TaskReasonUser"><userName>%s</userName></reason>'
             '<queueTime>%s</queueTime><startTime>%s</startTime></val>'
@@ -943,14 +944,21 @@ def m_create_snapshot(req, h):
         if lic == 'task':
             raise Fault('RestrictedVersion', 'Current license or ESXi version prohibits execution of the requested operation.')
         qf = fault_get('quiesce_fail')
-        if quiesce and qf:
+        if quiesce and qf == 'silent':          # real ESXi 7.0.3 without VMware Tools in the guest: no error, the snapshot is simply marked quiesced = false
+            quiesce_done = False
+        else:
+            quiesce_done = quiesce
+        if quiesce and qf and qf != 'silent':
             if qf == 'quiesce':
                 raise Fault('ApplicationQuiesceFault', 'Failed to quiesce the virtual machine. The guest operating system reported an error.')
             raise Fault('ToolsUnavailable', 'Cannot quiesce this virtual machine because VMware Tools is not currently available.')
         tf = fault_get('task_fail')
         if tf:
             raise Fault('FileFault', str(tf))
-        sn = make_snapshot(vm, name, desc, memory, quiesce)
+        npf = fault_get('no_permission')
+        if npf:
+            raise Fault('NoPermission', 'Permission to perform this operation was denied.|' + str(npf))
+        sn = make_snapshot(vm, name, desc, memory, quiesce_done)
         vm.layout_lag = fault_get('layout_lag', 0)
         t['result'] = ('VirtualMachineSnapshot', sn.ref)
         S.events.append(('create', vm.name, name))
@@ -1478,13 +1486,17 @@ def m_rename_snapshot(req, h):
     raise Fault('ManagedObjectNotFound', 'The object \'vim.vm.Snapshot:%s\' has already been deleted or has not been completely created' % ref)
 
 
+def m_refresh_datastore(req, h):
+    return '<RefreshDatastoreResponse xmlns="urn:vim25"></RefreshDatastoreResponse>'
+
+
 def m_refresh(req, h):
     return '<RefreshStorageInfoResponse xmlns="urn:vim25"></RefreshStorageInfoResponse>'
 
 
 METHODS = {'CreateSnapshot_Task': m_create_snapshot, 'RemoveSnapshot_Task': m_remove_snapshot, 'RetrievePropertiesEx': m_retrieve_ex,
            'ContinueRetrievePropertiesEx': m_continue_ex, 'RetrieveProperties': m_retrieve, 'CreateContainerView': m_create_view, 'DestroyView': m_destroy_view,
-           'CancelTask': m_cancel, 'RenameSnapshot': m_rename_snapshot, 'RefreshStorageInfo': m_refresh, 'MakeDirectory': m_make_directory, 'DeleteDatastoreFile_Task': m_delete_ds_file,
+           'CancelTask': m_cancel, 'RenameSnapshot': m_rename_snapshot, 'RefreshStorageInfo': m_refresh, 'RefreshDatastore': m_refresh_datastore, 'MakeDirectory': m_make_directory, 'DeleteDatastoreFile_Task': m_delete_ds_file,
            'RegisterVM_Task': m_register_vm, 'PowerOnVM_Task': m_power_on, 'CopyVirtualDisk_Task': m_copy_virtual_disk,
            'PowerOffVM_Task': m_power_off, 'ShutdownGuest': m_shutdown_guest, 'DisableMethods': m_disable_methods, 'EnableMethods': m_enable_methods, 'QueryDisabledMethods': m_query_disabled,
            'ResetVM_Task': m_simple_denied('ResetVM_Task'), 'SuspendVM_Task': m_simple_denied('SuspendVM_Task'), 'ReconfigVM_Task': m_reconfigure,

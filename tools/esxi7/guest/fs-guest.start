@@ -1,0 +1,14 @@
+#!/bin/sh
+# Установленный Alpine: при КАЖДОЙ загрузке проверяет диск данных (sdb, ext4) ДО монтирования и после, затем проверяет файлы и продолжает писать.
+# Тот же скрипт у исходной ВМ и у восстановленной копии: журнал на serial (/dev/ttyS0) показывает, нужно ли было восстановление журнала.
+L=/dev/ttyS0
+( echo "FSBOOT $(date +%s) $(uname -r)"
+DATA=""; i=0; while [ -z "$DATA" ] && [ $i -lt 180 ]; do DATA=$(findfs LABEL=vm2bdata 2>/dev/null); [ -n "$DATA" ] || sleep 1; i=$((i+1)); done
+echo "FSDATA $DATA"
+echo "FSSB $(dumpe2fs -h $DATA 2>/dev/null | grep -E '^Filesystem (features|state)|^Journal features' | tr '\n' ';')"
+echo "FSFSCK $(e2fsck -fn $DATA 2>&1 | tail -3 | tr '\n' ';')"
+mkdir -p /data; mount -t ext4 -o noatime $DATA /data; echo "FSMOUNT rc=$?"
+echo "FSDMESG $(dmesg | grep -i -E 'sdb|EXT4-fs' | tail -4 | tr '\n' ';')"
+VM2B_TTY=1 /usr/local/bin/fsw verify /data
+[ -e /etc/vm2b-nowrite ] || { VM2B_TTY=1 nohup /usr/local/bin/fsw write /data --rate ${FSRATE:-10} >/dev/null 2>&1 & }
+echo "FSRUN $(pidof fsw)" ) > $L 2>&1 &

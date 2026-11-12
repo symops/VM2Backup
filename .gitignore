@@ -45,3 +45,4 @@ cap.pcap*
 /.winvm/esxi/
 /.winvm/guest-images/vmtools-apks/
 .winvm/shared/x64arch/
+/.winvm/guest-images/

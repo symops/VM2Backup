@@ -834,9 +834,9 @@ VM2B_TEST("esxi", esxi_snapshot_failure_paths)
 {
     Vec<Env> all, es; if (!Envs(c_, all)) return true; Normal(all, es);
     EsTmp tmp(c_, "esxi-sf");
-    int round = c_.range(0, 5);
+    int round = c_.range(0, 6);
     for (const Env& e : es) {
-        int kind = round++ % 6;
+        int kind = round++ % 7;
         Ctl ctl(e); ctl.reset();
         Fix f; T_CHECK(MakeFix(c_, ctl, e, f, "SF", 1, 200000, "poweredOn")); if (!f.m.ok) return false;
         BackupOptions o = RandomOpts(c_, false); o.verify = false;
@@ -845,10 +845,11 @@ VM2B_TEST("esxi", esxi_snapshot_failure_paths)
         Target* t = LocalAt(tmp.sub("store"));
         Json fl = Json::object();
         if (kind == 0) { fl["license_block"] = c_.coin() ? "call" : "task"; }
-        if (kind == 1) { fl["quiesce_fail"] = c_.coin() ? "tools" : "quiesce"; }
+        if (kind == 1) { int qk = c_.range(0, 2); fl["quiesce_fail"] = qk == 0 ? "tools" : qk == 1 ? "quiesce" : "silent"; }       // "silent": the real host takes the snapshot with quiesced = false and no error
         if (kind == 2) { fl["task_fail"] = "The file is locked by another process"; }
         if (kind == 3) { fl["task_hang"] = true; cfg["task_timeout"] = 2; }
         if (kind == 4) { fl["remove_fail"] = "datastore is read only"; }
+        if (kind == 6) { fl["no_permission"] = "VirtualMachine.State.CreateSnapshot"; }
         if (kind == 5) { Json o2, a = Json::object(); a["vm"] = f.spec.name; a["name"] = "manual snapshot"; ctl.call("snapshot", a, o2); Json a2 = Json::object(); a2["vm"] = f.spec.name; a2["name"] = "VM2Backup-deadbeef00"; ctl.call("snapshot", a2, o2); }
         ctl.faults(fl);
         VmSource* src = NewEsxiSource(cfg, err);
@@ -860,7 +861,9 @@ VM2B_TEST("esxi", esxi_snapshot_failure_paths)
             T_CHECK(ctl.leaked() == 0); T_CHECK(ctl.snapCount(f.spec.name) == 0);
         } else if (kind == 1) {
             T_CHECK(ok); T_CHECK(Contains(warn, "without quiescing"));
-            T_CHECK(ctl.counter("snap:CreateSnapshot") == 2); T_CHECK(ctl.leaked() == 0);
+            T_CHECK(ctl.counter("snap:CreateSnapshot") == (fl.get("quiesce_fail").str() == "silent" ? 1 : 2)); T_CHECK(ctl.leaked() == 0);
+        } else if (kind == 6) {                                                   // a user without the snapshot privilege: the message names the privilege
+            T_CHECK(!ok); T_CHECK(Contains(err, "lacks the privilege \"VirtualMachine.State.CreateSnapshot\"")); T_CHECK(Contains(err, "role")); T_CHECK(perm); T_CHECK(ctl.leaked() == 0);
         } else if (kind == 2) {
             T_CHECK(!ok); T_CHECK(Contains(err, "locked by another process")); T_CHECK(ctl.leaked() == 0);
         } else if (kind == 3) {
@@ -1445,6 +1448,11 @@ VM2B_TEST("esxi", esxi_restore_refusals_and_clean_failures)
           dirs0 = CountDirs(e, "datastore1") + CountDirs(e, "datastore2");
           EsxiRestoreOptions o; o.vmName = stray; bool ok = RestoreToEsxi(*t, r.man.archive, e.cfg(), o, r.o.password, rd, &pr, nullptr, err); T_CHECK(!ok); T_CHECK(Contains(err, "already exist")); noTrace("stray folder");
           RemoveTree(JoinPath(JoinPath(e.root, "datastore1"), stray)); dirs0 = CountDirs(e, "datastore1") + CountDirs(e, "datastore2"); }
+        // 3b. a datastore without room (the emulator's `ds_free` override): refused BEFORE a folder is made or a byte is sent, the message names the datastore and the numbers
+        { Json fl = Json::object(), dsf = Json::object(); dsf["datastore1"] = 1000; dsf["datastore2"] = 1000; fl["ds_free"] = dsf; ctl.faults(fl);
+          EsxiRestoreOptions o; o.vmName = "nospace" + Str::fmt("%u", c_.rnd(1000)); bool ok = RestoreToEsxi(*t, r.man.archive, e.cfg(), o, r.o.password, rd, &pr, nullptr, err);
+          T_CHECK(!ok); T_CHECK(Contains(err, "not enough free space")); T_CHECK(Contains(err, "datastore")); noTrace("no free space");
+          Json fn = Json::object(); fn["ds_free"] = Json(); Json o3; ctl.call("faults", fn, o3); }
         // 4. things that do not exist on the server
         { EsxiRestoreOptions o; o.vmName = "x" + Str::fmt("%u", c_.rnd(1000)); o.datastore = "no-such-datastore"; bool ok = RestoreToEsxi(*t, r.man.archive, e.cfg(), o, r.o.password, rd, &pr, nullptr, err); T_CHECK(!ok); T_CHECK(Contains(err, "datastore")); noTrace("bad datastore"); }
         if (e.vcenter()) {

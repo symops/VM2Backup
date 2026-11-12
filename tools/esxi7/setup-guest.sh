@@ -8,18 +8,21 @@ D=$(cd "$(dirname "$0")" && pwd); S="$D/ssh.sh"; ROOT=$(cd "$D/../.." && pwd)
 OUT=$($S 'sh -s' <<'GUEST'
 set -e
 DS=/vmfs/volumes/datastore1
-if [ ! -d "$DS" ]; then
-  for d in $(ls /vmfs/devices/disks/ | grep '^t10\.' | grep -v ':'); do
-    # второй диск = тот, у которого нет разделов
-    ls /vmfs/devices/disks/ | grep -q "^$d:1\$" || DISK=$d
-  done
-  [ -n "$DISK" ] || { echo "нет пустого диска"; exit 1; }
-  END=$(partedUtil getptbl /vmfs/devices/disks/$DISK | sed -n 2p | awk '{print $1*$2*$3-1}')
-  partedUtil mklabel /vmfs/devices/disks/$DISK gpt
-  partedUtil setptbl /vmfs/devices/disks/$DISK gpt "1 2048 $END AA31E02A400F11DB9590000C2911D1B8 0"
-  vmkfstools -C vmfs6 -S datastore1 /vmfs/devices/disks/$DISK:1
+# пустые диски (без разделов) по порядку: первый -> datastore1, второй (если есть, раунд 3, пункт C) -> datastore2
+mkds() { # $1 имя датастора, $2 диск
+  partedUtil mklabel /vmfs/devices/disks/$2 gpt; END=$(partedUtil getUsableSectors /vmfs/devices/disks/$2 | awk "{print \$2}")
+  partedUtil mklabel /vmfs/devices/disks/$2 gpt
+  partedUtil setptbl /vmfs/devices/disks/$2 gpt "1 2048 $END AA31E02A400F11DB9590000C2911D1B8 0"
+  vmkfstools -C vmfs6 -S $1 /vmfs/devices/disks/$2:1
   sleep 3
-fi
+}
+EMPTY=""
+for d in $(ls /vmfs/devices/disks/ | grep '^t10\.' | grep -v ':'); do
+  ls /vmfs/devices/disks/ | grep -q "^$d:1\$" || EMPTY="$EMPTY $d"
+done
+set -- $EMPTY
+[ -d "$DS" ] || { [ -n "$1" ] || { echo "нет пустого диска"; exit 1; }; mkds datastore1 $1; shift; }
+[ -d /vmfs/volumes/datastore2 ] || { [ -n "$1" ] && mkds datastore2 $1; }
 ls -la /vmfs/volumes/ | head
 # pciBridge*: без них pvscsi во вложенном ESXi не получает слот PCIe («No PCIe slot available for SCSI0»), ВМ не включается
 make_vm() { # $1 имя, $2 guestOS

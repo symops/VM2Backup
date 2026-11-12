@@ -521,6 +521,11 @@ private:
                     const XmlNode& d = det->kids[0];
                     m_faultType = d.xsiType();
                     if (m_faultType.empty()) { m_faultType = d.name; if (m_faultType.ends_with("Fault") && m_faultType.size() > 5) m_faultType = m_faultType.substr(0, m_faultType.size() - 5); }
+                    if (m_faultType == "NoPermission") {      // vCenter / ESXi name the missing privilege: the message of the user says which one (docs/ESXI.md, the roles)
+                        Str pid = d.childText("privilegeId").trim();
+                        if (pid.empty()) for (const XmlNode& k : d.kids) if (k.name == "privilegeId") pid = k.text.trim();
+                        if (!pid.empty()) m_faultMsg = "the user lacks the privilege \"" + pid + "\" (" + m_faultMsg + ")";
+                    }
                 }
                 if (m_faultType == "NotAuthenticated" && relogin && attempt == 0 && m_loggedIn && strcmp(method, "Login") != 0) {
                     m_loggedIn = false;
@@ -802,6 +807,7 @@ private:
                     const XmlNode* f = e->child("fault"); if (f) tr.faultType = f->xsiType();
                     tr.faultMsg = OneLine(e->childText("localizedMessage"));
                     if (tr.faultMsg.empty() && f) tr.faultMsg = OneLine(f->childText("faultMessage"));
+                    if (f && tr.faultType == "NoPermission") { Str pid = f->childText("privilegeId").trim(); if (!pid.empty()) tr.faultMsg = "the user lacks the privilege \"" + pid + "\" (" + tr.faultMsg + ")"; }
                 }
                 if (tr.faultMsg.empty()) tr.faultMsg = tr.faultType.empty() ? Str("the task failed") : tr.faultType;
                 return true;
@@ -855,7 +861,9 @@ private:
         Str m = msg.lower();
         return type == "RestrictedVersion" || type == "NoPermission" || m.find("prohibits") >= 0 || (m.find("license") >= 0 && m.find("restrict") >= 0);
     }
-    static Str LicenseMessage(const Str& what) {
+    static Str LicenseMessage(const Str& what, const Str& faultMsg = Str()) {
+        if (faultMsg.find("lacks the privilege") >= 0)
+            return what + " was refused by the server: " + faultMsg + ". Give the user a role with this privilege (docs/ESXI.md, the roles of the backup user)";
         return what + " was refused by the server: the license of this ESXi host does not allow the write API (free ESXi) or the user lacks the snapshot privilege. "
                       "Use a licensed host (or vCenter)";
     }
@@ -1343,7 +1351,7 @@ private:
                 if (!runTask("CopyVirtualDisk_Task", in, m_cloneTimeout, tr)) { Str e = err; bool t = transient; m_cloning = false; return fail(e, t); }
                 if (!tr.ok) {
                     m_cloning = false;
-                    if (IsLicenseProblem(tr.faultType, tr.faultMsg)) return fail(LicenseMessage("cloning the disk of the running VM"));
+                    if (IsLicenseProblem(tr.faultType, tr.faultMsg)) return fail(LicenseMessage("cloning the disk of the running VM", tr.faultMsg));
                     if (tr.faultMsg.find("pace") >= 0 || tr.faultType == "NoDiskSpace" || tr.faultType == "NoSpace") return fail("cloning the disk " + c.srcDesc + " failed, the datastore has no room for the temporary clone (a thin copy of the disk's data is needed): " + tr.faultMsg);
                     return fail("cloning the disk " + c.srcDesc + " failed: " + tr.faultMsg);
                 }
@@ -1674,6 +1682,11 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
         unsigned char rb[5]; RandomBytes(rb, 5);
         Str newName = "VM2Backup-" + HexEncode(rb, 5), newRef;
         bool q = m_quiesce && poweredOn;
+        if (q && !toolsRunning(m_vmRef)) {   // a real ESXi 7.0.3 takes a snapshot that was asked to be quiesced WITHOUT an error when the guest has no running VMware Tools (and its own `quiesced`
+            // flag is wrong even for a really quiesced snapshot: it cannot be used): say so before, the request itself is still sent (the Tools may be just late)
+            if (!warning.empty()) warning += "; ";
+            warning += "VMware Tools is not running in the guest: the snapshot is taken without quiescing (the host does not report an error for it), the copy is crash-consistent";
+        }
         for (int attempt = 0; attempt < 2; ++attempt) {
             Str in = Ref("_this", "VirtualMachine", m_vmRef) + Tag("name", newName) + Tag("description", Str(kSnapDesc) + LiveMark(m_runToken)) +
                      Tag("memory", (m_memory && poweredOn) ? "true" : "false") + Tag("quiesce", q ? "true" : "false");
@@ -1684,11 +1697,11 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
                 return fail(e, t);
             }
             if (tr.ok) { newRef = tr.result; break; }
-            if (IsLicenseProblem(tr.faultType, tr.faultMsg)) return fail(LicenseMessage("creating the snapshot"));
+            if (IsLicenseProblem(tr.faultType, tr.faultMsg)) return fail(LicenseMessage("creating the snapshot", tr.faultMsg));
             if (q && IsQuiesceProblem(tr.faultType, tr.faultMsg)) {
                 q = false;
                 if (!warning.empty()) warning += "; ";
-                warning += "the quiesced snapshot failed (" + tr.faultMsg + "): taken without quiescing (VMware Tools missing or not running), the copy is crash-consistent";
+                warning += "the quiesced snapshot failed (" + tr.faultMsg + "): taken without quiescing (VMware Tools missing or not running, or the quiesce failed or timed out in the guest), the copy is crash-consistent";
                 cleanupByName(newName, Str());                       // a half-made one must not stay
                 continue;
             }
@@ -2134,7 +2147,13 @@ bool RestoreImpl::loadInventory(Inventory& inv, bool full)
     {   // datastores
         static const char* p[] = { "name", "summary.capacity", "summary.freeSpace", "summary.type", "summary.accessible" };
         if (!s.createView("Datacenter", inv.dcId, "Datastore", view)) return false;
-        bool ok = s.retrieve(Impl::PropSet("Datastore", p, 5), Impl::ViewSelect(view), objs); s.destroyView(view);
+        bool ok = s.retrieve(Impl::PropSet("Datastore", p, 5), Impl::ViewSelect(view), objs);
+        if (ok && full) {   // hostd keeps the free space of a datastore for minutes (a real ESXi 7.0.3 still showed 22 GB free after a 22 GB file was made): ask for a refresh, then read again
+            const XmlNode* rr = nullptr;
+            for (const ObjData& o : objs) { s.call("RefreshDatastore", Ref("_this", "Datastore", o.id), rr); s.err.clear(); s.m_hasFault = false; }
+            if (!objs.empty()) ok = s.retrieve(Impl::PropSet("Datastore", p, 5), Impl::ViewSelect(view), objs);
+        }
+        s.destroyView(view);
         if (!ok) return false;
         for (const ObjData& o : objs) { InvDs d; d.name = o.text("name"); d.capacity = I64(o.text("summary.capacity")); d.free = I64(o.text("summary.freeSpace")); d.type = o.text("summary.type"); d.accessible = o.text("summary.accessible", "true") != "false"; inv.ds.push_back(d); }
     }
@@ -2361,6 +2380,22 @@ bool RestoreImpl::initFromMeta()
         (void)hostCompute;
     }
     buildMap();
+    {   // the free space BEFORE anything is created: a restore that cannot fit is refused at once and nothing is written (a real ESXi 7.0.3 answers a datastore that ran full with an
+        // empty HTTP 500 only after the space is gone, and the retries take a quarter of an hour; every file is counted at its full size: a PUT writes the zeros of a thin disk too)
+        Vec<Str> dn; Vec<u64> need; const Json& fl = m_meta.get("files");
+        for (size_t i = 0; i < fl.size(); ++i) {
+            Str ds, path; mapArc(fl.at(i).get("path").str(), ds, path);
+            size_t k = 0; for (; k < dn.size(); ++k) if (dn[k] == ds) break;
+            if (k == dn.size()) { dn.push_back(ds); need.push_back(0); }
+            need[k] += (u64)fl.at(i).get("size").integer();
+        }
+        for (size_t k = 0; k < dn.size(); ++k) {
+            const InvDs* d = inv.findDs(dn[k]);
+            if (d && d->capacity > 0 && need[k] > (u64)(d->free < 0 ? 0 : d->free))
+                return fail(Str::fmt("not enough free space on the datastore \"%s\": the restore needs %llu MB there and %llu MB are free (nothing was written): choose another datastore or free some space",
+                                     dn[k].c_str(), (unsigned long long)((need[k] + 1048575) >> 20), (unsigned long long)((u64)(d->free < 0 ? 0 : d->free) >> 20)));
+        }
+    }
     if (!ensureDir(m_mainDs, m_dir, true)) return false;
     m_inited = true;
     return true;
