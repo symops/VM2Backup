@@ -69,6 +69,8 @@ function Run-Level($vm, $level, $threads, $srcRoot, $srcHash, $label, [switch]$B
     Api $w 'settings.set' @{ level = $level; threads = $threads; max_parallel = 1 } | Out-Null
     foreach ($x in @((Api $w 'tasks.list' @{}).Result)) { if ($x.name -like 'lvl-*') { Api $w 'tasks.delete' @{ id = $x.id } | Out-Null } }
     foreach ($x in @((Api $w 'servers.list' @{}).Result)) { if ($x.name -eq 'lvl src') { Api $w 'servers.delete' @{ id = $x.id } | Out-Null } }
+    # раунд 15: после перезапуска службы на нагруженной ВМ первые запросы могут не пройти (в большом наборе так упала первая строка): ждём рабочий ответ API
+    for ($k = 0; $k -lt 150; $k++) { $ok = Api $w 'servers.list' @{}; if ($ok.Status -eq 200 -and $null -ne $ok.Result) { break }; Start-Sleep -Seconds 2; $w2 = Web-Ready; if ($w2) { $w = $w2 } }
     $sv = Api $w 'servers.save' @{ server = @{ type = 'directory'; name = 'lvl src'; path = $srcRoot } }; $sid = $sv.Result.id; if (-not $sid) { Write-Output "INFO servers.save: $($sv.Text)" }
     $el = @{ source = @{ server = $sid; vms = @($vm) }; target = @{ server = 'local'; directory = "$dir\{VM}" }; compress = @{ codec = 'xz' }; encrypt = @{ enabled = $false }; verify = $false; keep = 0; segment_mib = 0 }
     $tk = Api $w 'tasks.save' @{ task = @{ name = "lvl-$level-$threads"; enabled = $true; elements = @($el) } }
@@ -115,6 +117,7 @@ elseif ($Mode -eq 'list') {
     $textMb = 500; $rndMb = 300
     Mk-Data "$src\vmM" $textMb 500 $rndMb
     $hash = [LvlGen]::TreeHash("$src\vmM"); Write-Output ("INFO source hash: $hash")
+    $script:JobMax = 9000      # раунд 15: уровень 9 с одним потоком на 4 ГБ ВМ занимает около 6200 с (предел 5400 с обрывал строку)
     foreach ($pair in ($A1 -split ' ')) { $lv, $t = $pair -split ':'; Run-Level 'vmM' ([int]$lv) ([int]$t) $src $hash "list L$lv T$t" }
 }
 elseif ($Mode -eq 'big') {

@@ -1,4 +1,4 @@
-# VM2Backup guest test library (dot-source it):  . C:\vm2b\guest\lib.ps1
+﻿# VM2Backup guest test library (dot-source it):  . C:\vm2b\guest\lib.ps1
 $ErrorActionPreference = 'Continue'
 $global:Share = if ($env:SRC) { $env:SRC } else { '\\10.0.2.4\qemu' }
 function Out-Line($s) { Write-Output $s }
@@ -20,7 +20,8 @@ function Web-Call($w, [string]$method, [string]$path, $body, [bool]$useCsrf = $t
         $json = if ($body -is [string]) { $body } else { ConvertTo-Json $body -Depth 12 -Compress }
         $bytes = [Text.Encoding]::UTF8.GetBytes($json); $req.ContentType = 'application/json'; $req.ContentLength = $bytes.Length
         if ($useCsrf -and $w.Csrf) { $req.Headers.Add('X-CSRF-Token', $w.Csrf) }
-        $s = $req.GetRequestStream(); $s.Write($bytes, 0, $bytes.Length); $s.Close()
+        # раунд 15: таймаут записи запроса (ВМ перегружена вводом-выводом) - ответ со статусом 0, а не исключение, после которого всё становится null
+        try { $s = $req.GetRequestStream(); $s.Write($bytes, 0, $bytes.Length); $s.Close() } catch { return @{ Status = 0; Text = $_.Exception.Message; Json = $null } }
     }
     try { $resp = $req.GetResponse() } catch [System.Net.WebException] { $resp = $_.Exception.Response; if (-not $resp) { return @{ Status = 0; Text = $_.Exception.Message; Json = $null } } }
     $sr = New-Object IO.StreamReader($resp.GetResponseStream()); $text = $sr.ReadToEnd(); $sr.Close(); $st = [int]$resp.StatusCode; $resp.Close()
