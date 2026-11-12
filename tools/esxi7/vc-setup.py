@@ -4,8 +4,9 @@
 #   tools/esxi7/vc-setup.py
 import hashlib, http.cookiejar, os, re, ssl, sys, time, urllib.request
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '.winvm', 'esxi')
-sso = open(os.path.join(root, 'secret-vc-sso')).read().strip(); hostpw = open(os.path.join(root, 'secret')).read().strip()
-VC, HOST = '10.213.77.11', '10.213.77.10'
+# второй хост (раунд 3, пункт E): HOST=10.213.77.12 HOSTSECRET=../esxi2/secret tools/esxi7/vc-setup.py  (датацентр vm2b-dc уже есть, хост добавляется в него)
+sso = open(os.path.join(root, 'secret-vc-sso')).read().strip(); hostpw = open(os.path.join(root, os.environ.get('HOSTSECRET', 'secret'))).read().strip()
+VC, HOST = '10.213.77.11', os.environ.get('HOST', '10.213.77.10')
 ctx = ssl._create_unverified_context(); cj = http.cookiejar.CookieJar()
 op = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx), urllib.request.HTTPCookieProcessor(cj))
 def call(m, inner, ver='7.0'):

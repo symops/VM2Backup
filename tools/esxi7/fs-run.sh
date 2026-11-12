@@ -17,7 +17,7 @@ p = json.loads(params); p.setdefault("tag", tag); p["store"] = w(e + "/fsout/sto
 cfg = {"esxi_real": {"host": "10.213.77.10", "port": 443, "user": "root", "password_file": w(e + "/secret"), "fingerprint": "sha256:" + fp, "vms": [], "restore_prefix": "vm2b-rt"}, "esxi_fs": p}
 if os.environ.get("VM2B_REAL_KEY") == "vcenter_real" and os.path.exists(e + "/secret-vc-sso"):
     cfg["vcenter_real"] = {"host": "10.213.77.11", "port": 443, "user": os.environ.get("VC_USER", "administrator@vsphere.local"), "password_file": w(e + "/" + os.environ.get("VC_SECRET", "secret-vc-sso")), "fingerprint": os.environ.get("VC_FP", ""), "datacenter": "vm2b-dc", "vms": [], "restore_prefix": "vm2b-vc-rt"}
-json.dump(cfg, open(e + "/servers.json", "w")); os.chmod(e + "/servers.json", 0o600)
+json.dump(cfg, open(e + "/servers-" + tag + ".json", "w")); os.chmod(e + "/servers-" + tag + ".json", 0o600)
 PY
 export WINEDEBUG=-all
-wine64 "$EXE" --servers "$E/servers.json" --only "$TEST" 2>&1 | grep -vE "^$" | cut -c1-3000 | tee "$RES/$TAG.txt"
+wine64 "$EXE" --servers "$E/servers-$TAG.json" --only "$TEST" 2>&1 | grep -vE "^$" | cut -c1-3000 | tee "$RES/$TAG.txt"
