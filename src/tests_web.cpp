@@ -68,6 +68,7 @@ Json FakeAdapter(const char* guid, bool up, const char* a1, const char* a2 = nul
 
 i64 g_clockOffset = 0;
 i64 OffsetNow() { return (i64)UnixNow() + g_clockOffset; }
+i64 OffsetNowMs() { return (i64)(UnixNow() * 1000.0) + g_clockOffset * 1000; }       // the same clock in ms: a lock lasts its full time, not 0..1 s less
 
 } // namespace
 
@@ -229,6 +230,27 @@ VM2B_TEST("web", auth_users_login_throttle_sessions)
     T_CHECK(b.usersSave(u2, err));
     Bytes f; T_CHECK(ReadWholeFile(JoinPath(tmp.sub("d2"), "web.json").c_str(), f, err)); Json doc; T_CHECK(Json::parse((const char*)f.data(), f.size(), doc, err));
     T_CHECK(doc.get("users").at(0).get("pw").get("iter").integer() >= 300000); T_CHECK(Str((const char*)f.data(), f.size()).find("Zebra") < 0);
+    return true;
+}
+
+// Regression (flaky svcweb/web_https_api_roles_and_refusals, seed 4101): the lock after the first failed login was kept in whole seconds, so a
+// failure at x.9 s was unlocked again at (x+1).0 s: the "1 s" throttle lasted 0..1 s (shorter than the round trip of the next request on a loaded
+// host).  With a millisecond clock: a failure at x.900 must still be held at (x+1).000 and until x.900 + 1 s, then released.
+static i64 g_nowMs;
+static i64 FakeNowMs() { return g_nowMs; }
+VM2B_TEST("web", auth_first_failure_lock_is_a_full_second)
+{
+    Tmp tmp(c_, "webthr1"); WebAuth a; Str err;
+    g_nowMs = 9000000LL * 1000 + 900; a.setClockMs(FakeNowMs); T_CHECK(a.open(tmp.sub("d"), err, false)); a.setKdfIterationsForTests(1000);
+    Json s = Json::object(); s["name"] = "alice"; s["role"] = "operator"; s["password"] = "correct horse battery"; s["twofa"] = "optional";
+    T_CHECK(a.usersSave(s, err));
+    WebAuth::LoginResult r = a.login("7.7.7.7", "alice", "wrong password!", "", ""); T_CHECK(r.status == 401);
+    g_nowMs += 150;                                                                    // x.900 -> (x+1).050: another whole second on the clock
+    r = a.login("7.7.7.7", "alice", "correct horse battery", "", ""); T_CHECK(r.status == 429 && r.retryAfter == 1);
+    g_nowMs += 800;                                                                    // 950 ms after the failure
+    r = a.login("7.7.7.7", "alice", "correct horse battery", "", ""); T_CHECK(r.status == 429 && r.retryAfter == 1);
+    g_nowMs += 60;                                                                     // 1010 ms: released
+    r = a.login("7.7.7.7", "alice", "correct horse battery", "", ""); T_CHECK(r.status == 200);
     return true;
 }
 
@@ -426,7 +448,7 @@ VM2B_TEST("web", host_for_python_clients)
     ServiceCore core; ServiceOptions o; o.dataDir = JoinPath(dataDir, "svc"); o.pipeName = Str::fmt("vm2b-webh-%lu", (unsigned long)GetCurrentProcessId()); o.pipeSddl = "D:(A;;GA;;;WD)"; o.tickMs = 100;
     T_CHECK(core.start(o, err)); if (c_.failed) return false;
     WebServer web; T_CHECK(web.start(&core, o.dataDir, err, false));
-    web.setKdfIterationsForTests((u32)c_.servers.get("web").get("kdf").integer(2000)); web.setClock(OffsetNow); web.setRetrySeconds(1);
+    web.setKdfIterationsForTests((u32)c_.servers.get("web").get("kdf").integer(2000)); web.setClockMs(OffsetNowMs); web.setRetrySeconds(1);
     Str ready = JoinPath(ctl, "ready.txt"); Str e2; WriteWholeFile(ready.c_str(), "ready", 5, e2);
     DWORD start = GetTickCount(); bool quit = false;
     while (!quit && GetTickCount() - start < 900000) {

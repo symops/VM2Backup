@@ -786,6 +786,7 @@ struct WebServer::Impl {
 WebServer::WebServer() : m(new Impl()) { m->owner = this; }
 WebServer::~WebServer() { stop(); for (int i = 0; i < 500 && m->applyPending > 0; ++i) Sleep(10); delete m; }
 
+void WebServer::setClockMs(i64 (*clock)()) { m->auth.setClockMs(clock); }
 void WebServer::setClock(i64 (*clock)()) { m->clockFn = clock; m->auth.setClock(clock); }
 void WebServer::setRetrySeconds(int s) { m->retrySec = s < 1 ? 1 : s; }
 void WebServer::setInterfaceProvider(Json (*p)()) { m->ifProvider = p; if (m->evt) SetEvent(m->evt); }

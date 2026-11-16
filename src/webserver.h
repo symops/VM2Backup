@@ -29,6 +29,7 @@ public:
     bool handleAdminFromWeb(const Str& actor, const Str& session, const Str& ip, const Str& cmd, const Json& args, Json& result, Str& err, bool& applyLater);
 
     // ---- hooks for the tests ----
+    void setClockMs(i64 (*clock)());               // tests: unix milliseconds (the throttle then keeps sub-second precision)
     void setClock(i64 (*clock)());                 // unix seconds (sessions, throttling, TOTP); null = real
     void setRetrySeconds(int s);                   // how often unbound addresses are retried (default 30)
     void setInterfaceProvider(Json (*p)());        // replaces the list of adapters (same shape as web.interfaces.list "interfaces"); null = the real ones

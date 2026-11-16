@@ -19,8 +19,10 @@ public:
     WebAuth();
     ~WebAuth();
     bool open(const Str& dataDir, Str& err, bool enabledDefault = true);                 // loads (or creates) web.json
-    void setClock(i64 (*clock)()) { m_clock = clock; }       // unix seconds; null = the real clock
+    void setClock(i64 (*clock)()) { m_clock = clock; m_clockMs = nullptr; }       // unix seconds; null = the real clock
+    void setClockMs(i64 (*clock)()) { m_clockMs = clock; m_clock = nullptr; }     // tests: unix MILLISECONDS (sub-second throttle checks)
     i64 now() const;
+    i64 nowMs() const;                                      // milliseconds (the throttle); a test clock gives seconds * 1000
 
     // ---- settings {enabled, bind:[entries], port, require_2fa_admins, session_minutes, trust_proxy} ----
     // a bind entry: an address ("192.168.1.10", "::1", "fe80::1%12"), "adapter:<AdapterName GUID>", "localhost" (127.0.0.1 + ::1), "all" (0.0.0.0 + ::)
@@ -84,7 +86,7 @@ private:
     bool checkTotp(Json& u, const Str& code);
     bool useRecovery(Json& u, const Str& code);
     bool isTwofaRequired(const Json& u) const;
-    struct Fail { int count; i64 last; i64 lockedUntil; Str key; };
+    struct Fail { int count; i64 last; i64 lockedUntil /* ms */; Str key; };
     int  throttleLeft(const Str& key);                       // seconds the caller must still wait (0 = go)
     void noteFail(const Str& key);
     void clearFail(const Str& key);
@@ -98,6 +100,7 @@ private:
     Vec<WebSession> m_sessions;
     Vec<Fail> m_fails;
     i64 (*m_clock)();
+    i64 (*m_clockMs)();
     u32 m_kdfIter;
     Json m_dummy;                                            // a password hash to burn the same time for unknown users
 };

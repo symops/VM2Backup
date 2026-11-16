@@ -101,6 +101,9 @@ netsh advfirewall firewall delete rule name="VM2Backup web"
   user's sessions at once.  `POST /api/password` changes the own password.
 * Rate limiting: per IP and per user name (existing or not): after each failure a growing wait (1, 2, 4 ... 60 s), after 8 failures
   15 minutes; while waiting the attempt is answered `429` + `Retry-After` **without being evaluated**.
+  The wait is counted from the moment of the failure in MILLISECONDS (`WebAuth::nowMs`, `Retry-After` rounded up): earlier it was kept in whole
+  seconds, so the first 1 s wait could be over after a few milliseconds (a failure at x.99 s was released at (x+1).00 s); this made
+  `svcweb/web_https_api_roles_and_refusals` fail once in ~50 runs on a loaded host (regression test `auth_first_failure_lock_is_a_full_second`).
 * Audit log `audit.log` (rotated at 5 MB, five files are kept: `audit.log`, `audit.1.log` ... `audit.4.log`) in the data folder: logins (ok / failed; blocked ones see below), logout, password and user changes,
   settings / certificate changes, every state-changing API call with user + IP (command and an id / name only - never arguments with
   secrets), refused calls.  `web.audit.tail {lines}` reads it.

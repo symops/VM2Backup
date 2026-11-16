@@ -836,7 +836,10 @@ VM2B_TEST("svcweb", web_https_api_roles_and_refusals)
     WebCli adm(port, fp), opr(port, fp), vwr(port, fp);
     T_CHECK(adm.login("root", pwA.c_str()) == 200 && adm.role == "admin"); T_CHECK(opr.login("oper", pwO.c_str()) == 200 && opr.role == "operator"); T_CHECK(vwr.login("eye", pwV.c_str()) == 200 && vwr.role == "viewer");
     { WebCli w(port, fp); T_CHECK(w.login("root", "wrong-password-1") == 401);
-      Json r; T_CHECK(w.loginRaw("root", pwA.c_str(), "", "", &r) == 429); T_CHECK(r.get("retry_after").integer() >= 1);       // the throttle holds even the right password for a moment
+      // the throttle holds even the right password for a moment (1 s from the failure, kept in ms by the product).  On a host so loaded that the next
+      // request is sent more than 0.5 s after the failure was answered the lock may rightly be over: then only the answer is checked, not the 429.
+      ULONGLONG t0 = GetTickCount64(); Json r; int st = w.loginRaw("root", pwA.c_str(), "", "", &r); ULONGLONG dt = GetTickCount64() - t0;
+      if (dt < 500) { T_CHECK(st == 429); T_CHECK(r.get("retry_after").integer() >= 1); } else { T_CHECK(st == 429 || st == 200); c_.note("login throttle check skipped: the request took %d ms", (int)dt); }
       T_CHECK(w.login("nobody", pwA.c_str()) == 401); T_CHECK(w.login("root", pwA.c_str()) == 200); }
     if (c_.failed) return false;
 

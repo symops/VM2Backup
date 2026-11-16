@@ -128,14 +128,17 @@ Str WebAuth::Totp(const Bytes& secret, u64 t, int digits)
 }
 
 // ---- construction / file ------------------------------------------------------------------------------------------------
-WebAuth::WebAuth() : m_clock(nullptr), m_kdfIter(kEncIterationsDefault)
+WebAuth::WebAuth() : m_clock(nullptr), m_clockMs(nullptr), m_kdfIter(kEncIterationsDefault)
 {
     InitializeCriticalSection(&m_cs);
     m_doc = Json::object();
 }
 WebAuth::~WebAuth() { DeleteCriticalSection(&m_cs); }
 
-i64 WebAuth::now() const { return m_clock ? m_clock() : (i64)UnixNow(); }
+i64 WebAuth::now() const { return m_clockMs ? m_clockMs() / 1000 : m_clock ? m_clock() : (i64)UnixNow(); }
+// Milliseconds for the throttle: lockedUntil is kept in ms, so a lock of N s lasts N s from the moment of the failure (with whole seconds a
+// 1 s lock set at x.9 s ended at once at (x+1).0 s - the first "slow down" was 0..1 s long).  A test clock is in whole seconds.
+i64 WebAuth::nowMs() const { return m_clockMs ? m_clockMs() : m_clock ? m_clock() * 1000 : (i64)(UnixNow() * 1000.0); }
 
 // enabledDefault = the product's first-start defaults: the site is ON (127.0.0.1:8443), the default administrator admin/admin exists and
 // the global 2FA requirement for admins is off (otherwise admin/admin could not sign in).  false (tests): off, no default user, 2FA required.
@@ -499,27 +502,27 @@ bool WebAuth::isTwofaRequired(const Json& u) const
 // ---- throttling ---------------------------------------------------------------------------------------------------------------
 int WebAuth::throttleLeft(const Str& key)
 {
-    i64 t = now();
+    i64 t = now(), tm = nowMs();
     for (size_t i = 0; i < m_fails.size(); ++i) if (m_fails[i].key == key) {
         Fail& f = m_fails[i];
-        if (t - f.last > kLockSeconds && f.lockedUntil <= t) { m_fails.erase(i); return 0; }
-        return f.lockedUntil > t ? (int)(f.lockedUntil - t) : 0;
+        if (t - f.last > kLockSeconds && f.lockedUntil <= tm) { m_fails.erase(i); return 0; }
+        return f.lockedUntil > tm ? (int)((f.lockedUntil - tm + 999) / 1000) : 0;       // seconds left, rounded up (never 0 while locked)
     }
     return 0;
 }
 void WebAuth::noteFail(const Str& key)
 {
-    i64 t = now(); Fail* f = nullptr;
+    i64 t = now(), tm = nowMs(); Fail* f = nullptr;
     for (size_t i = 0; i < m_fails.size(); ++i) if (m_fails[i].key == key) f = &m_fails[i];
     if (!f) {
-        if (m_fails.size() > 5000) for (size_t i = m_fails.size(); i-- > 0;) if (m_fails[i].lockedUntil <= t && t - m_fails[i].last > kLockSeconds) m_fails.erase(i);
+        if (m_fails.size() > 5000) for (size_t i = m_fails.size(); i-- > 0;) if (m_fails[i].lockedUntil <= tm && t - m_fails[i].last > kLockSeconds) m_fails.erase(i);
         if (m_fails.size() > 20000) m_fails.erase(0);
         Fail n; n.count = 0; n.last = t; n.lockedUntil = 0; n.key = key; m_fails.push_back(n); f = &m_fails.back();
     }
     if (t - f->last > kLockSeconds) f->count = 0;
     f->count++; f->last = t;
     int wait = f->count >= kLockAfter ? kLockSeconds : (f->count > 6 ? 60 : (1 << (f->count - 1)));      // 1 2 4 8 16 32 60 s, then 15 minutes
-    f->lockedUntil = t + wait;
+    f->lockedUntil = tm + (i64)wait * 1000;
 }
 void WebAuth::clearFail(const Str& key) { for (size_t i = 0; i < m_fails.size(); ++i) if (m_fails[i].key == key) { m_fails.erase(i); return; } }
 
