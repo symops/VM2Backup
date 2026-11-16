@@ -3040,6 +3040,17 @@ VM2B_TEST("esxi", esxi_real_fixtures_parse)
         T_CHECK(loadv("RetrievePropertiesEx-vmlist.resp.xml", vl));
         { const XmlNode* rv = vl.child("Body") && vl.child("Body")->child("RetrievePropertiesExResponse") ? vl.child("Body")->child("RetrievePropertiesExResponse")->child("returnval") : nullptr;
           int objs = 0; if (rv) for (const XmlNode& o : rv->kids) if (o.name == "objects") ++objs; T_CHECK(objs >= 1); }
+        // round 4: the task of a user without System.Read on the root folder is a missingSet / NoPermission; the datastore names the hosts that mount it; the host knows its cluster
+        XmlNode ms, dh, hc;
+        T_CHECK(loadv("RetrievePropertiesEx-task-missingSet-NoPermission.resp.xml", ms));
+        { const XmlNode* o = ms.find("Body/RetrievePropertiesExResponse/returnval/objects"); const XmlNode* m = o ? o->child("missingSet") : nullptr; const XmlNode* f = m ? m->find("fault/fault") : nullptr;
+          T_CHECK(f && f->xsiType() == "NoPermission" && f->childText("privilegeId").trim() == "System.Read" && f->child("object") && f->child("object")->text.trim() == "group-d1"); }
+        T_CHECK(loadv("RetrievePropertiesEx-datastore-host.resp.xml", dh));
+        { const XmlNode* o = dh.find("Body/RetrievePropertiesExResponse/returnval/objects"); int mounts = 0;
+          if (o) for (const XmlNode& ps : o->kids) if (ps.name == "propSet" && ps.childText("name").trim() == "host") { const XmlNode* v = ps.child("val"); if (v) for (const XmlNode& k : v->kids) if (k.name == "DatastoreHostMount" && k.child("key") && k.find("mountInfo/accessible")) ++mounts; }
+          T_CHECK(mounts >= 1); }
+        T_CHECK(loadv("RetrievePropertiesEx-host-in-cluster.resp.xml", hc));
+        { const XmlNode* o = hc.find("Body/RetrievePropertiesExResponse/returnval/objects"); bool par = false; if (o) for (const XmlNode& ps : o->kids) if (ps.name == "propSet" && ps.childText("name").trim() == "parent") par = ps.child("val") && ps.child("val")->text.trim().starts_with("domain-c"); T_CHECK(par); }
     }
     return true;
 }
@@ -3411,6 +3422,61 @@ VM2B_TEST("esxi", esxi_cold_with_own_snapshots_and_history)
             }
         }
         delete t; DeleteVm(ctl, f.spec.name); RemoveTree(store); RemoveTree(tmp.sub("r"));
+    }
+    return true;
+}
+
+// =====================================================================================================================================================================
+// Round 4 (docs/ESXI.md, "Проверено на настоящем vCenter 7.0.3 (раунд 4)"): диагностика прав на малых сущностях, хост ВМ пропал во время передачи, датастор не виден выбранному хосту.
+// Образцы настоящего vCenter: NoPermission называет объект (`object`), состояние задачи без System.Read на корне приходит как missingSet, при отключённом хосте файлы отдаются как HTTP 404.
+// =====================================================================================================================================================================
+VM2B_TEST("esxi", esxi_round4_diagnostics)
+{
+    Vec<Env> all, es; if (!Envs(c_, all)) return true; Normal(all, es);
+    EsTmp tmp(c_, "esxi-r4");
+    for (const Env& e : es) {
+        for (int kind = 0; kind < 4; ++kind) {
+            Ctl ctl(e); ctl.reset();
+            Fix f; T_CHECK(MakeFix(c_, ctl, e, f, "R4", 1, 200000, "poweredOn")); if (!f.m.ok) return false;
+            BackupOptions o = RandomOpts(c_, false); o.verify = false; o.password.clear();
+            Json cfg = e.cfg(true); Str err; Manifest man; Str warn;
+            Str store = tmp.sub("store"); RemoveTree(store); Target* t = LocalAt(store);
+            Json fl = Json::object();
+            if (kind == 0) fl["no_permission"] = "VirtualMachine.State.CreateSnapshot@vm";                          // the object is named in the fault
+            if (kind == 1) fl["task_denied"] = true;                                                                // the state of the task is not readable without System.Read on the root folder
+            if (kind == 2) { Json hd = Json::object(); hd["count"] = 3; hd["match"] = "-flat.vmdk"; fl["host_down"] = hd; }   // the files are "not found" for three requests (the host is away), then they come back
+            if (kind == 3) {}                                                                                       // restore on a host that does not see the datastore (below)
+            ctl.faults(fl);
+            VmSource* src = NewEsxiSource(cfg, err);
+            Pr pr; bool ok = BackupVm(*src, f.spec.name, *t, o, &pr, man, warn, err);
+            if (kind == 0) {
+                T_CHECK(!ok); { Str need = "lacks the privilege \"VirtualMachine.State.CreateSnapshot\" on the VirtualMachine \"" + f.spec.name + "\""; T_CHECK(Contains(err, need.c_str())); }
+            } else if (kind == 1) {
+                T_CHECK(!ok); T_CHECK(Contains(err, "cannot be read")); T_CHECK(Contains(err, "\"System.Read\""));
+            } else if (kind == 2) {
+                // a vCenter that answers 404 for the files of a VM whose host is away: a temporary failure, the copy goes on when the files come back (it used to end as "HTTP 404 Not Found")
+                if (!ok) { c_.note("%s: %s", e.name.c_str(), err.c_str()); Json lg; ctl.call("log", Json(), lg); size_t n0 = lg.get("log").size() > 14 ? lg.get("log").size() - 14 : 0; for (size_t i = n0; i < lg.get("log").size(); ++i) c_.note("  %s %s %s", lg.get("log").at(i).get("kind").str().c_str(), lg.get("log").at(i).get("what").str().c_str(), lg.get("log").at(i).get("info").str().c_str()); }
+                T_CHECK(ok); T_CHECK(ctl.leaked() == 0);
+            } else {
+                T_CHECK(ok);
+                Json tg; Str te; T_CHECK(EsxiRestoreTargets(e.cfg(), e.vcenter() ? f.spec.dc : Str(), tg, te));
+                Str hostName = tg.get("hosts").size() ? tg.get("hosts").at(0).get("name").str() : Str();
+                T_CHECK(!hostName.empty());
+                T_CHECK(e.vcenter() ? tg.get("hosts").at(0).has("compute") : true);                              // the options say which compute resource (cluster) the host belongs to
+                Json nf = Json::object(); Json names = Json::array(); names.push("datastore1"); nf["ds_not_on_host"] = names; ctl.faults(nf);
+                EsxiRestoreOptions ro; ro.vmName = f.spec.name + " r4"; ro.host = hostName; if (e.vcenter()) ro.datacenter = f.spec.dc;
+                ReadOptions rd = RestoreRo(tmp); EsxiRestoreResult res; Str re; Pr pr2;
+                bool rok = RestoreToEsxi(*t, man.archive, e.cfg(), ro, o.password, rd, &pr2, &res, re);
+                T_CHECK(!rok); T_CHECK(Contains(re, "is not mounted on the host")); T_CHECK(Contains(re, "nothing was written")); T_CHECK(Contains(re, "datastore1"));
+                T_CHECK(!StateHasVm(ctl, ro.vmName, "datastore1")); T_CHECK(ctl.counter("reg:RegisterVM") == 0);
+                Json clr = Json::object(); clr["ds_not_on_host"] = Json(); ctl.faults(clr);                         // the datastore is mounted again: the same restore works
+                EsxiRestoreResult res2; Str re2; Pr pr3;
+                bool rok2 = RestoreToEsxi(*t, man.archive, e.cfg(), ro, o.password, rd, &pr3, &res2, re2);
+                if (!rok2) c_.note("%s restore: %s", e.name.c_str(), re2.c_str());
+                T_CHECK(rok2);
+            }
+            delete src; delete t; DeleteVm(ctl, f.spec.name); RemoveTree(store);
+        }
     }
     return true;
 }

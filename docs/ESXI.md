@@ -625,3 +625,55 @@ xz1 M = 2311 (отличается 52 935 блоков), пароль + xz 5 M =
 | **Холодный режим на ВМ второго хоста** (блокировка через vCenter) | `QueryDisabledMethods` у `vm2b-bb`: **24 метода отключены источником `VM2Backup-...-on-...`** (`PowerOnVM_Task`, `ReconfigVM_Task`, `CreateSnapshot_Task`, `UnregisterVM`, `Destroy_Task`, `MigrateVM_Task`, `CloneVM_Task`, ...), чужая сессия администратора получает `MethodDisabled: The method is disabled by 'VM2Backup-...'` на каждый |
 
 **Не проверено:** кластер и DRS (на двух отдельных хостах не создавался; восстановление в пул кластера, миграция ВМ между хостами под DRS не проверялись), `MigrateVM` / vMotion во время копии, отключение хоста во время ПЕРЕДАЧИ клона (в этом прогоне копия успела прочитать клон до обрыва), vSAN. Скорость во вложенной среде ограничивает такие проверки.
+
+## Проверено на настоящем vCenter 7.0.3 (раунд 4, 13.11.2026): кластер, миграция, отключение хоста, роли на малых сущностях, сбой quiesce
+
+Стенд пересоздан с нуля: VCSA 7.0.3.02500 (12 ГиБ) + два вложенных ESXi 7.0.3 (по 4 ГиБ, 2 vCPU), датацентр `vm2b-dc`, **кластер `vm2b-cl`** с обоими хостами (`tools/esxi7/r4-cluster.py`), общий **NFS-датастор `nfsds`** (сервер nfs-ganesha в контейнере `vm2b-nfs` БЕЗ сети Docker: собственный veth в мосту, адрес 10.213.77.2, экспорт только .10 и .12; `tools/esxi7/nfs.sh`), на обоих хостах метка VMotion на `vmk0`.
+Ядерного NFS-сервера в системе нет и ставить его нельзя, поэтому пользовательский nfs-ganesha. Первая загрузка VCSA снова упёрлась в стенд: у `cis-license` один раз упала JVM (SIGSEGV; повторный запуск шагов вручную невозможен: шаги не идемпотентны и стирают пароли параметров, пришлось пересоздать устройство), как и раньше шаг `hvc_firstboot` не проходит (на работу источника не влияет).
+Журналы: `.winvm-results/esxi7-round4-20261113/` (вне git). Вспомогательные скрипты: `tools/esxi7/vcl.py` (SOAP-библиотека), `r4-ops.py` (миграция, снимки, блокировки), `r4-run.sh`, `r4-mkvm.sh`, `r4-folder-probe.py`, `roles.py` (теперь и `ds:`, `pool:`, `cluster:`, `host:`, `vmfolder:`, `PROPAGATE=false`).
+
+### 1. Кластер и DRS
+| Проверка | Результат |
+|---|---|
+| `esxi.restore_options` | `pools`: `resgroup-10` «vm2b-cl/Resources»; `hosts`: оба; теперь у хостов и пулов есть поле `compute` (имя кластера); датастор `nfsds` (NFS, 314 ГБ) виден наравне с локальными |
+| Восстановление в пул кластера, хост не указан (DRS manual / выключен / fullyAutomated) | везде успех: сервер сам выбирает хост по датастору (локальный `datastore1` -> хост A, `datastoreB` -> B, `nfsds` -> любой). **Запасной выбор хоста не нужен**: `RegisterVM` без `host` в кластере с выключенным DRS принимается |
+| Восстановление на конкретный хост, пул не указан | успех (`runtime.host` = указанный). Исправлено: пул по умолчанию берётся из того же вычислительного ресурса, что и хост (раньше первого из списка) |
+| Датастор, который выбранный хост не видит (`datastore1` + хост B) | **ошибка найдена**: поздний отказ сервера «Invalid datastore path 'ds:///vmfs/volumes/<uuid>/...'» после записи файлов. Теперь продукт спрашивает у датастора список хостов (`Datastore.host`) и отказывает ДО записи: «the datastore "datastore1" is not mounted on the host "10.213.77.12" (it is mounted on: 10.213.77.10): choose a datastore the host can see, or another host (nothing was written)» |
+| Копия ВМ из кластера, холодный режим, блокировка | на `vm2b-nfsoff` (NFS, кластер) во время копии `MigrateVM_Task`, `RelocateVM_Task`, `PowerOnVM_Task`, `ReconfigVM_Task` -> `The method is disabled by 'VM2Backup-...'` |
+| Задачи на обоих хостах одновременно | холодная копия + восстановление `vm2b-off` (хост A, 87 с + 74 с) и горячая копия + восстановление `vm2b-bb` (хост B, 52 с + 34 с): обе успешны |
+| HA | включается (`numEffectiveHosts` 2), но **агенты HA на вложенных хостах не поднимаются** (`dasHostState` uninitialized, «unable to find a master»): любое включение ВМ отказывает «The host is reporting errors in its attempts to provide vSphere HA support». Продукт честно пишет предупреждение «the VM could not be powered on again: No host is compatible...» (копия готова). HA выключен, дальнейшие проверки без него |
+
+### 2. Миграция (общий NFS-датастор: vMotion работает и во вложенной среде, ~10-17 с)
+* **vMotion во время горячей копии** (`vm2b-nfs1`, включена, на `nfsds`, чтение клона 3 Мбит/с): три миграции A->B->A->B на 20-й, 59-й, 98-й секундах копии, каждая успешна; **копия завершилась без ошибок, sha256 диска равен эталону** (`19822c0d...a7f779`), снимок и клон убраны. Продукт ничего не замечает: чтение идёт через vCenter.
+* **Холодный режим**: блокированная ВМ отказывает во всех методах миграции (выше).
+* Копия и восстановление на NFS: `vm2b-nfsoff` (холодная) и `vm2b-nfs1` (горячая) скопированы, восстановленные на `nfsds` диски совпадают с эталоном sha256 на хосте.
+* **Не удалось**: storage vMotion / `RelocateVM_Task` со сменой датастора: `A general system error occurred: PBM error occurred during PreMigrateCheckCallback: HTTP error response: Bad Request` (служба PBM/SPBM не настроена: шаги первой загрузки `sms_spbm`/`hvc` не выполняются на этом устройстве).
+
+### 3. Хост отключён во время передачи клона
+Горячая копия `vm2b-bb` (хост B, локальный `datastoreB`, чтение 2 Мбит/с), событие через 40-60 с после начала чтения:
+| Событие | Поведение |
+|---|---|
+| `hostd stop` на B (30-60 с) + `start`, `vpxa restart`, `ReconnectHost` | **до исправления**: копия НЕ УДАЛАСЬ за 80 с: «reading [datastoreB] vm2b-bb/vm2b-bb-Snapshot1.vmsn: HTTP 404 Not Found» (vCenter отдаёт 404 вместо ошибки связи, пока хост лежит; у ВМ ещё `connected`) + «the snapshot ... could not be removed ... disconnected»; остатки: снимок и клон `VM2Backup-*`; следующая копия: «removed 1 old VM2Backup snapshot(s)», клонов нет. **После**: 404 при состоянии ВМ не `connected`, либо когда не отдаётся и сам `.vmx` ВМ (HEAD), считается временным сбоем с пояснением «the host of the VM does not answer ...»; копия повторена 6 раз и **готова за 371 с, sha256 равен эталону**, остатков нет |
+| разрыв сети хоста (`ip link down` tap на 75 с) | копия не заметила сбоя (повторов 0, 251 с), sha256 равен эталону |
+| `DisconnectHost_Task` на 45 с, затем `ReconnectHost_Task` | копия не заметила (повторов 0, 197 с), sha256 равен эталону |
+Эмулятор: `host_down` (`esxi_round4_diagnostics`, вид 2).
+
+### 4. Роли на меньших сущностях (шаблоны раунда 3: роли `r4-viewer` / `r4-cold` / `r4-hot` / `r4-restore`)
+Найдено: кроме привилегий роли для работы нужен **доступ на чтение к объектам, через которые идёт работа**:
+| Сущность | Что нужно | Как найдено / текст продукта |
+|---|---|---|
+| корневая папка (БЕЗ наследования) | `System.Read` (+`System.Anonymous`, `System.View`) | без него состояние любой задачи приходит как `missingSet` и продукт говорил «the task has no state»; теперь «the task task-136 cannot be read: the user lacks the privilege "System.Read" on the Folder "Datacenters" (group-d1)...» |
+| датацентр (БЕЗ наследования) | `System.Read` | `CopyVirtualDisk_Task`: «the user lacks the privilege "System.Read" on the Datacenter "vm2b-dc" (datacenter-3)» |
+| хост (или кластер) с датастором | `System.View` на ЛЮБОМ хосте, который монтирует датастор (сервер отдаёт файлы через такой хост и сам выбирает среди видимых) | без него `/folder`: GET каталога 200, но HEAD/PUT/DELETE = **404** (или 500 при видимости только части хостов); текст продукта дополнен подсказкой про хост |
+| датастор | `Datastore.Browse`, `Datastore.FileManagement` | «...lacks the privilege "Datastore.FileManagement" on the Datastore "nfsds" (datastore-14)» |
+| ВМ, папка ВМ, пул ресурсов (не корневой), кластер | `VirtualMachine.*` ролей Backup (cold/hot): права наследуются ВМ от папки И от пула (проверено: роль на папке `vm2b-sub`, на пуле `vm2b-pool`, на кластере: копия успешна) | корневой пул кластера права держать не может (`InvalidArgument: entity`) |
+| корневая папка, ТОЛЬКО без наследования или с ним | `Global.DisableMethods`, `Global.EnableMethods` | на ВМ не действуют; с ролью на корне (без наследования) блокировка ставится и снимается |
+| Restore | `Datastore.Browse/FileManagement` на датасторе, `VirtualMachine.Inventory.Register` на папке ВМ, `Resource.AssignVMToPool` на пуле | всё на малых сущностях: восстановление в `vm2b-sub` + `vm2b-pool` + `nfsds` успешно с первого раза; отказы называют право и объект: «...lacks the privilege "Resource.AssignVMToPool" on the ResourcePool "vm2b-pool" (resgroup-58)», «...VirtualMachine.Inventory.Register on the Folder "vm2b-sub" (group-v55)», «cannot create the folder [nfsds] vm2b-rl-r4 on the datastore: the user lacks the privilege "Datastore.FileManagement" on the Datastore "nfsds"» (папки и файлы убраны) |
+Итоговые наборы (hot): роль Backup (hot) на ВМ/папке/пуле + датастор; `System.Read` на корне и датацентре без наследования; `System.View` на хосте. Другая ВМ: «VM not found: vm2b-bb (vCenter lists only the VMs on which the user has a role with System.View...)»; своя копируется (hot 46-52 с, cold 60-75 с). Viewer: «lacks the privilege "VirtualMachine.State.CreateSnapshot" on the VirtualMachine "vm2b-nfs1" (vm-23)».
+**Исправлено в продукте** (все пункты - диагностика): `NoPermission` называет объект (имя и id, из `object` в ошибке и `missingSet`); «the task has no state» при отказе чтения задачи; подсказка про хост при 404; отказ до записи при датасторе, не видимом хосту; без права `Global.DisableMethods` копия не пытается и не жалуется на снятие несуществующей блокировки (была ложное предупреждение «the lock ... could not be removed»); 404 при пропавшем хосте = временный сбой.
+
+### 5. Сбой quiesce в госте (детерминированный)
+Гость `vm2b-fsf` пересоздан с `/usr/sbin/pre-freeze-script` (код возврата 1, `tools/esxi7/guest/pre-freeze-script`, сборка `FAILFREEZE=1 guest-fs-build-disk.sh`): vmbackup запускает его вместе со скриптами из `backupScripts.d`. `vim-cmd snapshot.create ... quiesce=1`: «An error occurred while quiescing the virtual machine. See the virtual machine's event log for details.» каждый раз. Продукт (`ff-q1`, горячая копия, quiesce=true): «the quiesced snapshot failed (...): taken without quiescing (VMware Tools missing or not running, or the quiesce failed or timed out in the guest), the copy is crash-consistent», копия готова за 470 с, снимков и клонов не осталось.
+
+### Регрессии
+`esxi_round4_diagnostics` (эмулятор: `NoPermission` с объектом, `missingSet` задачи, датастор на другом хосте до/после, 404 при отсутствующем хосте), образцы настоящих ответов в `tests/fixtures/vcenter7-real/` (`RetrievePropertiesEx-task-missingSet-NoPermission`, `-datastore-host`, `-cluster`, `-host-in-cluster`, проверка в `esxi_real_fixtures_parse`).

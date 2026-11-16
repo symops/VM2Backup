@@ -35,6 +35,7 @@ echo "APK rc=$?"
 cp $M/fsw /mnt/usr/local/bin/fsw; chmod 755 /mnt/usr/local/bin/fsw
 cp $M/vm2b.start /mnt/etc/local.d/vm2b.start; chmod 755 /mnt/etc/local.d/vm2b.start
 mkdir -p /mnt/etc/vmware-tools/backupScripts.d; cp $M/10-vm2b /mnt/etc/vmware-tools/backupScripts.d/10-vm2b; chmod 755 /mnt/etc/vmware-tools/backupScripts.d/10-vm2b
+[ -f $M/pre-freeze-script ] && { cp $M/pre-freeze-script /mnt/usr/sbin/pre-freeze-script; chmod 755 /mnt/usr/sbin/pre-freeze-script; }
 printf '[logging]\nlog = true\nvmsvc.level = debug\nvmsvc.handler = file\nvmsvc.data = /var/log/vmsvc.log\nvmbackup.level = debug\n' >> /mnt/etc/vmware-tools/tools.conf
 rm -f /mnt/etc/vmware-tools/poweroff-vm-default   # СИМВОЛИЧЕСКАЯ ссылка на statechange.sh: запись «через» неё ломала и poweron-vm-default (гость выключался сам)
 printf '#!/bin/sh\nexec /sbin/poweroff\n' > /mnt/etc/vmware-tools/poweroff-vm-default; chmod 755 /mnt/etc/vmware-tools/poweroff-vm-default
@@ -55,6 +56,8 @@ W=$T/isowork-fs; rm -rf "$W"; cp -a "$B" "$W"
 (cd "$O" && tar --owner=0 --group=0 -czf "$W/localhost.apkovl.tar.gz" .)
 sed -i "s/^APPEND .*/APPEND modules=loop,squashfs,sd-mod,usb-storage,ahci quiet console=ttyS0/" "$W/boot/syslinux/syslinux.cfg"
 cp -r "$REPO" "$W/repo"; cp "$T/fsw" "$W/fsw"; cp "$D/guest/fs-guest.start" "$W/vm2b.start"; cp "$D/guest/fs-quiesce.sh" "$W/10-vm2b"
+# FAILFREEZE=1 (раунд 4, пункт 5): гость с НАСТОЯЩИМ сбоем quiesce - /usr/sbin/pre-freeze-script всегда завершается кодом 1 (вместо флага guestinfo.vm2b_failfreeze)
+[ -n "$FAILFREEZE" ] && cp "$D/guest/pre-freeze-script" "$W/pre-freeze-script"
 genisoimage -quiet -V "alpine-virt 3.24.3 x86_64" -r -J -joliet-long -b boot/syslinux/isolinux.bin -c boot/syslinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o "$T/fs-install.iso" "$W"
 rm -rf "$W" "$O"
 rm -f "$OUT/root.raw" "$OUT/data.raw"; truncate -s 1G "$OUT/root.raw"; truncate -s 512M "$OUT/data.raw"; trap - EXIT

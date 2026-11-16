@@ -596,8 +596,11 @@ def task_prop(t, path):
     if st == 'error':
         f = t['error']
         fmsg, _, fpriv = f[1].partition('|')       # NoPermission: "text|Privilege.Id" (a real host names the privilege in the fault)
-        err = ('<error xsi:type="LocalizedMethodFault"><fault xsi:type="%s"><faultMessage><key>%s</key><message>%s</message></faultMessage>%s</fault>'
-               '<localizedMessage>%s</localizedMessage></error>' % (f[0], f[0], x(fmsg), ('<privilegeId>%s</privilegeId>' % x(fpriv)) if fpriv else '', x(fmsg)))
+        fobj = ''
+        if fpriv.endswith('@vm'):                  # "Privilege.Id@vm": vCenter also names the object the privilege is missing on (round 4): here the VM of the task
+            fpriv = fpriv[:-3]; fobj = '<object type="VirtualMachine">%s</object>' % x(t['vm'])
+        err = ('<error xsi:type="LocalizedMethodFault"><fault xsi:type="%s"><faultMessage><key>%s</key><message>%s</message></faultMessage>%s%s</fault>'
+               '<localizedMessage>%s</localizedMessage></error>' % (f[0], f[0], x(fmsg), fobj, ('<privilegeId>%s</privilegeId>' % x(fpriv)) if fpriv else '', x(fmsg)))
     return ('<val xsi:type="TaskInfo"><key>%s</key><task type="Task">%s</task><name>%s</name><descriptionId>%s</descriptionId><entity type="VirtualMachine">%s</entity>'
             '<entityName>%s</entityName><state>%s</state><cancelled>%s</cancelled><cancelable>true</cancelable>%s%s<reason xsi:type="TaskReasonUser"><userName>%s</userName></reason>'
             '<queueTime>%s</queueTime><startTime>%s</startTime></val>'
@@ -764,6 +767,12 @@ def inv_prop(t, i, path):
             return '<val xsi:type="xsd:string">%s</val>' % DS_TYPES.get(name, 'VMFS')
         if path == 'summary.accessible':
             return '<val xsi:type="xsd:boolean">true</val>'
+        if path == 'host':             # the hosts that mount the datastore; fault ds_not_on_host = [names]: those datastores are mounted on ANOTHER host only
+            other = name in (fault_get('ds_not_on_host') or [])
+            hids = ['host-elsewhere'] if other else [v['host'] for v in S.inv.values()]
+            return '<val xsi:type="ArrayOfDatastoreHostMount">%s</val>' % ''.join(
+                '<DatastoreHostMount><key type="HostSystem">%s</key><mountInfo><path>/vmfs/volumes/%s</path><accessMode>readWrite</accessMode>'
+                '<mounted>true</mounted><accessible>true</accessible></mountInfo></DatastoreHostMount>' % (h, x(name)) for h in hids)
     else:
         for dcid, inv in S.inv.items():
             if t == 'ComputeResource' and i == inv['compute']:
@@ -871,6 +880,9 @@ def object_content(t, i, paths):
         if task is None:
             raise Fault('ManagedObjectNotFound', 'The object has already been deleted or has not been completely created')
         advance_task(task)
+        if fault_get('task_denied'):               # a real vCenter 7.0.3 shows the state of a task only to a user who has System.Read on the root folder: the property is missing
+            return ('<obj type="Task">%s</obj><missingSet><path>info</path><fault><fault xsi:type="NoPermission"><object type="Folder">group-d1</object>'
+                    '<privilegeId>System.Read</privilegeId></fault><localizedMessage></localizedMessage></fault></missingSet>' % x(i))
         for p in paths:
             props += '<propSet><name>%s</name>%s</propSet>' % (x(p), task_prop(task, p))
     elif t in ('Datastore', 'ComputeResource', 'ResourcePool', 'HostSystem', 'Folder'):
@@ -1718,6 +1730,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         path = os.path.join(S.root, ds, *parts)
         if self.command == 'PUT':
             return self.put(path, rel, ds)
+        hd = fault_get('host_down')                # round 4: the host of the datastore is away (a real vCenter answers 404 for the files meanwhile); {"count": requests, "stale": true = the VM still "connected"}
+        if hd and self.command == 'GET' and hd.get('match', '') in rel and fault_take_inner('host_down'):     # only GETs of the matching files are counted; HEAD is "not found" while GETs still fail
+            hd['fired'] = True
+            return self.send_bytes(404, b'Not Found', 'text/plain')
+        if hd and self.command == 'GET' and hd.get('fired') and hd.get('match', '') in rel:
+            hd['healed'] = True                      # the first matching GET that is served again: the host is back
+        if hd and self.command == 'HEAD' and hd.get('fired') and not hd.get('healed'):
+            return self.send_bytes(404, b'Not Found', 'text/plain')
         rw = fault_get('raw_http')
         if rw and rw.get('target') == 'folder' and self.command in ('GET', 'HEAD') and fault_take_inner('raw_http'):
             return self.raw_out(rw.get('kind', 0))

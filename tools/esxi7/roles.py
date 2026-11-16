@@ -2,6 +2,7 @@
 """Раунд 3, пункт D: пользователи и роли на настоящем vCenter 7.0.3 для поиска минимального набора привилегий.  Пароли пользователей: .winvm/esxi/secret-vc-<имя> (права 600, не печатаются), administrator: secret-vc-sso.
    roles.py user <имя>                      локальный пользователь SSO <имя>@vsphere.local (dir-cli на VCSA; пароль случайный)
    roles.py role <роль> <прив,прив,...>     создаёт роль или ЗАМЕНЯЕТ её набор привилегий
+   (PROPAGATE=false - право только на саму сущность, без наследования)
    roles.py grant <имя> <роль> [корень|dc|ds:<имя>|vm:<имя>|folder:<id>]   назначает роль пользователю (propagate), по умолчанию на корневую папку; прежние права пользователя на этой сущности заменяются
    roles.py drop <имя>                      убирает права пользователя на корне и удаляет пользователя;  roles.py rmrole <роль>
    roles.py privs                           список всех привилегий vCenter (идентификаторы)"""
@@ -28,6 +29,14 @@ def entity(spec_):
         st, t = adm.call('<RetrieveProperties xmlns="urn:vim25"><_this type="PropertyCollector">%s</_this><specSet><propSet><type>Datacenter</type><pathSet>name</pathSet></propSet><objectSet><obj type="Folder">%s</obj><skip>true</skip><selectSet xsi:type="TraversalSpec"><name>t</name><type>Folder</type><path>childEntity</path><skip>false</skip></selectSet></objectSet></specSet></RetrieveProperties>' % (pc, root))
         return 'Datacenter', re.search(r'<obj type="Datacenter">([^<]+)', t).group(1)
     if k == 'vm': return 'VirtualMachine', pv.vc_vm(adm, v)
+    if k in ('ds', 'pool', 'cluster', 'host', 'vmfolder'):   # раунд 4: роль на датасторе / пуле / кластере / хосте / папке ВМ по имени
+        typ = {'ds': 'Datastore', 'pool': 'ResourcePool', 'cluster': 'ClusterComputeResource', 'host': 'HostSystem', 'vmfolder': 'Folder'}[k]
+        st, t = adm.call('<CreateContainerView xmlns="urn:vim25"><_this type="ViewManager">%s</_this><container type="Folder">%s</container><type>%s</type><recursive>true</recursive></CreateContainerView>' % (re.search(r'<viewManager[^>]*>([^<]+)', adm.sc).group(1), root, typ))
+        view = re.search(r'<returnval type="ContainerView">([^<]+)', t).group(1)
+        st, t = adm.call('<RetrieveProperties xmlns="urn:vim25"><_this type="PropertyCollector">%s</_this><specSet><propSet><type>%s</type><pathSet>name</pathSet></propSet><objectSet><obj type="ContainerView">%s</obj><skip>true</skip><selectSet xsi:type="TraversalSpec"><name>t</name><type>ContainerView</type><path>view</path><skip>false</skip></selectSet></objectSet></specSet></RetrieveProperties>' % (pc, typ, view))
+        for m in re.finditer(r'<obj type="%s">([^<]+)</obj><propSet><name>name</name><val[^>]*>([^<]*)</val>' % typ, t):
+            if m.group(2) == v: return typ, m.group(1)
+        raise SystemExit('нет сущности ' + spec_)
     if k == 'folder': return 'Folder', v
     raise SystemExit('сущность?')
 cmd, *a = sys.argv[1:]
@@ -43,7 +52,7 @@ elif cmd == 'role':
 elif cmd == 'grant':
     user, role = a[0], a[1]; et, eid = entity(a[2] if len(a) > 2 else None); rid = role_id(role)
     adm.call('<RemoveEntityPermission xmlns="urn:vim25"><_this type="AuthorizationManager">%s</_this><entity type="%s">%s</entity><user>VSPHERE.LOCAL\\%s</user><isGroup>false</isGroup></RemoveEntityPermission>' % (AM, et, eid, user))
-    st, t = adm.call('<SetEntityPermissions xmlns="urn:vim25"><_this type="AuthorizationManager">%s</_this><entity type="%s">%s</entity><permission><principal>VSPHERE.LOCAL\\%s</principal><group>false</group><roleId>%s</roleId><propagate>true</propagate></permission></SetEntityPermissions>' % (AM, et, eid, user, rid))
+    st, t = adm.call('<SetEntityPermissions xmlns="urn:vim25"><_this type="AuthorizationManager">%s</_this><entity type="%s">%s</entity><permission><principal>VSPHERE.LOCAL\\%s</principal><group>false</group><roleId>%s</roleId><propagate>%s</propagate></permission></SetEntityPermissions>' % (AM, et, eid, user, rid, os.environ.get('PROPAGATE', 'true')))
     print('grant', user, role, et, eid, pv.fault(t)[:160] if 'Fault' in t else 'OK')
 elif cmd == 'revoke':
     user = a[0]; et, eid = entity(a[1] if len(a) > 1 else None)

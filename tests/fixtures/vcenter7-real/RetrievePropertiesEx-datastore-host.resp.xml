@@ -1,0 +1,10 @@
+HTTP 200
+<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/"
+ xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+ xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<soapenv:Body>
+<RetrievePropertiesExResponse xmlns="urn:vim25"><returnval><objects><obj type="Datastore">datastore-14</obj><propSet><name>host</name><val xsi:type="ArrayOfDatastoreHostMount"><DatastoreHostMount xsi:type="DatastoreHostMount"><key type="HostSystem">host-25</key><mountInfo><path>/vmfs/volumes/e25eb8bb-4170c9e3</path><accessMode>readWrite</accessMode><mounted>true</mounted><accessible>true</accessible></mountInfo></DatastoreHostMount><DatastoreHostMount xsi:type="DatastoreHostMount"><key type="HostSystem">host-12</key><mountInfo><path>/vmfs/volumes/e25eb8bb-4170c9e3</path><accessMode>readWrite</accessMode><mounted>true</mounted><accessible>true</accessible></mountInfo></DatastoreHostMount></val></propSet><propSet><name>name</name><val xsi:type="xsd:string">nfsds</val></propSet></objects></returnval></RetrievePropertiesExResponse>
+</soapenv:Body>
+</soapenv:Envelope>

@@ -1,0 +1,5 @@
+#!/bin/sh
+# Раунд 4: настоящий сбой quiesce в госте. vmbackup (open-vm-tools) запускает этот скрипт перед заморозкой; код возврата 1 = заморозка не удалась,
+# снимок с quiesce завершается ошибкой "An error occurred while quiescing the virtual machine".
+echo "PREFREEZE-SCRIPT failing on purpose (exit 1) $(date +%s.%N)" > /dev/ttyS0
+exit 1

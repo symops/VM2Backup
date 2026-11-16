@@ -127,6 +127,9 @@ namespace {
 static i64 I64(const Str& s) { return (i64)strtoll(s.c_str(), nullptr, 10); }
 static bool IsTrue(const Str& s) { return s == "true" || s == "1"; }
 static Str Tag(const char* tag, const Str& text) { return Str("<") + tag + ">" + XmlEscape(text) + "</" + tag + ">"; }
+// vCenter 7.0.3 (round 4): the datastore HTTP interface (/folder) goes through a HOST that mounts the datastore, and the user must see that host (System.View on the host or the cluster):
+// without it the files are "not found" (404) or the server answers 500, whatever the privileges on the datastore are.
+static const char* const kHostViewHint = " (a user of a role set on small entities also needs read access, System.View, to a host that mounts the datastore, or to its cluster: the server serves the files through such a host, see docs/ESXI.md)";
 static Str Ref(const char* tag, const char* type, const Str& id) { return Str("<") + tag + " type=\"" + type + "\">" + XmlEscape(id) + "</" + tag + ">"; }
 
 // One line for an error text: no line breaks, bounded.
@@ -147,6 +150,7 @@ static const char* kEnvelopeClose = "</soapenv:Body></soapenv:Envelope>";
 struct Prop { Str name; XmlNode val; };
 struct ObjData {
     Str type, id; Vec<Prop> props;
+    Str deniedPriv, deniedType, deniedId, deniedPath;     // a property the server did not give for lack of a privilege (missingSet / NoPermission): which one, on which object
     const XmlNode* get(const char* n) const { for (size_t i = 0; i < props.size(); ++i) if (props[i].name == n) return &props[i].val; return nullptr; }
     Str text(const char* n, const char* def = "") const { const XmlNode* v = get(n); return v ? v->text.trim() : Str(def); }
 };
@@ -506,7 +510,7 @@ private:
             env += Str("<") + method + " xmlns=\"urn:vim25\">" + inner + "</" + method + ">";
             env += kEnvelopeClose;
             HttpHeaders h; h.add("Content-Type", "text/xml; charset=utf-8"); h.add("SOAPAction", "\"urn:vim25/" + m_ver + "\"");
-            HttpResponse r; Bytes out;
+            HttpResponse r; Bytes out; Str npPid, npType, npId;
             if (!m_soap->requestBytes("POST", "/sdk", h, env.data(), env.size(), r, out)) return failHttp(*m_soap);
             m_status = r.status; m_hasFault = false; m_faultType.clear(); m_faultMsg.clear();
             TraceSoap(method, env, r.status, out);
@@ -524,13 +528,19 @@ private:
                     if (m_faultType == "NoPermission") {      // vCenter / ESXi name the missing privilege: the message of the user says which one (docs/ESXI.md, the roles)
                         Str pid = d.childText("privilegeId").trim();
                         if (pid.empty()) for (const XmlNode& k : d.kids) if (k.name == "privilegeId") pid = k.text.trim();
-                        if (!pid.empty()) m_faultMsg = "the user lacks the privilege \"" + pid + "\" (" + m_faultMsg + ")";
+                        const XmlNode* ob = d.child("object"); npType = ob ? ob->attr("type") : Str(); npId = ob ? ob->text.trim() : Str();
+                        if (!pid.empty()) { npPid = pid; m_faultMsg = "the user lacks the privilege \"" + pid + "\" (" + m_faultMsg + ")"; }
                     }
                 }
                 if (m_faultType == "NotAuthenticated" && relogin && attempt == 0 && m_loggedIn && strcmp(method, "Login") != 0) {
                     m_loggedIn = false;
                     if (!login()) return false;
                     continue;
+                }
+                if (!npPid.empty() && !npId.empty()) {      // the entity the privilege is missing on (vCenter checks some of them on the datacenter, the datastore, the folder, not on the VM)
+                    Str m0 = OneLine(m_faultMsg); int q = m0.find("\" ("); Str tail = q >= 0 ? m0.substr((size_t)q + 2) : Str();
+                    Str lab = entityLabel(npType, npId);
+                    m_faultMsg = "the user lacks the privilege \"" + npPid + "\" on " + lab + (tail.empty() ? Str() : " " + tail);
                 }
                 return fail(m_faultMsg.empty() ? m_faultType : m_faultMsg, false);
             }
@@ -632,6 +642,13 @@ private:
             ObjData d;
             const XmlNode* ob = o.child("obj"); if (!ob) continue;
             d.type = ob->attr("type"); d.id = ob->text.trim();
+            for (const XmlNode& ms : o.kids) {
+                if (ms.name != "missingSet") continue;
+                const XmlNode* f1 = ms.child("fault"); const XmlNode* f2 = f1 ? f1->child("fault") : nullptr;
+                if (!f2 || f2->xsiType() != "NoPermission") continue;
+                const XmlNode* fo = f2->child("object");
+                d.deniedPriv = f2->childText("privilegeId").trim(); d.deniedType = fo ? fo->attr("type") : Str(); d.deniedId = fo ? fo->text.trim() : Str(); d.deniedPath = ms.childText("path").trim();
+            }
             for (const XmlNode& ps : o.kids) {
                 if (ps.name != "propSet") continue;
                 Prop p; p.name = ps.childText("name").trim();
@@ -643,6 +660,18 @@ private:
         }
     }
 
+    bool m_inLabel = false;
+    // "the Datacenter "vm2b-dc" (datacenter-3)": where a privilege is missing; the name is asked for best-effort (a user without the right to see the entity gets the id only)
+    Str entityLabel(const Str& type, const Str& id) {
+        Str fallback = "the " + (type.empty() ? Str("object") : type) + " " + id;
+        if (m_inLabel || type.empty()) return fallback;
+        m_inLabel = true;
+        Str e = err; bool t = transient, hf = m_hasFault; Str ft = m_faultType, fm = m_faultMsg; int st = m_status;
+        Str name; Vec<ObjData> objs; static const char* pn[] = { "name" };
+        if (retrieve(PropSet(type.c_str(), pn, 1), ObjSelect(type.c_str(), id), objs) && !objs.empty()) name = objs[0].text("name");
+        err = e; transient = t; m_hasFault = hf; m_faultType = ft; m_faultMsg = fm; m_status = st; m_inLabel = false;
+        return name.empty() ? fallback : "the " + type + " \"" + name + "\" (" + id + ")";
+    }
     bool retrieve(const Str& propSets, const Str& objSets, Vec<ObjData>& out) {
         out.clear();
         Str spec = "<specSet>" + propSets + objSets + "</specSet>";
@@ -763,7 +792,7 @@ private:
             if (!ok) return false;
             for (const ObjData& o : objs) if (o.text("name") == name) { hit.push_back(dc); ids.push_back(o.id); }
         }
-        if (hit.empty()) return fail("VM not found: " + name);
+        if (hit.empty()) return fail("VM not found: " + name + (m_vcenter ? Str(" (vCenter lists only the VMs on which the user has a role with System.View, directly or through the folder or the pool: if the VM exists, give the user a role on it)") : Str()));
         if (hit.size() > 1 || ids.size() > 1) return fail("several VMs are named \"" + name + "\" (in different folders or datacenters): rename one of them, or set the datacenter of the server");
         m_dcRef = hit[0].id;
         return readVm(ids[0], hit[0].name, out);
@@ -793,6 +822,11 @@ private:
             if (!honourAbort && a) m_abort = a;
             if (!ok) return false;
             const XmlNode* info = objs.empty() ? nullptr : objs[0].get("info");
+            if (!info && !objs.empty() && !objs[0].deniedPriv.empty()) {   // vCenter shows a task only to a user who may read the root folder (found on a real vCenter 7.0.3, round 4)
+                Str pr = objs[0].deniedPriv, ty = objs[0].deniedType, id = objs[0].deniedId;
+                Str lab = id.empty() ? Str("the inventory") : entityLabel(ty, id);
+                return fail("the task " + task + " cannot be read: the user lacks the privilege \"" + pr + "\" on " + lab + " (the server shows the state of a task only to a user who has it there, also when the privilege is not inherited): give the user a role with this privilege on that object");
+            }
             if (!info) return fail("the task has no state");
             Str st = info->childText("state").trim();
             if (st == "success") {
@@ -807,7 +841,11 @@ private:
                     const XmlNode* f = e->child("fault"); if (f) tr.faultType = f->xsiType();
                     tr.faultMsg = OneLine(e->childText("localizedMessage"));
                     if (tr.faultMsg.empty() && f) tr.faultMsg = OneLine(f->childText("faultMessage"));
-                    if (f && tr.faultType == "NoPermission") { Str pid = f->childText("privilegeId").trim(); if (!pid.empty()) tr.faultMsg = "the user lacks the privilege \"" + pid + "\" (" + tr.faultMsg + ")"; }
+                    if (f && tr.faultType == "NoPermission") {
+                        Str pid = f->childText("privilegeId").trim(); const XmlNode* ob = f->child("object"); Str ot = ob ? ob->attr("type") : Str(), oi = ob ? ob->text.trim() : Str();
+                        if (!pid.empty()) { Str base = tr.faultMsg; tr.faultMsg = "the user lacks the privilege \"" + pid + "\" (" + base + ")";
+                            if (!oi.empty()) { Str lab = entityLabel(ot, oi); tr.faultMsg = "the user lacks the privilege \"" + pid + "\" on " + lab + " (" + base + ")"; } }
+                    }
                 }
                 if (tr.faultMsg.empty()) tr.faultMsg = tr.faultType.empty() ? Str("the task failed") : tr.faultType;
                 return true;
@@ -1022,6 +1060,8 @@ private:
     bool giveBack(const Str& vmRef, const Hold& h, bool tryUnlock, Str& w, bool* powered = nullptr) {
         Str e = err; bool t = transient; bool allOk = true;
         if (powered) *powered = false;
+        // our own lock that was never placed (the user lacks Global.DisableMethods on the root folder, the host does not know DisableMethods): nothing to lift, no warning for it (round 4)
+        if (tryUnlock && !m_noLockSource.empty() && h.source == m_noLockSource) tryUnlock = false;
         if (tryUnlock && !m_authMgr.empty() && !unlockMethods(vmRef, h.source) && m_faultType != "NotSupported" && !(m_hasFault && m_faultMsg.find("not found") >= 0)) {
             if (!w.empty()) w += "; "; w += "the lock \"" + h.source + "\" could not be removed (" + err + ")"; allOk = false;
         }
@@ -1138,6 +1178,7 @@ private:
             Str why;
             if (!lockMethods(v.id, m_hold.source, v.power != "poweredOn" && m_hold.orig != "poweredOn", why)) {
                 // a standing limit of the host, not a problem of this run: no warning (every scheduled backup would end as "Warning"); the service logs it and keeps it in the history record
+                if (!m_holdResumed && m_faultType == "NoPermission") m_noLockSource = m_hold.source;               // nothing to lift at the end (a resumed hold may have a lock from the earlier process: that one is lifted)
                 m_lockInfo = "not locked: " + why + "; the VM stays powered off during the backup and is marked as held, but another administrator can still power it on or change it";
                 m_hasFault = false; err.clear();
             } else m_lockInfo = "locked (DisableMethods)";
@@ -1223,11 +1264,32 @@ private:
         return Str::fmt("the datastore file access was refused (HTTP %d) for the datastore \"", status) + ds + "\": the user most likely lacks the datastore privilege Datastore.FileManagement on it "
                "(the server names no privilege for file requests): give the user a role with it (docs/ESXI.md, the roles of the backup user)";
     }
+    // Настоящий vCenter 7.0.3 (раунд 4): пока хост ВМ отключён (hostd остановлен, нет связи), файл ВМ он отдаёт как HTTP 404 «Not Found» -
+    // то есть похоже на пропавший файл. Состояние ВМ спрашивается у самого vCenter, а если оно ещё `connected`, пробуется .vmx самой ВМ: когда и он «не найден»,
+    // датастор не обслуживается вовсе. Это временный сбой (копия продолжится); `hint` - пояснение для сообщения.
+    bool hostAway(int status, Str& hint) {
+        if (!(status == 404 || status == 500 || status == 502 || status == 503 || status == 504) || m_vmRef.empty()) return false;
+        bool down = false;
+        VmData hv; Str e0 = err; bool t0 = transient;
+        if (readVm(m_vmRef, m_dc, hv)) {
+            if (!hv.conn.empty() && hv.conn != "connected") { down = true; hint = " (the host of the VM does not answer: the connection state of the VM is \"" + hv.conn + "\" in the server; the files come back when the host is reachable, the backup is resumed then)"; }
+            else if (status == 404) {
+                Str vds, vp;
+                if (EsxiParseDsPath(hv.vmPath, vds, vp)) {
+                    HttpHeaders h2; HttpResponse r2; m_files->close();
+                    if (!FolderRequest(*m_files, "HEAD", EsxiFolderUrl(vds, vp, m_dc), h2, r2, m_host, m_port) || r2.status == 404 || r2.status >= 500) { down = true; hint = " (the .vmx of the VM is not served either: the host that holds the datastore \"" + vds + "\" is most likely unreachable; the backup is resumed when it is back)"; }
+                    m_files->close();
+                }
+            }
+        }
+        err = e0; transient = t0; m_hasFault = false;
+        return down;
+    }
     bool readSmall(const Str& ds, const Str& path, Bytes& out, bool allowHtml = false, size_t limit = (size_t)1 << 20, bool relogged = false) {
         HttpHeaders h; HttpResponse r;
         if (!FolderRequest(*m_files, "GET", EsxiFolderUrl(ds, path, m_dc), h, r, m_host, m_port)) return failHttp(*m_files);
         if (r.status == 401 || r.status == 403) { m_files->close(); if (relogged) return fail(FileDeniedMessage(r.status, ds)); m_loggedIn = false; if (!ensureSession()) return fail(FileDeniedMessage(r.status, ds)); return readSmall(ds, path, out, allowHtml, limit, true); }
-        if (r.status != 200) { m_files->close(); return fail(Str::fmt("reading [%s] %s: HTTP %d", ds.c_str(), path.c_str(), r.status), r.status >= 500); }
+        if (r.status != 200) { m_files->close(); Str hh; bool away = hostAway(r.status, hh); return fail(Str::fmt("reading [%s] %s: HTTP %d", ds.c_str(), path.c_str(), r.status) + hh, away || r.status >= 500); }
         if (!allowHtml && r.headers.value("Content-Type").lower().find("text/html") >= 0) { m_files->close(); return fail("reading [" + ds + "] " + path + ": the server answered with an HTML page instead of the file", true); }
         out.clear(); Bytes b; b.resize(65536);
         for (;;) { i64 k = r.body->read(b.data(), b.size()); if (k < 0) { m_files->close(); return fail("reading [" + ds + "] " + path + ": " + r.body->err, r.body->transient); } if (k == 0) break; for (i64 j = 0; j < k; ++j) out.push_back(b[(size_t)j]); if (out.size() > limit) break; }
@@ -1366,7 +1428,7 @@ private:
                 int bar = k.find('|'); Str ds = k.substr(0, (size_t)bar), dir = k.substr((size_t)bar + 1);
                 HttpHeaders h; h.add("Content-Type", "application/octet-stream"); HttpResponse r; Bytes out; Str body = "VM2Backup clones are complete\n";
                 if (!m_files->requestBytes("PUT", EsxiFolderUrl(ds, dir + "/ready", m_dc), h, body.data(), body.size(), r, out)) return failHttp(*m_files);
-                if (r.status != 200 && r.status != 201 && r.status != 204) return fail(Str::fmt("cannot write into the temporary folder [%s] %s: HTTP %d", ds.c_str(), dir.c_str(), r.status));
+                if (r.status != 200 && r.status != 201 && r.status != 204) return fail(Str::fmt("cannot write into the temporary folder [%s] %s: HTTP %d", ds.c_str(), dir.c_str(), r.status) + ((r.status == 404 || r.status == 500) ? Str(kHostViewHint) : Str()));
             }
         }
         for (CloneInfo& c : m_clones) {                                             // the descriptor texts (the clone's own, made reproducible later in buildFiles)
@@ -1394,7 +1456,7 @@ private:
             if (!FolderRequest(*m_files, "HEAD", EsxiFolderUrl(f.ds, f.path, m_dc), h, r, m_host, m_port)) return failHttp(*m_files);
             if ((r.status == 401 || r.status == 403) && attempt == 0 && !relogged) { relogged = true; m_loggedIn = false; if (!login()) return fail(FileDeniedMessage(r.status, f.ds)); continue; }
             if (r.status == 401 || r.status == 403) return fail(FileDeniedMessage(r.status, f.ds));
-            if (r.status == 404) return fail("the file is missing on the datastore (or the user lacks the datastore privilege Datastore.Browse, with which the server hides files): " + f.name);
+            if (r.status == 404) return fail("the file is missing on the datastore (or the user lacks the datastore privilege Datastore.Browse, with which the server hides files)" + Str(kHostViewHint) + ": " + f.name);
             if (r.status == 200) {
                 if (IsBinaryType(f.type) && r.headers.value("Content-Type").lower().find("text/html") >= 0) return fail("the datastore answered with an HTML page instead of the file: " + f.name, true);
                 if (r.contentLength >= 0) {
@@ -1419,7 +1481,7 @@ private:
     Json m_cfg;
     Str m_host, m_user, m_password, m_dcCfg, m_ver; int m_port;
     bool m_vcenter, m_quiesce, m_memory, m_history = true, m_historyCfg = true; int m_skippedSnaps = 0;
-    bool m_hot = false, m_forceOff = false, m_cold = false, m_holdResumed = false; int m_shutdownTimeout = 300, m_toolsWait = 30; bool m_justStarted = false; Str m_authMgr, m_endWarn, m_lockInfo; Hold m_hold; double m_downFrom = 0, m_downTo = 0;
+    bool m_hot = false, m_forceOff = false, m_cold = false, m_holdResumed = false; int m_shutdownTimeout = 300, m_toolsWait = 30; bool m_justStarted = false; Str m_authMgr, m_endWarn, m_lockInfo, m_noLockSource; Hold m_hold; double m_downFrom = 0, m_downTo = 0;
     bool m_cloning = false, m_liveClone = true; int m_cloneTimeout = 21600; Str m_vdm, m_dcRef; Vec<CloneInfo> m_clones; Vec<Str> m_keptNames; Vec<Str> m_cloneDirs;   // m_cloneDirs: "ds|path" of the clone folders of this run
     int m_taskTimeout, m_removeTimeout, m_pollMs;
     HttpClient* m_soap; HttpClient* m_files;
@@ -1606,7 +1668,7 @@ bool Impl::begin(const Str& vm, bool allowLive, const Str& resumeToken, Str& fin
     m_begun = false; m_reused = false; m_list.clear(); m_snapRef.clear(); m_snapName.clear(); m_meta.clear(); token.clear(); warning.clear(); m_restartWhy.clear();
     { unsigned char tb[4]; RandomBytes(tb, 4); LiveRegister(m_runToken, false); m_runToken = HexEncode(tb, 4); LiveRegister(m_runToken, true); }
     m_leaked.clear(); m_history = m_historyCfg; m_clones.clear(); m_cloneDirs.clear(); m_cloning = false;
-    m_endWarn.clear(); m_lockInfo.clear(); m_justStarted = false; m_downFrom = m_downTo = 0; m_hold = Hold(); m_holdResumed = false; m_cold = !m_hot;
+    m_endWarn.clear(); m_lockInfo.clear(); m_noLockSource.clear(); m_justStarted = false; m_downFrom = m_downTo = 0; m_hold = Hold(); m_holdResumed = false; m_cold = !m_hot;
     if (vm.empty()) return fail("no VM name");
     if (!ensureSession()) return false;
     if (m_vcenter && !m_apiType.empty() && m_apiType != "VirtualCenter") warning = "the server is not a vCenter (it is a standalone host): the server type is set wrongly, the copy works the same";
@@ -1928,7 +1990,8 @@ bool Impl::pack(TarWriter& tar, Progress* pr, Str& warning)
                 // отвечает пустым HTTP 500 («Failed to lock file» в hostd.log). Скажем об этом прямо, а не просто «HTTP 500».
                 if (r.status == 500 && m_vmOn && IsBinaryType(f.type))
                     hint = " (the running VM keeps this disk locked: ESXi does not give a disk of a powered-on VM over the datastore HTTP interface, even after a snapshot; the server setting \"live_disk\": \"direct\" reads it in place, remove it so that the disk is cloned on the host first, see docs/ESXI.md)";
-                return fail(Str::fmt("reading %s: HTTP %d %s", f.name.c_str(), r.status, OneLine(r.reason).c_str()) + hint, false);      // (500, 502, 503 and 504 were tried 3 times above)
+                bool hostDown = hostAway(r.status, hint);
+                return fail(Str::fmt("reading %s: HTTP %d %s", f.name.c_str(), r.status, OneLine(r.reason).c_str()) + hint, hostDown);      // (500, 502, 503 and 504 were tried 3 times above)
             } else {
                 if (IsBinaryType(f.type) && r.headers.value("Content-Type").lower().find("text/html") >= 0) {
                     m_files->close();                                           // an error page of a proxy / a login page, not the file
@@ -2020,13 +2083,13 @@ void Impl::end(bool keepForResume)
 
 
 // ---- restore to ESXi ---------------------------------------------------------------------------------------------------
-struct InvDs { Str name, type; i64 free, capacity; bool accessible; InvDs() : free(0), capacity(0), accessible(true) {} };
+struct InvDs { Str name, type; Vec<Str> mountedOn; bool mountsKnown = false; i64 free, capacity; bool accessible; InvDs() : free(0), capacity(0), accessible(true) {} };
 struct InvFolder { Str id, path; };
 struct InvPool { Str id, name, path, compute; };
 struct InvHost { Str id, name, compute; };
 struct Inventory {
     Str dcId, dcName, vmFolder; Vec<Str> dcNames;
-    Vec<InvDs> ds; Vec<InvFolder> folders; Vec<InvPool> pools; Vec<InvHost> hosts; Vec<Str> vms; Vec<Str> computes, computeRoot;
+    Vec<InvDs> ds; Vec<InvFolder> folders; Vec<InvPool> pools; Vec<InvHost> hosts; Vec<Str> vms; Vec<Str> computes, computeRoot, computeIds;
     const InvDs* findDs(const Str& n) const { for (const InvDs& d : ds) if (d.name == n) return &d; return nullptr; }
 };
 
@@ -2160,17 +2223,20 @@ bool RestoreImpl::loadInventory(Inventory& inv, bool full)
     if (!objs.empty()) inv.vmFolder = objs[0].text("vmFolder");
     Str view;
     {   // datastores
-        static const char* p[] = { "name", "summary.capacity", "summary.freeSpace", "summary.type", "summary.accessible" };
+        static const char* p[] = { "name", "summary.capacity", "summary.freeSpace", "summary.type", "summary.accessible", "host" };
         if (!s.createView("Datacenter", inv.dcId, "Datastore", view)) return false;
-        bool ok = s.retrieve(Impl::PropSet("Datastore", p, 5), Impl::ViewSelect(view), objs);
+        bool ok = s.retrieve(Impl::PropSet("Datastore", p, 6), Impl::ViewSelect(view), objs);
         if (ok && full) {   // hostd keeps the free space of a datastore for minutes (a real ESXi 7.0.3 still showed 22 GB free after a 22 GB file was made): ask for a refresh, then read again
             const XmlNode* rr = nullptr;
             for (const ObjData& o : objs) { s.call("RefreshDatastore", Ref("_this", "Datastore", o.id), rr); s.err.clear(); s.m_hasFault = false; }
-            if (!objs.empty()) ok = s.retrieve(Impl::PropSet("Datastore", p, 5), Impl::ViewSelect(view), objs);
+            if (!objs.empty()) ok = s.retrieve(Impl::PropSet("Datastore", p, 6), Impl::ViewSelect(view), objs);
         }
         s.destroyView(view);
         if (!ok) return false;
-        for (const ObjData& o : objs) { InvDs d; d.name = o.text("name"); d.capacity = I64(o.text("summary.capacity")); d.free = I64(o.text("summary.freeSpace")); d.type = o.text("summary.type"); d.accessible = o.text("summary.accessible", "true") != "false"; inv.ds.push_back(d); }
+        for (const ObjData& o : objs) { InvDs d; d.name = o.text("name"); d.capacity = I64(o.text("summary.capacity")); d.free = I64(o.text("summary.freeSpace")); d.type = o.text("summary.type"); d.accessible = o.text("summary.accessible", "true") != "false";
+            // the hosts that mount the datastore (an NFS share is on several, a local VMFS on one): a restore onto a host that does not see the datastore is refused before anything is written
+            if (const XmlNode* hm = o.get("host")) { d.mountsKnown = true; for (const XmlNode& k : hm->kids) { const XmlNode* key = k.child("key"); const XmlNode* acc = k.find("mountInfo/accessible"); if (key && !(acc && acc->text.trim() == "false")) d.mountedOn.push_back(key->text.trim()); } }
+            inv.ds.push_back(d); }
     }
     {   // VM folders
         static const char* p[] = { "name", "parent", "childType" };
@@ -2206,7 +2272,7 @@ bool RestoreImpl::loadInventory(Inventory& inv, bool full)
         bool ok = s.retrieve(Impl::PropSet("ComputeResource", pc, 3), Impl::ViewSelect(view), objs); s.destroyView(view);
         if (!ok) return false;
         Vec<Str> cids, cnames;
-        for (const ObjData& o : objs) { cids.push_back(o.id); cnames.push_back(o.text("name")); inv.computes.push_back(o.text("name")); inv.computeRoot.push_back(o.text("resourcePool")); }
+        for (const ObjData& o : objs) { cids.push_back(o.id); cnames.push_back(o.text("name")); inv.computes.push_back(o.text("name")); inv.computeIds.push_back(o.id); inv.computeRoot.push_back(o.text("resourcePool")); }
         static const char* pp[] = { "name", "parent" };
         if (!s.createView("Datacenter", inv.dcId, "ResourcePool", view)) return false;
         ok = s.retrieve(Impl::PropSet("ResourcePool", pp, 2), Impl::ViewSelect(view), objs); s.destroyView(view);
@@ -2254,8 +2320,10 @@ bool RestoreImpl::targets(Json& out, Str& err)
     for (const InvDs& d : inv.ds) { Json o = Json::object(); o["name"] = d.name; o["free"] = (i64)d.free; o["capacity"] = (i64)d.capacity; o["type"] = d.type; o["accessible"] = d.accessible; ds.push(o); }
     out["datastores"] = ds;
     Json fo = Json::array(); for (const InvFolder& f : inv.folders) { Json o = Json::object(); o["id"] = f.id; o["path"] = f.path; fo.push(o); } out["folders"] = fo;
-    Json po = Json::array(); for (const InvPool& p : inv.pools) { Json o = Json::object(); o["id"] = p.id; o["name"] = p.name; o["path"] = p.path; po.push(o); } out["pools"] = po;
-    Json ho = Json::array(); for (const InvHost& h : inv.hosts) { Json o = Json::object(); o["id"] = h.id; o["name"] = h.name; ho.push(o); } out["hosts"] = ho;
+    Json po = Json::array(); for (const InvPool& p : inv.pools) { Json o = Json::object(); o["id"] = p.id; o["name"] = p.name; o["path"] = p.path; o["compute"] = p.compute; po.push(o); } out["pools"] = po;
+    Json ho = Json::array(); for (const InvHost& h : inv.hosts) { Json o = Json::object(); o["id"] = h.id; o["name"] = h.name;
+        for (size_t i = 0; i < inv.computeIds.size() && i < inv.computes.size(); ++i) if (inv.computeIds[i] == h.compute) o["compute"] = inv.computes[i];   // the cluster (or the standalone host's own compute resource) of the host
+        ho.push(o); } out["hosts"] = ho;
     Json vm = Json::array(); for (const Str& v : inv.vms) vm.push(v); out["vms"] = vm;
     m_s->logout();
     return true;
@@ -2392,9 +2460,24 @@ bool RestoreImpl::initFromMeta()
         // the root pool of the compute resource of the chosen host, else of the first one
         Str hostCompute; for (const InvHost& h : inv.hosts) if (h.id == m_hostId) hostCompute = h.compute;
         if (!inv.computeRoot.empty()) m_poolId = inv.computeRoot[0];
-        (void)hostCompute;
+        // the host belongs to its own compute resource (a cluster or a standalone host): the pool of ANOTHER one is refused by the server
+        for (size_t i = 0; i < inv.computeIds.size() && i < inv.computeRoot.size(); ++i) if (!hostCompute.empty() && inv.computeIds[i] == hostCompute && !inv.computeRoot[i].empty()) m_poolId = inv.computeRoot[i];
     }
     buildMap();
+    if (!m_hostId.empty()) {   // the chosen host must see every datastore the restore writes to (the server answers a late "Invalid datastore path" otherwise)
+        Vec<Str> seen;
+        const Json& fl0 = m_meta.get("files");
+        for (size_t i = 0; i < fl0.size(); ++i) {
+            Str ds0, path0; mapArc(fl0.at(i).get("path").str(), ds0, path0);
+            bool dup = false; for (const Str& x : seen) if (x == ds0) dup = true; if (dup) continue; seen.push_back(ds0);
+            const InvDs* d = inv.findDs(ds0);
+            if (!d || !d->mountsKnown) continue;
+            bool on = false; for (const Str& h : d->mountedOn) if (h == m_hostId) on = true;
+            if (on) continue;
+            Str hn = m_hostId, where; for (const InvHost& h : inv.hosts) { if (h.id == m_hostId) hn = h.name; for (const Str& m : d->mountedOn) if (h.id == m) where += (where.empty() ? "" : ", ") + h.name; }
+            return fail("the datastore \"" + ds0 + "\" is not mounted on the host \"" + hn + "\" (it is mounted on: " + (where.empty() ? Str("no host") : where) + "): choose a datastore the host can see, or another host (nothing was written)");
+        }
+    }
     {   // the free space BEFORE anything is created: a restore that cannot fit is refused at once and nothing is written (a real ESXi 7.0.3 answers a datastore that ran full with an
         // empty HTTP 500 only after the space is gone, and the retries take a quarter of an hour; every file is counted at its full size: a PUT writes the zeros of a thin disk too)
         Vec<Str> dn; Vec<u64> need; const Json& fl = m_meta.get("files");
@@ -2455,7 +2538,7 @@ bool RestoreImpl::putStream(const Str& ds, const Str& path, u64 size, Source& bo
     if (st == 403) return fail("uploading " + shown + " was refused (HTTP 403): the host or its license does not allow writing to the datastore");
     if (st == 503) return fail("uploading " + shown + ": the host is busy (HTTP 503)", true);
     (void)bodyIsArchive;
-    return fail(Str::fmt("uploading %s: HTTP %d %s", shown.c_str(), st, OneLine(r.reason).c_str()), st >= 500 && st != 501);
+    return fail(Str::fmt("uploading %s: HTTP %d %s", shown.c_str(), st, OneLine(r.reason).c_str()) + ((st == 404) ? Str(kHostViewHint) : Str()), st >= 500 && st != 501);
 }
 
 bool RestoreImpl::writeFile(const RestoreFile& f, Source& body, RestoreTick* tick)
