@@ -84,6 +84,7 @@ static void WINAPI ServiceMain(DWORD, LPWSTR*)
     SetState(SERVICE_START_PENDING, 15000);
     g_stopEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     ServiceCore core; Str err;
+    g_opt.pipeKeepTrying = true;                         // a squatter on the pipe name must not stop the service for good (security review F9): it works without the channel and takes the pipe when it is free
     if (!core.start(g_opt, err)) {
         Log(L"the service cannot start: %s", Wide(err).c_str());
         // SCM показывает только "Incorrect function" (код 1): причину кладём ещё и в журнал событий Windows (Приложение), чтобы администратор её увидел

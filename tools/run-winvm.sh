@@ -26,6 +26,7 @@
 #   tz        (раунд 8, ПОСЛЕДНЯЯ перед sac) пояса с переходом на летнее время (tzutil), часы гостя Set-Date при отключённом w32time: родные тесты расписания + настоящая служба (guest/tzreal.ps1)
 #   launcher  (раунд 13) лаунчер установщика F7: папка в %TEMP%, DACL, удержание файлов, испорченный хеш (guest/launcher.ps1)
 #   sec       (раунд 13) F2 / F3 / F5 на настоящей службе (guest/sec.ps1)
+#   lowsec    (ревью безопасности, низкие находки) F9 на настоящей службе: имя канала занято другой программой, служба работает и потом занимает канал, клиент не доверяет чужому каналу (guest/lowsec.ps1); ещё НЕ прогонялась на настоящей Windows
 #   levels    (раунд 13) уровни xz 0-9 и потоки на 32-битной Windows: время, размер, пики памяти службы, restore / verify (guest/levels.ps1)
 #   webshots  (раунд 13) сайт в Edge на госте: горячий режим, уровни сжатия, языки (guest/webshots.ps1)
 #   uacyes    (раунд 13) настоящий запрос UAC, «Да» с хоста, повышенный установщик из удерживаемой папки (guest/uacyes.ps1)
@@ -499,6 +500,16 @@ if want sec; then
   gj 31-sec 3000 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\sec.ps1' > /dev/null; RC=$?
   tr -d '\r' < "$RES/31-sec.out" | grep -aE '^INFO' | cut -c1-400 | tee -a "$SUM"
   tally sec $RC 31-sec
+fi
+
+if want lowsec; then
+  # ревью безопасности, F9: имя канала занято другой программой (guest/lowsec.ps1; сам клиент - тест winreal/pipe_default_name_client_checks_the_service)
+  gj 33-lowsec-start 900 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\lowsec.ps1 start' > /dev/null; RC1=$?
+  gj 33-lowsec-client 600 "set TAG=lowsec-squat" "set ARGS=--seed $SEED --only pipe_default_name_client_checks_the_service" "set VM2B_SQUAT=1" 'call C:\vm2b\guest\autotest.cmd' > /dev/null; RC2=$?
+  gj 33-lowsec-finish 900 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\lowsec.ps1 finish' > /dev/null; RC3=$?
+  gj 33-lowsec-real 600 "set TAG=lowsec-real" "set ARGS=--seed $SEED --only pipe_default_name_client_checks_the_service,pipe_name_held_by_another_program_is_waited_out" 'call C:\vm2b\guest\autotest.cmd' > /dev/null; RC4=$?
+  for f in 33-lowsec-start 33-lowsec-finish; do tr -d '\r' < "$RES/$f.out" | grep -aE '^INFO' | cut -c1-400 | tee -a "$SUM"; done
+  tally lowsec $(( RC1 + RC2 + RC3 + RC4 )) 33-lowsec-start 33-lowsec-client 33-lowsec-finish 33-lowsec-real
 fi
 
 if want levels; then
