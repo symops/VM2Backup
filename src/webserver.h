@@ -4,7 +4,7 @@
 // See docs/WEB.md.  The Windows program configures it through handleAdmin() (commands "web.*", routed by the service).
 //
 //   web.status              -> {enabled, listening, address, port, bind, entries:[{entry,addresses:[{address,listening,error}],listening,error}], cert{...}, users, sessions}
-//   web.settings.get / web.settings.set {enabled, bind:[...], port, require_2fa_admins, session_minutes, trust_proxy} -> {settings, warnings[]}
+//   web.settings.get / web.settings.set {enabled, bind:[...], port, require_2fa_admins, session_minutes, trust_proxy, trusted_proxies:[ip], allowed_hosts:[name]} -> {settings, warnings[]}
 //   web.interfaces.list     -> {interfaces:[{name, friendly, description, up, loopback, addresses:[{address,family,link_local}]}]}
 //   web.cert.generate {names[]} / web.cert.import {pfx_path, password}
 //   web.users.list / save {name, role, password?, twofa} / delete {name} / totp_enroll {name} / totp_confirm {name, code} / totp_disable {name}

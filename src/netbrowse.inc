@@ -43,7 +43,7 @@ bool RealRegDrives(const Str& sid, Vec<NetRegDrive>& out)
 Str RealSidName(const Str& sid)
 {
     typedef BOOL (WINAPI *Conv)(LPCWSTR, PSID*);
-    HMODULE a = LoadLibraryW(L"advapi32.dll"); Conv conv = a ? (Conv)(void*)GetProcAddress(a, "ConvertStringSidToSidW") : nullptr; if (!conv) return Str();
+    HMODULE a = LoadLibraryExW(L"advapi32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32); Conv conv = a ? (Conv)(void*)GetProcAddress(a, "ConvertStringSidToSidW") : nullptr; if (!conv) return Str();
     Wide w(sid); PSID p = nullptr; if (!conv(w.c_str(), &p) || !p) return Str();
     wchar_t name[256], dom[256]; DWORD nn = 256, dn = 256; SID_NAME_USE use; Str r;
     if (LookupAccountSidW(nullptr, p, name, &nn, dom, &dn, &use)) r = dn ? FromWide(dom) + "\\" + FromWide(name) : FromWide(name);
@@ -101,7 +101,7 @@ unsigned long RealEnumShares(const Str& server, Vec<NetNode>& out)
 {
     typedef DWORD (WINAPI *ShareEnumFn)(LPWSTR, DWORD, LPBYTE*, DWORD, LPDWORD, LPDWORD, LPDWORD);
     typedef DWORD (WINAPI *FreeFn)(LPVOID);
-    HMODULE h = LoadLibraryW(L"netapi32.dll"); if (!h) return ERROR_NO_NETWORK;
+    HMODULE h = LoadLibraryExW(L"netapi32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32); if (!h) return ERROR_NO_NETWORK;
     ShareEnumFn en = (ShareEnumFn)(void*)GetProcAddress(h, "NetShareEnum"); FreeFn fr = (FreeFn)(void*)GetProcAddress(h, "NetApiBufferFree");
     if (!en || !fr) return ERROR_NO_NETWORK;
     Wide sv(server); LPBYTE buf = nullptr; DWORD n = 0, tot = 0, resume = 0;
@@ -132,7 +132,7 @@ unsigned long RealEnumDomain(Str& domain, Vec<NetNode>& out)
 {
     typedef DWORD (WINAPI *DsGetFn)(LPCWSTR, LPCWSTR, GUID*, LPCWSTR, ULONG, void**);
     typedef DWORD (WINAPI *FreeFn)(LPVOID);
-    HMODULE na = LoadLibraryW(L"netapi32.dll"); if (!na) return ERROR_NO_NETWORK;
+    HMODULE na = LoadLibraryExW(L"netapi32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32); if (!na) return ERROR_NO_NETWORK;
     DsGetFn ds = (DsGetFn)(void*)GetProcAddress(na, "DsGetDcNameW"); FreeFn fr = (FreeFn)(void*)GetProcAddress(na, "NetApiBufferFree");
     if (!ds || !fr) return ERROR_NO_NETWORK;
     void* p = nullptr; DWORD rc = ds(nullptr, nullptr, nullptr, nullptr, 0x40000000u /* DS_RETURN_DNS_NAME */, &p);
@@ -146,7 +146,7 @@ unsigned long RealEnumDomain(Str& domain, Vec<NetNode>& out)
         Str lab = domain.substr(from, i - from); from = i + 1; if (lab.empty()) return 0;
         for (size_t k = 0; k < lab.size(); ++k) { char c = lab[k]; if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '-')) return 0; }
         if (!base.empty()) base += ","; base += "DC=" + lab; } }
-    HMODULE lh = LoadLibraryW(L"wldap32.dll"); if (!lh) return 0;
+    HMODULE lh = LoadLibraryExW(L"wldap32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32); if (!lh) return 0;
     typedef void* (__cdecl *InitFn)(wchar_t*, ULONG); typedef ULONG (__cdecl *SetOptFn)(void*, int, void*); typedef ULONG (__cdecl *BindFn)(void*, wchar_t*, wchar_t*, ULONG);
     typedef ULONG (__cdecl *SearchFn)(void*, wchar_t*, ULONG, wchar_t*, wchar_t**, ULONG, void*, void*, LdapTimeval*, ULONG, void**);
     typedef void* (__cdecl *FirstFn)(void*, void*); typedef void* (__cdecl *GetValsFn)(void*, void*, const wchar_t*); typedef int (__cdecl *FreeValsFn)(void*); typedef int (__cdecl *MsgFreeFn)(void*); typedef ULONG (__cdecl *UnbindFn)(void*);

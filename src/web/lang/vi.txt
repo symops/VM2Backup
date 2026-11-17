@@ -23,6 +23,7 @@ Add user...	Thêm người dùng...
 Add window	Thêm khung giờ
 Additional names	Tên bổ sung
 Address	Địa chỉ
+Addresses of the reverse proxies (X-Forwarded-For is believed only from them)	Địa chỉ các reverse proxy (chỉ tin X-Forwarded-For từ các địa chỉ này)
 Advanced	Nâng cao
 After a lost connection the program reconnects and goes on; nothing finished is sent again.	Sau khi mất kết nối, chương trình sẽ kết nối lại và tiếp tục; phần đã hoàn tất không được gửi lại.
 All	Tất cả
@@ -227,6 +228,7 @@ Once	Một lần
 One volume (no resuming)	Một volume (không thể tiếp tục)
 Only for a network folder that asks for a user name	Chỉ dành cho thư mục mạng yêu cầu tên người dùng
 Open	Mở
+Other host names the site may be reached by (besides IP addresses, localhost and the name of this computer)	Các tên máy chủ khác có thể truy cập trang (ngoài địa chỉ IP, localhost và tên của máy tính này)
 Owner	Chủ sở hữu
 Parallel jobs	Số tác vụ song song
 Parallel jobs: 1 to 16.	Số tác vụ song song: từ 1 đến 16.

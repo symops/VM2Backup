@@ -53,7 +53,7 @@ typedef ULONG (WINAPI* GetAdaptersAddressesFn)(ULONG, ULONG, PVOID, PIP_ADAPTER_
 Json RealInterfaces()
 {
     Json out = Json::array();
-    HMODULE h = LoadLibraryW(L"iphlpapi.dll"); if (!h) return out;
+    HMODULE h = LoadLibraryExW(L"iphlpapi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32); if (!h) return out;
     GetAdaptersAddressesFn fn = (GetAdaptersAddressesFn)GetProcAddress(h, "GetAdaptersAddresses");
     if (!fn) return out;
     Bytes buf; ULONG size = 32768; ULONG r = ERROR_BUFFER_OVERFLOW;
@@ -99,7 +99,8 @@ struct WebServer::Impl {
     struct IpCount { Str ip; int n; };
 
     ServiceCore* core; WebAuth auth; Str dataDir;
-    CRITICAL_SECTION adminCs, tcs, qcs, ipcs;
+    CRITICAL_SECTION adminCs, tcs, qcs, ipcs, pcs;
+    Vec<Str> proxies, hostsAllowed, ownNames, certNames; Bytes certNamesSrc;      // trusted_proxies / allowed_hosts of the settings (under pcs), this computer's DNS names (set once)
     Vec<Target> targets; Vec<EntryNote> notes; Vec<Str> entries; int portNum;
     WebTlsServer* tls; Str tlsError; Bytes certDer; bool selfSigned;
     volatile LONG stopFlag; HANDLE mgr; Vec<HANDLE> workers; HANDLE sem; HANDLE evt;
@@ -112,8 +113,8 @@ struct WebServer::Impl {
 
     Impl() : core(nullptr), portNum(8443), tls(nullptr), selfSigned(false), stopFlag(0), mgr(nullptr), sem(nullptr), evt(nullptr), ifProvider(nullptr), retrySec(30),
              running(false), enabled(false), trustProxy(0), notify1(nullptr), notify2(nullptr), iphlp(nullptr), lastReconcile(0), clockFn(nullptr), owner(nullptr), applyPending(0), closed(0)
-    { InitializeCriticalSection(&adminCs); InitializeCriticalSection(&tcs); InitializeCriticalSection(&qcs); InitializeCriticalSection(&ipcs); }
-    ~Impl() { DeleteCriticalSection(&adminCs); DeleteCriticalSection(&tcs); DeleteCriticalSection(&qcs); DeleteCriticalSection(&ipcs); }
+    { InitializeCriticalSection(&adminCs); InitializeCriticalSection(&tcs); InitializeCriticalSection(&qcs); InitializeCriticalSection(&ipcs); InitializeCriticalSection(&pcs); }
+    ~Impl() { DeleteCriticalSection(&pcs); DeleteCriticalSection(&adminCs); DeleteCriticalSection(&tcs); DeleteCriticalSection(&qcs); DeleteCriticalSection(&ipcs); }
 
     Json interfaces() { return ifProvider ? ifProvider() : RealInterfaces(); }
 
@@ -236,8 +237,53 @@ struct WebServer::Impl {
         Json s = auth.settings();
         enabled = s.get("enabled").boolean(); portNum = (int)s.get("port").integer(8443);
         entries.clear(); const Json& b = s.get("bind"); for (size_t i = 0; i < b.size(); ++i) entries.push_back(b.at(i).str());
-        InterlockedExchange(&trustProxy, s.get("trust_proxy").boolean() ? 1 : 0);
+        applyLive(s);
     }
+
+    // The settings that are read live (no listener restart): trust_proxy, trusted_proxies, allowed_hosts.
+    void applyLive(const Json& s)
+    {
+        InterlockedExchange(&trustProxy, s.get("trust_proxy").boolean() ? 1 : 0);
+        Vec<Str> p, h;
+        const Json& a = s.get("trusted_proxies"); for (size_t i = 0; i < a.size(); ++i) p.push_back(NormIp(a.at(i).str()));
+        const Json& b = s.get("allowed_hosts"); for (size_t i = 0; i < b.size(); ++i) h.push_back(b.at(i).str().lower());
+        Guard g(&pcs); proxies = p; hostsAllowed = h;
+        if (ownNames.empty()) {                              // this computer's names: the short one and the DNS one
+            WCHAR w[300]; DWORD n = 300; if (GetComputerNameExW(ComputerNameDnsHostname, w, &n)) ownNames.push_back(FromWide(w).lower());
+            n = 300; if (GetComputerNameExW(ComputerNameDnsFullyQualified, w, &n)) ownNames.push_back(FromWide(w).lower());
+            n = 300; if (GetComputerNameExW(ComputerNameNetBIOS, w, &n)) ownNames.push_back(FromWide(w).lower());
+        }
+    }
+    static Str NormIp(const Str& ipIn)
+    {
+        Str ip = ipIn.trim(); int pc = ip.find('%'); if (pc >= 0) ip = ip.substr(0, (size_t)pc);
+        if (ip.lower().starts_with("::ffff:") && ip.find('.') >= 0) ip = ip.substr(7);
+        return ip.lower();
+    }
+    bool isTrustedProxy(const Str& ip) { Str n = NormIp(ip); Guard g(&pcs); for (const Str& p : proxies) if (p == n) return true; return false; }
+
+    // DNS-rebinding guard (security review F15): a Host header is accepted when it is an IP literal, "localhost", a name of this computer
+    // or one of allowed_hosts; the TLS certificate would stop a rebound name in a browser anyway, this is the second wall.
+    bool hostAllowed(const Str& hostHeader)
+    {
+        Str h = hostHeader.trim(); if (h.empty()) return false;
+        Str name;
+        if (h[0] == '[') { int e = h.find(']'); if (e < 0) return false; name = h.substr(1, (size_t)e - 1); Str rest = h.substr((size_t)e + 1); if (!rest.empty() && rest[0] != ':') return false; }
+        else { int c = h.find(':'); name = c >= 0 ? h.substr(0, (size_t)c) : h; if (c >= 0 && h.find(':', (size_t)c + 1) >= 0) name = h; }     // a bare IPv6 literal is tolerated
+        { in_addr a4; in6_addr a6; Str nn = name; int pc = nn.find('%'); if (pc >= 0) nn = nn.substr(0, (size_t)pc); if (inet_pton(AF_INET, nn.c_str(), &a4) == 1 || inet_pton(AF_INET6, nn.c_str(), &a6) == 1) return true; }
+        name = name.lower(); while (name.size() > 1 && name[name.size() - 1] == '.') name = name.substr(0, name.size() - 1);
+        if (name == "localhost") return true;
+        Guard g(&pcs);
+        for (const Str& n : ownNames) if (n == name) return true;
+        for (const Str& n : hostsAllowed) if (n == name) return true;
+        if (certDer.size() && (certNamesSrc.size() != certDer.size() || memcmp(certNamesSrc.data(), certDer.data(), certDer.size()) != 0)) {     // the names of the site's own certificate are the names it is meant to be reached by
+            certNamesSrc = certDer; certNames.clear();
+            Json d = WebTlsDescribe(certDer); const Json& nm = d.get("names"); for (size_t i = 0; i < nm.size(); ++i) certNames.push_back(nm.at(i).str().lower());
+        }
+        for (const Str& n : certNames) if (n == name) return true;
+        return false;
+    }
+    Str cookieName() const { return Str::fmt("__Host-vm2b_%d", portNum); }       // the port is part of the name: another service on the same host name must not receive or set our session
 
     bool ensureIdentity(Str& err)
     {
@@ -255,7 +301,7 @@ struct WebServer::Impl {
 
     void startNotify()
     {
-        iphlp = LoadLibraryW(L"iphlpapi.dll"); if (!iphlp) return;
+        iphlp = LoadLibraryExW(L"iphlpapi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32); if (!iphlp) return;
         NotifyFn n1 = (NotifyFn)GetProcAddress(iphlp, "NotifyIpInterfaceChange");
         NotifyFn n2 = (NotifyFn)GetProcAddress(iphlp, "NotifyUnicastIpAddressChange");
         if (n1) { HANDLE h = nullptr; if (n1(AF_UNSPEC, (void*)OnNetChange, evt, FALSE, &h) == NO_ERROR) notify1 = h; }
@@ -419,7 +465,7 @@ struct WebServer::Impl {
     {
         switch (s) { case 100: return "Continue"; case 200: return "OK"; case 202: return "Accepted"; case 204: return "No Content"; case 400: return "Bad Request"; case 401: return "Unauthorized"; case 403: return "Forbidden";
                      case 404: return "Not Found"; case 405: return "Method Not Allowed"; case 408: return "Request Timeout"; case 411: return "Length Required"; case 413: return "Payload Too Large";
-                     case 414: return "URI Too Long"; case 415: return "Unsupported Media Type"; case 417: return "Expectation Failed"; case 429: return "Too Many Requests"; case 431: return "Request Header Fields Too Large";
+                     case 414: return "URI Too Long"; case 415: return "Unsupported Media Type"; case 417: return "Expectation Failed"; case 421: return "Misdirected Request"; case 429: return "Too Many Requests"; case 431: return "Request Header Fields Too Large";
                      case 500: return "Internal Server Error"; case 501: return "Not Implemented"; case 505: return "HTTP Version Not Supported"; default: return "Status"; }
     }
 
@@ -524,6 +570,7 @@ struct WebServer::Impl {
                 if (clCount == 1 && !ParseLen(rq.header("content-length"), clen)) { Response r = Plain(400, "bad Content-Length"); r.close = true; sendResponse(c, r, false); goto done; }
                 if (rq.version == "HTTP/1.1" && (!rq.has("host") || rq.header("host").empty())) { Response r = Plain(400, "Host header required"); r.close = true; sendResponse(c, r, false); goto done; }
                 { int hc = 0; for (const Header& h : rq.headers) if (h.name == "host") ++hc; if (hc > 1) { Response r = Plain(400, "duplicate Host"); r.close = true; sendResponse(c, r, false); goto done; } }
+                if (!rq.header("host").empty() && !hostAllowed(rq.header("host"))) { Response r = Plain(421, "unknown host name; an administrator can add it to allowed_hosts"); r.close = true; sendResponse(c, r, false); goto done; }
                 if (clen > kMaxBody) { Response r = Plain(413, "body too large (8 MiB at most)"); r.close = true; sendResponse(c, r, false); goto done; }
                 Str conn = rq.header("connection").lower();
                 rq.keepAlive = rq.version == "HTTP/1.1" ? conn.find("close") < 0 : conn.find("keep-alive") >= 0;
@@ -553,13 +600,39 @@ struct WebServer::Impl {
     }
 
     // ---- routing ----
+    // X-Forwarded-For counts only when trust_proxy is on AND the connection comes from one of trusted_proxies; the entries are walked from the
+    // right, addresses of trusted proxies themselves are skipped, the first other one is the client (a client-supplied left part is never used).
     Str clientIp(const Conn& c, const Request& rq)
     {
-        if (trustProxy && (c.ip == "127.0.0.1" || c.ip == "::1")) {
+        if (trustProxy && isTrustedProxy(c.ip)) {
             Str x = rq.header("x-forwarded-for");
-            if (!x.empty()) { int cm = -1; for (size_t i = x.size(); i-- > 0;) if (x[i] == ',') { cm = (int)i; break; } Str last = (cm >= 0 ? x.substr((size_t)cm + 1) : x).trim(); in_addr a4; in6_addr a6; if (inet_pton(AF_INET, last.c_str(), &a4) == 1 || inet_pton(AF_INET6, last.c_str(), &a6) == 1) return last; }
+            size_t end = x.size();
+            Str lastValid;
+            while (end > 0) {
+                int cm = -1; for (size_t i = end; i-- > 0;) if (x[i] == ',') { cm = (int)i; break; }
+                Str part = x.substr((size_t)(cm + 1), end - (size_t)(cm + 1)).trim();
+                in_addr a4; in6_addr a6;
+                if (inet_pton(AF_INET, part.c_str(), &a4) != 1 && inet_pton(AF_INET6, part.c_str(), &a6) != 1) break;       // garbage: stop, the address found so far (or the peer) stands
+                if (lastValid.empty()) lastValid = part;
+                if (!isTrustedProxy(part)) return part;
+                if (cm < 0) break; end = (size_t)cm;
+            }
+            if (!lastValid.empty()) return lastValid;
         }
         return c.ip;
+    }
+
+    // A viewer sees what servers exist (to read the history), not where they are or how one signs in to them (host, user, key and folder paths,
+    // directory): only id, name, type, builtin and the lock-out mark reach him.
+    static Json ViewerServers(const Json& full)
+    {
+        Json out = Json::array();
+        for (size_t i = 0; i < full.size(); ++i) {
+            const Json& e = full.at(i); Json v = Json::object();
+            v["id"] = e.get("id"); v["name"] = e.get("name"); v["type"] = e.get("type"); if (e.has("builtin")) v["builtin"] = e.get("builtin");
+            out.push(v);
+        }
+        return out;
     }
 
     static Str CookieValue(const Request& rq, const char* name)
@@ -578,10 +651,10 @@ struct WebServer::Impl {
         return Str();
     }
 
-    static Str SessionCookie(const Str& id, int maxAge)
+    Str sessionCookie(const Str& id, int maxAge) const
     {
-        if (id.empty()) return "Set-Cookie: __Host-vm2b=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0";
-        return Str::fmt("Set-Cookie: __Host-vm2b=%s; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=%d", id.c_str(), maxAge);
+        if (id.empty()) return "Set-Cookie: " + cookieName() + "=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0";
+        return Str::fmt("Set-Cookie: %s=%s; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=%d", cookieName().c_str(), id.c_str(), maxAge);
     }
 
     static bool SameOrigin(const Request& rq)
@@ -630,9 +703,9 @@ struct WebServer::Impl {
         if (name == "me") {
             if (m != "GET" && m != "HEAD") { r = Err(405, "method not allowed"); return; }
             Json j = Json::object(); WebSession s;
-            if (auth.session(CookieValue(rq, "__Host-vm2b"), s)) { j["authenticated"] = true; j["user"] = s.user; j["role"] = s.role; j["csrf"] = s.csrf; j["session_seconds"] = auth.sessionSeconds(); }
+            if (auth.session(CookieValue(rq, cookieName().c_str()), s)) { j["authenticated"] = true; j["user"] = s.user; j["role"] = s.role; j["csrf"] = s.csrf; j["session_seconds"] = auth.sessionSeconds(); }
             else { j["authenticated"] = false; j["no_users"] = auth.userCount() == 0; }
-            j["version"] = Str(VM2B_VER_STR);
+            if (j.get("authenticated").boolean()) j["version"] = Str(VM2B_VER_STR);     // no version for anybody who is not signed in
             r = JsonResp(200, j); return;
         }
         if (m != "POST") { r = Err(405, "use POST"); r.extra.push_back("Allow: POST"); return; }
@@ -653,7 +726,7 @@ struct WebServer::Impl {
             Json j = Json::object();
             if (lr.status == 200) {
                 j["ok"] = true; j["user"] = lr.user; j["role"] = lr.role; j["csrf"] = lr.csrf; j["session_seconds"] = auth.sessionSeconds();
-                r = JsonResp(200, j); r.extra.push_back(SessionCookie(lr.sessionId, 12 * 3600)); return;
+                r = JsonResp(200, j); r.extra.push_back(sessionCookie(lr.sessionId, 12 * 3600)); return;
             }
             j["ok"] = false; j["error"] = lr.message; if (lr.status == 202) j["need_2fa"] = true; if (lr.status == 429) j["retry_after"] = lr.retryAfter;
             if (lr.message.starts_with("No users")) j["no_users"] = true;
@@ -661,13 +734,13 @@ struct WebServer::Impl {
             return;
         }
         WebSession s;
-        if (!auth.session(CookieValue(rq, "__Host-vm2b"), s)) { r = Err(401, "not signed in"); return; }
+        if (!auth.session(CookieValue(rq, cookieName().c_str()), s)) { r = Err(401, "not signed in"); return; }
         if (!CsrfEq(rq.header("x-csrf-token"), s.csrf)) { r = Err(403, "missing or wrong CSRF token"); auth.audit("csrf_refused", s.user, ip, name); return; }
-        if (name == "logout") { auth.logout(s.id); Json j = Json::object(); j["ok"] = true; r = JsonResp(200, j); r.extra.push_back(SessionCookie(Str(), 0)); return; }
+        if (name == "logout") { auth.logout(s.id); Json j = Json::object(); j["ok"] = true; r = JsonResp(200, j); r.extra.push_back(sessionCookie(Str(), 0)); return; }
         if (name == "password") {
             Str e; Json j = Json::object();
             if (!auth.changePassword(s.user, args.get("current").str(), args.get("next").str(), ip, e)) { j["ok"] = false; j["error"] = e; r = JsonResp(400, j); return; }
-            j["ok"] = true; r = JsonResp(200, j); r.extra.push_back(SessionCookie(Str(), 0)); return;
+            j["ok"] = true; r = JsonResp(200, j); r.extra.push_back(sessionCookie(Str(), 0)); return;
         }
         if (!WebAuth::RoleAllows(s.role, name)) {
             auth.audit("forbidden", s.user, ip, name + " role=" + s.role);
@@ -685,6 +758,7 @@ struct WebServer::Impl {
         Json result; Str err; bool ok, later = false;
         if (name.starts_with("web.")) ok = owner->handleAdminFromWeb(s.user, s.id, ip, name, args, result, err, later);      // the site's own administration (admin role): with lock-out protections
         else ok = core->handle(name, args, result, err);
+        if (ok && name == "servers.list" && s.role == "viewer") result = ViewerServers(result);
         if (!WebAuth::IsReadOnlyCmd(name)) {
             Str d = name; Str id = args.get("id").str(); if (id.empty()) id = args.get("task").get("name").str(); if (id.empty()) id = args.get("server").get("name").str(); if (id.empty()) id = args.get("name").str();
             if (!id.empty()) d += " " + id;
@@ -871,7 +945,7 @@ bool WebServer::handleAdmin(const Str& cmd, const Json& a, Json& r, Str& err)
         if (!au.setSettings(a, err)) return false;
         Json after = au.settings();
         bool listenerChanged = !web || before.get("bind").dump() != after.get("bind").dump() || before.get("port").integer() != after.get("port").integer() || before.get("enabled").boolean() != after.get("enabled").boolean();
-        if (!listenerChanged) InterlockedExchange(&m->trustProxy, after.get("trust_proxy").boolean() ? 1 : 0);     // the other settings are read live: no restart, no dropped connections
+        m->applyLive(after);     // trust_proxy, trusted_proxies, allowed_hosts and the like are read live: no restart, no dropped connections
         Str e = restart(listenerChanged);
         r["settings"] = au.settings(); r["warnings"] = m->warnings();
         if (!e.empty()) r["error"] = e;

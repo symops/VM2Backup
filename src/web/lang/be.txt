@@ -23,6 +23,7 @@ Add user...	Дадаць карыстальніка...
 Add window	Дадаць акно
 Additional names	Дадатковыя імёны
 Address	Адрас
+Addresses of the reverse proxies (X-Forwarded-For is believed only from them)	Адрасы зваротных проксі (X-Forwarded-For прымаецца толькі ад іх)
 Advanced	Дадаткова
 After a lost connection the program reconnects and goes on; nothing finished is sent again.	Пасля абрыву сувязі праграма падключаецца нанова і працягвае; гатовае паўторна не перадаецца.
 All	Усе
@@ -227,6 +228,7 @@ Once	Аднаразова
 One volume (no resuming)	Адзін том (без аднаўлення перадачы)
 Only for a network folder that asks for a user name	Толькі для сеткавай папкі, якая запытвае імя карыстальніка
 Open	Адкрыць
+Other host names the site may be reached by (besides IP addresses, localhost and the name of this computer)	Іншыя імёны вузла, па якіх даступны сайт (акрамя IP-адрасоў, localhost і імя гэтага кампутара)
 Owner	Уладальнік
 Parallel jobs	Паралельных заданняў
 Parallel jobs: 1 to 16.	Паралельных заданняў: ад 1 да 16.

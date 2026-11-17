@@ -1192,12 +1192,16 @@ function createApp(env) {
         (W.warnings || []).forEach(function (w) { box.appendChild(h('div', { class: 'msg warn', text: w })); });
         // -- security --
         var tfa = chk('Require two-factor authentication for administrators', st.require_2fa_admins), sess = num(st.session_minutes || 20, 1), proxy = chk('Trust X-Forwarded-For from a reverse proxy on this computer', st.trust_proxy);
+        var proxies = txt((st.trusted_proxies || []).join(', ')), hosts = txt((st.allowed_hosts || []).join(', '));
+        function listOf(v) { return v.value.split(',').map(function (x) { return x.trim(); }).filter(function (x) { return x; }); }
         var secMsg = h('div', { class: 'msg' });
         box.appendChild(h('h3', { text: T('Security') }));
         box.appendChild(h('div', { class: 'f' }, tfa)); box.appendChild(field('Session idle timeout, minutes', sess)); box.appendChild(h('div', { class: 'f' }, proxy));
+        box.appendChild(field('Addresses of the reverse proxies (X-Forwarded-For is believed only from them)', proxies));
+        box.appendChild(field('Other host names the site may be reached by (besides IP addresses, localhost and the name of this computer)', hosts));
         box.appendChild(h('div', { class: 'note', text: T('Enable this only behind a reverse proxy that you control and that sets X-Forwarded-For itself; otherwise anybody can fake the address that is shown in the audit log and used for the login limits.') }));
         box.appendChild(h('div', { class: 'toolbar' }, h('button', { class: 'primary', text: T('Apply'), on: { click: function () {
-            api('web.settings.set', { require_2fa_admins: tfa.input.checked, session_minutes: parseInt(sess.value, 10), trust_proxy: proxy.input.checked }).then(function () { toast(T('Saved.')); }, function (e) { secMsg.className = 'msg err'; secMsg.textContent = e.message; });
+            api('web.settings.set', { require_2fa_admins: tfa.input.checked, session_minutes: parseInt(sess.value, 10), trust_proxy: proxy.input.checked, trusted_proxies: listOf(proxies), allowed_hosts: listOf(hosts) }).then(function () { toast(T('Saved.')); }, function (e) { secMsg.className = 'msg err'; secMsg.textContent = e.message; });
         } } })));
         box.appendChild(secMsg);
         // -- certificate --

@@ -148,6 +148,8 @@ static Json DefaultWebSettings(bool enabledDefault)
     s["enabled"] = enabledDefault;
     Json b = Json::array(); b.push("127.0.0.1"); s["bind"] = b;
     s["port"] = 8443; s["require_2fa_admins"] = !enabledDefault; s["session_minutes"] = 20; s["trust_proxy"] = false;
+    Json tp = Json::array(); tp.push("127.0.0.1"); tp.push("::1"); s["trusted_proxies"] = tp;      // X-Forwarded-For counts only from these addresses (and only with trust_proxy)
+    s["allowed_hosts"] = Json::array();                                                     // extra Host names accepted besides IP literals, localhost and this computer's name
     return s;
 }
 
@@ -218,6 +220,15 @@ bool WebAuth::BindEntryOk(const Str& e)
     return inet_pton(AF_INET, a.c_str(), &a4) == 1 || inet_pton(AF_INET6, a.c_str(), &a6) == 1;
 }
 
+// A DNS name for the list of accepted Host header values: letters, digits, '-', '_', '.', at most 253 characters, labels not empty.
+bool WebAuth::HostNameOk(const Str& e)
+{
+    if (e.empty() || e.size() > 253 || e[0] == '.' || e[e.size() - 1] == '.') return false;
+    char prev = 0;
+    for (size_t i = 0; i < e.size(); ++i) { char c = e[i]; if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '-' || c == '_' || c == '.')) return false; if (c == '.' && prev == '.') return false; prev = c; }
+    return true;
+}
+
 bool WebAuth::setSettings(const Json& p, Str& err)
 {
     Guard g(&m_cs);
@@ -234,6 +245,19 @@ bool WebAuth::setSettings(const Json& p, Str& err)
             if (list.size() > 32) { err = "too many bind entries"; return false; }
             for (size_t j = 0; j < list.size(); ++j) if (!BindEntryOk(list.at(j).str())) { err = "bad bind entry \"" + Sanitize(list.at(j).str(), 80) + "\": use an IP address, adapter:<GUID>, localhost or all"; return false; }
             s["bind"] = list;
+        }
+        else if (k == "trusted_proxies" || k == "allowed_hosts") {
+            if (!v.is_array()) { err = k + " must be a list of text entries"; return false; }
+            if (v.size() > 32) { err = "too many entries in " + k; return false; }
+            Json list = Json::array();
+            for (size_t j = 0; j < v.size(); ++j) {
+                if (!v.at(j).is_string()) { err = k + " entries must be text"; return false; }
+                Str e = v.at(j).str().trim();
+                if (k == "trusted_proxies") { in_addr a4; in6_addr a6; if (e.size() > 45 || (inet_pton(AF_INET, e.c_str(), &a4) != 1 && inet_pton(AF_INET6, e.c_str(), &a6) != 1)) { err = "bad proxy address \"" + Sanitize(e, 60) + "\": use an IP address"; return false; } }
+                else if (!HostNameOk(e)) { err = "bad host name \"" + Sanitize(e, 60) + "\": use a DNS name (letters, digits, '-', '.')"; return false; }
+                list.push(e);
+            }
+            s[k.c_str()] = list;
         }
         else if (k == "port") { i64 n = v.integer(-1); if (!v.is_number() || n < 1 || n > 65535) { err = "port must be 1..65535"; return false; } s["port"] = n; }
         else if (k == "session_minutes") { i64 n = v.integer(-1); if (!v.is_number() || n < 1 || n > 1440) { err = "session_minutes must be 1..1440"; return false; } s["session_minutes"] = n; }

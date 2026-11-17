@@ -24,9 +24,10 @@ public:
     i64 now() const;
     i64 nowMs() const;                                      // milliseconds (the throttle); a test clock gives seconds * 1000
 
-    // ---- settings {enabled, bind:[entries], port, require_2fa_admins, session_minutes, trust_proxy} ----
+    // ---- settings {enabled, bind:[entries], port, require_2fa_admins, session_minutes, trust_proxy, trusted_proxies:[ip], allowed_hosts:[name]} ----
     // a bind entry: an address ("192.168.1.10", "::1", "fe80::1%12"), "adapter:<AdapterName GUID>", "localhost" (127.0.0.1 + ::1), "all" (0.0.0.0 + ::)
     static bool BindEntryOk(const Str& e);
+    static bool HostNameOk(const Str& e);                    // a DNS name for allowed_hosts
     Json settings() const;
     bool setSettings(const Json& patch, Str& err);
 

@@ -23,6 +23,7 @@ Add user...	Aggiungi utente...
 Add window	Aggiungi finestra
 Additional names	Nomi aggiuntivi
 Address	Indirizzo
+Addresses of the reverse proxies (X-Forwarded-For is believed only from them)	Indirizzi dei reverse proxy (X-Forwarded-For è considerato solo da questi)
 Advanced	Avanzate
 After a lost connection the program reconnects and goes on; nothing finished is sent again.	Dopo una perdita di connessione il programma si riconnette e prosegue; nulla di ciò che è terminato viene reinviato.
 All	Tutti
@@ -227,6 +228,7 @@ Once	Una volta
 One volume (no resuming)	Un volume (senza ripresa)
 Only for a network folder that asks for a user name	Solo per una cartella di rete che richiede un nome utente
 Open	Apri
+Other host names the site may be reached by (besides IP addresses, localhost and the name of this computer)	Altri nomi host con cui il sito è raggiungibile (oltre a indirizzi IP, localhost e nome di questo computer)
 Owner	Proprietario
 Parallel jobs	Attività parallele
 Parallel jobs: 1 to 16.	Processi paralleli: da 1 a 16.

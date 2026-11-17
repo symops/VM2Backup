@@ -23,6 +23,7 @@ Add user...	ユーザーを追加...
 Add window	時間帯を追加
 Additional names	追加の名前
 Address	アドレス
+Addresses of the reverse proxies (X-Forwarded-For is believed only from them)	リバースプロキシのアドレス（X-Forwarded-For はこれらからのみ信頼されます）
 Advanced	詳細
 After a lost connection the program reconnects and goes on; nothing finished is sent again.	接続が切れた後、プログラムは再接続して続行します。完了した分は再送されません。
 All	すべて
@@ -227,6 +228,7 @@ Once	1 回
 One volume (no resuming)	単一ボリューム (再開不可)
 Only for a network folder that asks for a user name	ユーザー名を要求するネットワークフォルダーの場合のみ
 Open	開く
+Other host names the site may be reached by (besides IP addresses, localhost and the name of this computer)	サイトにアクセスできるその他のホスト名（IP アドレス、localhost、このコンピューター名を除く）
 Owner	所有者
 Parallel jobs	並列ジョブ数
 Parallel jobs: 1 to 16.	並列ジョブ数: 1 ～ 16。

@@ -23,6 +23,7 @@ Add user...	Kullanıcı ekle...
 Add window	Pencere ekle
 Additional names	Ek adlar
 Address	Adres
+Addresses of the reverse proxies (X-Forwarded-For is believed only from them)	Ters proxy adresleri (X-Forwarded-For yalnızca bunlardan kabul edilir)
 Advanced	Gelişmiş
 After a lost connection the program reconnects and goes on; nothing finished is sent again.	Bağlantı koptuktan sonra program yeniden bağlanır ve devam eder; tamamlanan hiçbir şey yeniden gönderilmez.
 All	Tümü
@@ -227,6 +228,7 @@ Once	Bir kez
 One volume (no resuming)	Tek birim (devam ettirme yok)
 Only for a network folder that asks for a user name	Yalnızca kullanıcı adı isteyen bir ağ klasörü için
 Open	Aç
+Other host names the site may be reached by (besides IP addresses, localhost and the name of this computer)	Sitenin erişilebildiği diğer ana bilgisayar adları (IP adresleri, localhost ve bu bilgisayarın adı dışında)
 Owner	Sahip
 Parallel jobs	Paralel işler
 Parallel jobs: 1 to 16.	Paralel işler: 1 ile 16 arası.

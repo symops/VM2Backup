@@ -23,6 +23,7 @@ Add user...	Gebruiker toevoegen...
 Add window	Tijdvenster toevoegen
 Additional names	Extra namen
 Address	Adres
+Addresses of the reverse proxies (X-Forwarded-For is believed only from them)	Adressen van de reverse proxy’s (X-Forwarded-For wordt alleen van hen geloofd)
 Advanced	Geavanceerd
 After a lost connection the program reconnects and goes on; nothing finished is sent again.	Na een verbroken verbinding maakt het programma opnieuw verbinding en gaat verder; niets wat al klaar is wordt opnieuw verzonden.
 All	Alles
@@ -227,6 +228,7 @@ Once	Eenmalig
 One volume (no resuming)	Eén volume (geen hervatting)
 Only for a network folder that asks for a user name	Alleen voor een netwerkmap die om een gebruikersnaam vraagt
 Open	Openen
+Other host names the site may be reached by (besides IP addresses, localhost and the name of this computer)	Andere hostnamen waaronder de site bereikbaar is (naast IP-adressen, localhost en de naam van deze computer)
 Owner	Eigenaar
 Parallel jobs	Parallelle taken
 Parallel jobs: 1 to 16.	Parallelle taken: 1 tot 16.

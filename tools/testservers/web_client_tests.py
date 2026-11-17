@@ -9,6 +9,7 @@ import hashlib, hmac, http.client, json, os, socket, ssl, struct, subprocess, sy
 CTL, DATA, PORT = sys.argv[1], sys.argv[2], int(sys.argv[3])
 QUICK = '--quick' in sys.argv
 LOCAL_DATA = os.path.join(DATA, 'svc')
+CK = '__Host-vm2b_%d' % PORT      # the session cookie: the port is part of the name (security review F14)
 fails, passes = [], 0
 ANSWERS = []          # every API answer body, searched for secrets at the end
 clock_offset = 0
@@ -57,7 +58,7 @@ class Client:
         self.conn = http.client.HTTPSConnection(self.host, self.port, context=ctx_default(), timeout=30)
     def raw(self, method, path, body=None, headers=None, retry=True):
         h = dict(headers or {})
-        if self.cookie and 'Cookie' not in h: h['Cookie'] = '__Host-vm2b=' + self.cookie
+        if self.cookie and 'Cookie' not in h: h['Cookie'] = CK + '=' + self.cookie
         if body is not None and not isinstance(body, (bytes, str)): body = json.dumps(body)
         if isinstance(body, str): body = body.encode()
         if body is not None and 'Content-Type' not in h: h['Content-Type'] = 'application/json'
@@ -89,7 +90,7 @@ class Client:
         if st == 200 and j.get('ok'):
             self.csrf = j['csrf']; self.role = j['role']
             sc = self.setcookie or ''
-            if sc.startswith('__Host-vm2b='): self.cookie = sc.split(';')[0].split('=', 1)[1]
+            if sc.startswith(CK + '='): self.cookie = sc.split(';')[0].split('=', 1)[1]
         return st, j
     def close(self):
         if self.conn: self.conn.close(); self.conn = None
@@ -247,7 +248,7 @@ def t_users_login_cookie_csrf():
     st, j = c.login('adm', PW['adm']); check(st == 200 and j['ok'] and j['role'] == 'admin' and len(j['csrf']) == 64, 'login succeeds')
     sc = c.setcookie or ''
     parts = [p.strip() for p in sc.split(';')]
-    check(parts[0].startswith('__Host-vm2b=') and len(parts[0].split('=')[1]) == 64, 'cookie __Host-vm2b with a 256-bit id')
+    check(parts[0].startswith(CK + '=') and len(parts[0].split('=')[1]) == 64, 'cookie __Host-vm2b_<port> with a 256-bit id')
     check('Secure' in parts and 'HttpOnly' in parts and 'SameSite=Strict' in parts and 'Path=/' in parts, 'cookie flags: Secure HttpOnly SameSite=Strict Path=/')
     check(not any(p.lower().startswith('domain') for p in parts), 'cookie has no Domain (host-only)')
     st, j = c.api('state'); check(st == 200 and j['ok'] and j['result']['version'], 'state via the API')
@@ -417,7 +418,7 @@ def t_malformed_and_slow():
     res = {}
     def slow_header():
         s = socket.create_connection(('127.0.0.1', PORT), timeout=40); t = ctx_default().wrap_socket(s)
-        t0 = time.time(); t.sendall(b'GET / HTTP/1.1\r\nHost: x\r\n')
+        t0 = time.time(); t.sendall(b'GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n')
         try:
             while time.time() - t0 < 30:
                 time.sleep(2)
@@ -565,7 +566,7 @@ def t_full_flow_and_secrets():
     for s in SECRETS: check(s not in cfg, 'secret not in config.json in clear')
     blob = b''.join(ANSWERS).decode('utf-8', 'replace')
     for s in allsecrets: check(s not in blob, 'secret never in any API answer: ' + s[:6] + '...')
-    check('"hash"' not in blob and '"salt"' not in blob, 'no password hashes in any answer')
+    check('"hash"' not in blob and '"salt"' not in blob and '"pwcheck"' not in blob, 'no password hashes (and no key salts / password checks of backups) in any answer')
     import re
     iters = [int(x) for x in re.findall(r'"iter":\s*(\d+)', wj)]
     check(len(iters) > 0, 'web.json stores password iteration counts (test hook lowers them to %s)' % (iters[:1],))
@@ -761,11 +762,11 @@ def t_security_extra():
         advance(1); x = Client(); x.login('secadm', 'Secure-Admin-Pass-1'); ids.add(x.cookie)
     check(len(ids) == 5 and None not in ids, 'session ids are unique')
     # ---- cookie quirks
-    for name, ck in [('two cookies, bad first', '__Host-vm2b=' + 'a' * 64 + '; __Host-vm2b=' + c.cookie), ('empty value', '__Host-vm2b='), ('huge', '__Host-vm2b=' + 'a' * 6000), ('nul-ish', '__Host-vm2b=%00' + c.cookie), ('quoted', '__Host-vm2b="' + c.cookie + '"'), ('other name', 'vm2b=' + c.cookie), ('garbage', ';;;=;==')]:
+    for name, ck in [('two cookies, bad first', CK + '=' + 'a' * 64 + '; ' + CK + '=' + c.cookie), ('empty value', CK + '='), ('huge', CK + '=' + 'a' * 6000), ('nul-ish', CK + '=%00' + c.cookie), ('quoted', CK + '="' + c.cookie + '"'), ('other name', 'vm2b=' + c.cookie), ('the old name without a port', '__Host-vm2b=' + c.cookie), ('the name of another port', '__Host-vm2b_%d=' % (PORT + 1) + c.cookie), ('garbage', ';;;=;==')]:
         out = raw_exchange(b'POST /api/state HTTP/1.1\r\n' + H + b'Cookie: ' + ck.encode() + b'\r\nX-CSRF-Token: ' + c.csrf.encode() + b'\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}')
         sc = status_of(out)
         check(sc in (200, 400, 401, 431), 'cookie quirk (%s) gives a sane status (got %d)' % (name, sc))
-        if name in ('empty value', 'other name', 'garbage', 'nul-ish', 'quoted', 'huge'): check(sc != 200, 'cookie quirk (%s) is not accepted as a session' % name)
+        if name in ('empty value', 'other name', 'garbage', 'nul-ish', 'quoted', 'huge', 'the old name without a port', 'the name of another port'): check(sc != 200, 'cookie quirk (%s) is not accepted as a session' % name)
     # ---- X-Forwarded-For and friends do not bypass the throttle
     admin('web.users.save', name='xffuser', role='viewer', password='Forwarded-Pass-123', twofa='off'); advance(10)
     xc = Client(); codes = []
@@ -942,6 +943,71 @@ def t_security_extra():
     r = admin('web.users.list')['result']['users']; check(all('\n' not in u['name'] and '\t' not in u['name'] and '\x00' not in u['name'] for u in r), 'no user name with control characters was stored')
     advance(3000)
 
+def t_low_findings():
+    """Security review F14 / F15: the cookie name carries the port, no version without a sign-in, Host header check, X-Forwarded-For only from the
+    listed proxies, the viewer's reduced server list."""
+    H = b'Host: 127.0.0.1\r\n'
+    admin('web.users.save', name='lowadm', role='admin', password='Low-Admin-Pass-123', twofa='off')
+    admin('web.users.save', name='lowvw', role='viewer', password='Low-Viewer-Pass-12', twofa='off')
+    advance(3000)
+    c = Client(); st, j = c.login('lowadm', 'Low-Admin-Pass-123'); check(st == 200, 'low findings: admin login')
+    # ---- F14: the cookie name has the port; a cookie of another port or the old name is not a session
+    check((c.setcookie or '').startswith(CK + '='), 'F14: the session cookie is named __Host-vm2b_<port>')
+    n = Client(); n.cookie = c.cookie
+    for nm in ('__Host-vm2b', '__Host-vm2b_%d' % (PORT + 1)):
+        out = raw_exchange(b'GET /api/me HTTP/1.1\r\n' + H + b'Cookie: ' + nm.encode() + b'=' + c.cookie.encode() + b'\r\n\r\n')
+        body = out.split(b'\r\n\r\n', 1)[-1]
+        check(b'"authenticated":false' in body.replace(b' ', b''), 'F14: a session cookie under the name %s is not accepted' % nm.encode())
+    # ---- F15: /api/me without a sign-in has no version; with one it has
+    st, data, r = Client().raw('GET', '/api/me'); me = json.loads(data)
+    check(st == 200 and not me.get('authenticated') and 'version' not in me, 'F15: /api/me without a sign-in does not give the version')
+    st, data, r = c.raw('GET', '/api/me'); me = json.loads(data); check(me.get('authenticated') and me.get('version'), 'F15: /api/me of a signed-in user has the version')
+    # ---- F15: the Host header
+    def host_status(h):
+        out = raw_exchange(b'GET /favicon.svg HTTP/1.1\r\nHost: ' + h.encode() + b'\r\nConnection: close\r\n\r\n'); return status_of(out)
+    for h in ('127.0.0.1', '127.0.0.1:%d' % PORT, 'localhost', 'LOCALHOST:%d' % PORT, '[::1]:%d' % PORT, '[::1]', '10.20.30.40', 'localhost.'):
+        check(host_status(h) == 200, 'F15: Host %s is accepted' % h)
+    for h in ('evil.example', 'evil.example:%d' % PORT, 'attacker.test.', 'localhost.evil.example', 'a b', '[::1', '127.0.0.1.evil.example'):
+        check(host_status(h) in (421, 400), 'F15: Host %r is refused (got %d)' % (h, host_status(h)))
+    r = admin('web.settings.set', allowed_hosts=['Backup.Example.org']); check(r.get('ok'), 'allowed_hosts accepts a DNS name')
+    check(host_status('backup.example.org') == 200 and host_status('BACKUP.EXAMPLE.ORG:%d' % PORT) == 200, 'F15: a listed host name is accepted (any case, with a port)')
+    check(host_status('other.example.org') == 421, 'F15: an unlisted name is still refused')
+    r = admin('web.settings.set', allowed_hosts=['bad host!']); check(not r.get('ok'), 'allowed_hosts refuses a malformed name')
+    r = admin('web.settings.set', allowed_hosts=[]); check(r.get('ok') and host_status('backup.example.org') == 421, 'allowed_hosts cleared: the name is refused again')
+    # the Origin check still compares Host and Origin
+    st, j = c.api('state', headers={'Origin': 'https://127.0.0.1:%d' % PORT}); check(st == 200, 'F15: a matching Origin still works')
+    # ---- F15: X-Forwarded-For is believed only with trust_proxy AND from a listed proxy; the rightmost foreign entry is the client
+    def audit_has(txt): return txt in admin('web.audit.tail', lines=60)['result']['text']
+    def fail_login(user, xff):
+        Client().api('login', {'user': user, 'password': 'wrong-password-xx'}, csrf=False, headers={'X-Forwarded-For': xff} if xff else {})
+    r = admin('web.settings.set', trust_proxy=False); check(r.get('ok'), 'trust_proxy off')
+    fail_login('xff-off', '10.77.0.1'); advance(100)
+    check(not audit_has('10.77.0.1') and audit_has('xff-off\t127.0.0.1'), 'F15: trust_proxy off: X-Forwarded-For ignored (the audit has the peer)')
+    r = admin('web.settings.set', trust_proxy=True, trusted_proxies=['127.0.0.1', '::1']); check(r.get('ok'), 'trust_proxy on, loopback listed')
+    fail_login('xff-on', '203.0.113.9'); advance(100)
+    check(audit_has('xff-on\t203.0.113.9'), 'F15: a listed proxy: the forwarded address is used')
+    fail_login('xff-chain', '6.6.6.6, 203.0.113.10, 127.0.0.1'); advance(100)
+    check(audit_has('xff-chain\t203.0.113.10') and not audit_has('xff-chain\t6.6.6.6'), 'F15: the rightmost foreign entry counts, not the client-supplied left part')
+    fail_login('xff-junk', 'not-an-address'); advance(100)
+    check(audit_has('xff-junk\t127.0.0.1'), 'F15: a junk header falls back to the peer')
+    r = admin('web.settings.set', trusted_proxies=['10.99.99.99']); check(r.get('ok'), 'trusted_proxies without loopback')
+    fail_login('xff-other', '203.0.113.11'); advance(100)
+    check(audit_has('xff-other\t127.0.0.1') and not audit_has('203.0.113.11'), 'F15: a connection from an address not in trusted_proxies cannot set the client address')
+    r = admin('web.settings.set', trusted_proxies=['not-an-ip']); check(not r.get('ok'), 'trusted_proxies refuses a non-address')
+    admin('web.settings.set', trust_proxy=False, trusted_proxies=['127.0.0.1', '::1'])
+    # ---- F15: a viewer gets a reduced server list; operator and admin the full one
+    st, j = c.api('servers.save', {'server': {'type': 'ftpes', 'name': 'Low FTP', 'host': 'ftp.low.example.invalid', 'port': 21, 'user': 'lowuser-name', 'password': 'Low-Ftp-Pass-1', 'directory': '/low/dir'}})
+    check(j.get('ok'), 'F15: a server for the list test')
+    advance(10); v = Client(); st, j = v.login('lowvw', 'Low-Viewer-Pass-12'); check(st == 200, 'F15: viewer login')
+    st, j = v.api('servers.list'); text = json.dumps(j)
+    check(st == 200 and j['ok'] and any(e.get('name') == 'Low FTP' and e.get('type') == 'ftpes' and e.get('id') for e in j['result']), 'F15: the viewer sees the name, type and id of a server')
+    leak = [k for k in ('ftp.low.example.invalid', 'lowuser-name', '/low/dir', '"host":', '"user":', '"directory":', '"port":') if k in text]
+    check(not leak, 'F15: the viewer does not get host, user and folder of a server (found %r in %s)' % (leak, text[:300]))
+    st, j = c.api('servers.list'); text = json.dumps(j); check('ftp.low.example.invalid' in text and 'lowuser-name' in text, 'F15: the admin gets the full server list')
+    admin('web.users.save', name='lowop', role='operator', password='Low-Operator-Pass1', twofa='off'); advance(10)
+    o = Client(); o.login('lowop', 'Low-Operator-Pass1'); st, j = o.api('servers.list'); check('ftp.low.example.invalid' in json.dumps(j), 'F15: the operator gets the full server list')
+    for u in ('lowadm', 'lowvw', 'lowop'): admin('web.users.delete', name=u)
+
 def t_status_counts():
     st = admin('web.status')['result']
     check(st['enabled'] and st['listening'] and st['users'] >= 3 and 'sessions' in st and st['port'] == PORT, 'web.status fields')
@@ -1025,12 +1091,12 @@ def t_tls_matrix():
     for ver in (ssl.TLSVersion.TLSv1_2, ssl.TLSVersion.TLSv1_3):
         c = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT); c.check_hostname = False; c.verify_mode = ssl.CERT_NONE; c.minimum_version = c.maximum_version = ver
         s = socket.create_connection(('127.0.0.1', PORT), timeout=10); t = c.wrap_socket(s)
-        t.sendall(b'GET /favicon.svg HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n'); 
+        t.sendall(b'GET /favicon.svg HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n'); 
         try: t.recv(100)
         except OSError: pass
         sess = t.session; t.close()
         s = socket.create_connection(('127.0.0.1', PORT), timeout=10); t = c.wrap_socket(s, session=sess)
-        reused = t.session_reused; t.sendall(b'GET /favicon.svg HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n'); d = t.recv(100); t.close()
+        reused = t.session_reused; t.sendall(b'GET /favicon.svg HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n'); d = t.recv(100); t.close()
         check(d.startswith(b'HTTP/1.1 200'), 'resumed %s connection serves (reused=%s)' % (ver.name, reused))
     # a forged / garbage session ticket must just fall back to a full handshake
     c = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT); c.check_hostname = False; c.verify_mode = ssl.CERT_NONE; c.maximum_version = ssl.TLSVersion.TLSv1_2
@@ -1038,13 +1104,13 @@ def t_tls_matrix():
     # TLS 1.2 renegotiation by the client must not crash or be silently honoured in a loop
     try:
         p = subprocess.Popen(['openssl', 's_client', '-connect', '127.0.0.1:%d' % PORT, '-tls1_2', '-quiet'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        out, err = p.communicate(b'R\nR\nR\nR\nR\nGET /favicon.svg HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n', timeout=40)
+        out, err = p.communicate(b'R\nR\nR\nR\nR\nGET /favicon.svg HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n', timeout=40)
         print('   renegotiation x5: stdout %d bytes, stderr %r' % (len(out), err[-120:]), flush=True)
     except subprocess.TimeoutExpired: p.kill(); check(False, 'renegotiation probe hung the client')
     time.sleep(0.5); check(_site_alive(), 'site alive after renegotiation attempts')
     # records at the limits: a 16 KiB+ record, zero-length records, a 1-byte-per-record request
     s = socket.create_connection(('127.0.0.1', PORT), timeout=10); t = ctx_default().wrap_socket(s)
-    for ch in b'GET /favicon.svg HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n': t.send(bytes([ch]))
+    for ch in b'GET /favicon.svg HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n': t.send(bytes([ch]))
     got = b''
     try:
         while True:
@@ -1066,7 +1132,7 @@ def t_tls_matrix():
     hello = bytes.fromhex('16030100c5010000c10303') + bytes(rnd.getrandbits(8) for _ in range(32)) + bytes.fromhex('00') + bytes.fromhex('0004130113020100') + b'\x01\x00' + bytes(rnd.getrandbits(8) for _ in range(150))
     cases = {'empty': b'', 'one byte': b'\x16', 'ssl2 hello': bytes.fromhex('80 2e 01 03 01 00 15 00 00 00 10') + os.urandom(40), 'garbage': os.urandom(3000),
              'record len 0xffff': b'\x16\x03\x03\xff\xff' + os.urandom(100), 'truncated hello': hello[:60], 'bad hello body': hello, 'alert flood': b'\x15\x03\x03\x00\x02\x02\x28' * 500,
-             'http plain': b'GET / HTTP/1.1\r\nHost: x\r\n\r\n', 'zero-len records': b'\x16\x03\x03\x00\x00' * 1000, 'ccs first': b'\x14\x03\x03\x00\x01\x01', 'appdata first': b'\x17\x03\x03\x00\x10' + os.urandom(16)}
+             'http plain': b'GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n', 'zero-len records': b'\x16\x03\x03\x00\x00' * 1000, 'ccs first': b'\x14\x03\x03\x00\x01\x01', 'appdata first': b'\x17\x03\x03\x00\x10' + os.urandom(16)}
     for n, p in cases.items():
         try: tcp(p)
         except OSError: pass
@@ -1108,13 +1174,13 @@ def t_tls_churn():
                     t = ctx_default().wrap_socket(s)
                     if mode == 2: t.close()
                     elif mode == 3:
-                        t.sendall(b'GET /favicon.svg HTTP/1.1\r\nHost: x\r\n\r\n'); t.recv(200); t.close()
+                        t.sendall(b'GET /favicon.svg HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n'); t.recv(200); t.close()
                     elif mode == 4:
-                        t.sendall(b'GET /favicon.svg HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n'); 
+                        t.sendall(b'GET /favicon.svg HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n'); 
                         while t.recv(65536): pass
                         t.close()
                     else:
-                        t.sendall(b'POST /api/state HTTP/1.1\r\nHost: x\r\nContent-Length: 1000\r\n\r\nabc'); t.close()
+                        t.sendall(b'POST /api/state HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 1000\r\n\r\nabc'); t.close()
             except (OSError, ssl.SSLError) as e:
                 with lock: errs.append(repr(e)[:80])
             with lock: done[0] += 1
@@ -1512,6 +1578,7 @@ def main():
     only = [a.split('=',1)[1] for a in sys.argv if a.startswith('--only=')]
     if not QUICK: tests.insert(5, t_malformed_and_slow)
     tests.insert(len(tests) - 1, t_clock_jumps); tests.insert(len(tests) - 1, t_totp_races); tests.insert(len(tests) - 1, t_concurrent_admin); tests.insert(len(tests) - 1, t_rpc_fuzz); tests.insert(len(tests) - 1, t_pfx_variants); tests.insert(len(tests) - 1, t_tls_matrix); tests.insert(len(tests) - 1, t_tls_churn); tests.insert(len(tests) - 1, t_tls_exhaustion)
+    tests.append(t_low_findings)
     tests.append(t_security_extra)                # last: it leaves tasks and users behind
     if only: tests = [t for t in tests if t.__name__ in only[0].split(',')]
     for t in tests:

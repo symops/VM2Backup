@@ -23,6 +23,7 @@ Add user...	사용자 추가...
 Add window	시간대 추가
 Additional names	추가 이름
 Address	주소
+Addresses of the reverse proxies (X-Forwarded-For is believed only from them)	리버스 프록시 주소 (X-Forwarded-For는 이 주소에서 온 것만 신뢰합니다)
 Advanced	고급
 After a lost connection the program reconnects and goes on; nothing finished is sent again.	연결이 끊어지면 프로그램이 다시 연결하여 계속합니다. 완료된 부분은 다시 전송되지 않습니다.
 All	모두
@@ -227,6 +228,7 @@ Once	한 번
 One volume (no resuming)	볼륨 하나(이어받기 불가)
 Only for a network folder that asks for a user name	사용자 이름을 요구하는 네트워크 폴더에만 해당
 Open	열기
+Other host names the site may be reached by (besides IP addresses, localhost and the name of this computer)	사이트에 접속할 수 있는 기타 호스트 이름 (IP 주소, localhost, 이 컴퓨터 이름 제외)
 Owner	소유자
 Parallel jobs	병렬 작업
 Parallel jobs: 1 to 16.	병렬 작업: 1에서 16까지.

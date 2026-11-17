@@ -741,6 +741,7 @@ static Str ServerPath(const Json& s, const Str& sub, const Str& name)
 
 static const char* const kNames[] = { "vm 00001.tar", "\xd0\xb4\xd0\xb8\xd1\x81\xd0\xba \xe6\x97\xa5\xe6\x9c\xac.json", "a  b c.bin", "x.tar.gz.enc.00002", "UPPER.Case", "#hash&amp;%20.dat" };
 
+static bool IsPasvAddrProfile(const Str& n) { return n == "pasv_public" || n == "pasv_cgnat" || n == "pasv_bounce"; }
 VM2B_TEST("ftp", ftp_roundtrip_random)
 {
     if (!AnyFtp(c_)) return true;
@@ -1413,7 +1414,7 @@ VM2B_TEST("ftp", ftp_quirk_servers_roundtrip)
     for (size_t pi = 0; pi < profs.size(); ++pi) {
         const Json& p = profs.at(pi);
         Str name = p.get("name").str();
-        if (p.get("expect").str() != "ok" || name == "big" || name == "lines5k" || name == "slow" || name == "es_reuse" || name == "s_reuse" || name == "pasv_public") continue;
+        if (p.get("expect").str() != "ok" || name == "big" || name == "lines5k" || name == "slow" || name == "es_reuse" || name == "s_reuse" || IsPasvAddrProfile(name)) continue;
         Target* t = MakeFtp(c_, QuirkCfg(*q, p, Uniq(c_, "q"))); T_CHECK(t != nullptr); if (!t) return false;
         bool ok = t->connect(); if (!ok) c_.note("%s connect: %s", name.c_str(), t->err.c_str());
         T_CHECK(ok); if (!ok) { delete t; continue; }
@@ -1551,8 +1552,8 @@ VM2B_TEST("ftp", ftp_lying_data_channel)
     for (size_t pi = 0; pi < profs.size(); ++pi) {
         const Json& p = profs.at(pi);
         Str name = p.get("name").str(), ex = p.get("expect").str();
-        if (ex != "data" && name != "pasv_public") continue;
-        Target* t = MakeFtp(c_, QuirkCfg(*q, p, Uniq(c_, "ld"), name == "pasv_public" ? 4 : 10)); T_CHECK(t != nullptr); if (!t) return false;
+        if (ex != "data" && !IsPasvAddrProfile(name)) continue;
+        Target* t = MakeFtp(c_, QuirkCfg(*q, p, Uniq(c_, "ld"), IsPasvAddrProfile(name) ? 4 : 10)); T_CHECK(t != nullptr); if (!t) return false;
         bool ok = t->connect(); if (!ok) c_.note("%s connect: %s", name.c_str(), t->err.c_str()); T_CHECK(ok); if (!ok) { delete t; continue; }
         DWORD t0 = GetTickCount();
         if (name == "size_long" || name == "size_short") {
@@ -1570,10 +1571,12 @@ VM2B_TEST("ftp", ftp_lying_data_channel)
         } else if (name == "pasv_dead") {
             Vec<Str> l; bool lok = t->list(l); c_.note("pasv_dead: list %s: %s", lok ? "WORKED?!" : "failed", t->err.c_str());
             T_CHECK(!lok); T_CHECK(t->transient);
-        } else {   // pasv_public: an address nobody can reach, the control connection's address does work
+        } else {   // pasv_public / pasv_cgnat / pasv_bounce (security review F13): the PASV reply names a public / CGNAT / third-party
+                   // address; it must never be contacted (the old code tried a public one first and ran into the 4 s connect timeout)
             Bytes d = RandomData(c_, (size_t)c_.range(1, 40000)); bool up = Upload(c_, t, "f.bin", d);
-            c_.note("pasv_public: upload %s after %lu ms: %s", up ? "ok" : "failed", (unsigned long)(GetTickCount() - t0), up ? "" : t->err.c_str());
+            c_.note("%s: upload %s after %lu ms: %s", name.c_str(), up ? "ok" : "failed", (unsigned long)(GetTickCount() - t0), up ? "" : t->err.c_str());
             T_CHECK(up);
+            if (GetTickCount() - t0 > 3000) { c_.note("%s: the announced address seems to have been contacted (%lu ms)", name.c_str(), (unsigned long)(GetTickCount() - t0)); c_.failed = true; }
             if (up) { Bytes g; T_CHECK(Download(c_, t, "f.bin", g)); T_CHECK(SameBytes(g, d)); }
         }
         if (GetTickCount() - t0 > 90000) { c_.note("%s took too long", name.c_str()); c_.failed = true; }

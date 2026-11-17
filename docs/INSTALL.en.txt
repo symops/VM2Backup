@@ -24,6 +24,8 @@ VM2Backup - backup of virtual machines (VMware ESXi / vCenter / folders) to a fo
    - A network folder is a "Network folder (SMB)" server: \\server\share[\folder], the user (DOMAIN\user, user@domain or a local user) and
      the password (stored encrypted with DPAPI, never shown again). See section 5.
    - Lost access to the web site (forgotten password, wrong port): VM2BackupService.exe /reset-web.
+   - The web site accepts only requests whose host name is an IP address, localhost, the name of this computer, a name of the site's certificate or a name listed under
+     Web access, Security (allowed_hosts); any other name (a DNS alias, a reverse proxy's own name) is answered with 421 until it is added there.
 
 3. Removal
    - VM2Backup-Setup.exe > "Remove", or uninstall.cmd as administrator. The settings, the history and the backups are kept

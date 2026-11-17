@@ -23,6 +23,7 @@ Add user...	Добавить пользователя...
 Add window	Добавить окно
 Additional names	Дополнительные имена
 Address	Адрес
+Addresses of the reverse proxies (X-Forwarded-For is believed only from them)	Адреса обратных прокси (X-Forwarded-For принимается только от них)
 Advanced	Дополнительно
 After a lost connection the program reconnects and goes on; nothing finished is sent again.	После обрыва связи программа подключается заново и продолжает; готовое повторно не передаётся.
 All	Все
@@ -227,6 +228,7 @@ Once	Однократно
 One volume (no resuming)	Один том (без возобновления)
 Only for a network folder that asks for a user name	Только для сетевой папки, которая запрашивает имя пользователя
 Open	Открыть
+Other host names the site may be reached by (besides IP addresses, localhost and the name of this computer)	Другие имена узла, по которым доступен сайт (кроме IP-адресов, localhost и имени этого компьютера)
 Owner	Владелец
 Parallel jobs	Параллельных заданий
 Parallel jobs: 1 to 16.	Одновременных заданий: от 1 до 16.

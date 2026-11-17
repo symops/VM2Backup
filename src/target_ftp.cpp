@@ -2,7 +2,7 @@
 //
 //   * control connection: kept open between files; before a command after a pause it is tested (readable = the server spoke or
 //     closed -> reconnect; idle > 5 s -> NOOP) and replaced transparently; NOOP is sent while a long transfer runs ("keepalive")
-//   * data connections: EPSV, falling back to PASV; a private address in the PASV reply is replaced by the control address;
+//   * data connections: EPSV, falling back to PASV; the address in a PASV reply is ignored, the control address is used;
 //     active mode (passive=false) with PORT / EPRT; TLS on the data channel resumes the control channel's session (shared credential)
 //   * errors: lost connection / reset / timeout / 421 425 426 450 451 452 and every other 4xx are transient; auth failures, 550 and
 //     friends, certificate problems are permanent
@@ -24,11 +24,6 @@ struct FtpXfer {
     virtual ~FtpXfer() {}
     virtual void orphan() = 0;
 };
-
-static bool IsPrivateV4(unsigned a, unsigned b)
-{
-    return a == 10 || a == 127 || a == 0 || (a == 172 && b >= 16 && b <= 31) || (a == 192 && b == 168) || (a == 169 && b == 254) || (a >= 224);
-}
 
 class FtpTarget : public Target {
 public:
@@ -305,7 +300,6 @@ bool FtpTarget::openPassive(Data& d, Reply& r)
         } else if (r.code / 100 == 4) return failReply("EPSV failed", r);
         if (!haveEndpoint) m_epsvBroken = true;         // not understood: PASV from now on
     }
-    Str alt;
     if (!haveEndpoint) {
         if (!cmd("PASV", r)) return false;
         if (r.code != 227) return failReply("the server refused passive mode (PASV)", r);
@@ -315,16 +309,13 @@ bool FtpTarget::openPassive(Data& d, Reply& r)
         }
         if (cnt < 6) return fail("cannot read the PASV reply", false);
         port = n[4] * 256 + n[5];
-        Str ip = Str::fmt("%d.%d.%d.%d", n[0], n[1], n[2], n[3]);
-        // A server behind NAT announces its private address: the control connection's address is the one that is reachable.
-        if (!m_ctl.peerIsV6() && ip != host) { if (IsPrivateV4((unsigned)n[0], (unsigned)n[1])) { /* use host */ } else { alt = host; host = ip; } }
+        // The address in the reply is ignored on purpose (FTP bounce, security review F13): the data connection always goes to the
+        // address of the control connection, as with EPSV.  A server behind NAT announces a private address, a hostile one a public
+        // address of a third party; neither is followed.
     }
     if (port <= 0 || port > 65535) return fail("the server announced a bad data port", false);
     TlsOptions o = m_tls;
     if (!d.conn.connect(host, port, false, o)) {
-        if (!alt.empty() && !d.conn.certError) {                     // a public address that does not work: the control address next
-            if (d.conn.connect(alt, port, false, o)) return true;
-        }
         return failNet(Str::fmt("cannot open the data connection to %s:%d", host.c_str(), port).c_str(), d.conn);
     }
     return true;

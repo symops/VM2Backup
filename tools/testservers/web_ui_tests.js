@@ -401,7 +401,7 @@ function makeEnv(router, lang) {
         const checks = find(page(), x => x.tagName === 'input' && x.attributes.type === 'checkbox').slice(-2);
         checks[0].checked = true; checks[1].checked = true; const sessIn = find(page(), x => x.tagName === 'input' && x.attributes.type === 'number')[1]; sessIn.value = '45';
         buttons(page(), 'Apply')[1].click(); await sleep(20);
-        ok(JSON.stringify(last('web.settings.set')) === JSON.stringify({ require_2fa_admins: true, session_minutes: 45, trust_proxy: true }), 'web access: security request: ' + JSON.stringify(last('web.settings.set')));
+        ok(JSON.stringify(last('web.settings.set')) === JSON.stringify({ require_2fa_admins: true, session_minutes: 45, trust_proxy: true, trusted_proxies: [], allowed_hosts: [] }), 'web access: security request: ' + JSON.stringify(last('web.settings.set')));
         ok(page().textContent.indexOf('anybody can fake the address') >= 0, 'web access: the reverse-proxy warning is shown');
         // certificate
         buttons(page(), 'Create new self-signed...')[0].click(); await sleep(10);

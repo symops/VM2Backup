@@ -23,6 +23,7 @@ Add user...	Tambah pengguna...
 Add window	Tambah jendela
 Additional names	Nama tambahan
 Address	Alamat
+Addresses of the reverse proxies (X-Forwarded-For is believed only from them)	Alamat reverse proxy (X-Forwarded-For hanya dipercaya dari alamat ini)
 Advanced	Lanjutan
 After a lost connection the program reconnects and goes on; nothing finished is sent again.	Setelah koneksi terputus, program tersambung kembali dan melanjutkan; apa yang sudah selesai tidak dikirim ulang.
 All	Semua
@@ -227,6 +228,7 @@ Once	Sekali
 One volume (no resuming)	Satu volume (tanpa melanjutkan)
 Only for a network folder that asks for a user name	Hanya untuk folder jaringan yang meminta nama pengguna
 Open	Buka
+Other host names the site may be reached by (besides IP addresses, localhost and the name of this computer)	Nama host lain yang dapat dipakai untuk mengakses situs (selain alamat IP, localhost, dan nama komputer ini)
 Owner	Pemilik
 Parallel jobs	Tugas paralel
 Parallel jobs: 1 to 16.	Tugas paralel: 1 sampai 16.

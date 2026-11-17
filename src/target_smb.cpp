@@ -200,7 +200,7 @@ typedef DWORD (WINAPI *GetLastFn)(LPDWORD, LPWSTR, DWORD, LPWSTR, DWORD);
 
 struct Mpr {                                    // mpr.dll is loaded when needed: the installer and the launcher do not link it
     HMODULE h; AddFn add; CancelFn cancel; GetConnFn getConn; GetLastFn getLast;
-    Mpr() : h(LoadLibraryW(L"mpr.dll")), add(nullptr), cancel(nullptr), getConn(nullptr), getLast(nullptr) {
+    Mpr() : h(LoadLibraryExW(L"mpr.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32)), add(nullptr), cancel(nullptr), getConn(nullptr), getLast(nullptr) {
         if (h) { getLast = (GetLastFn)(void*)GetProcAddress(h, "WNetGetLastErrorW"); add = (AddFn)(void*)GetProcAddress(h, "WNetAddConnection2W"); cancel = (CancelFn)(void*)GetProcAddress(h, "WNetCancelConnection2W"); getConn = (GetConnFn)(void*)GetProcAddress(h, "WNetGetConnectionW"); }
     }
 };

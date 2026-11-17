@@ -23,6 +23,7 @@ Add user...	添加用户...
 Add window	添加时间窗口
 Additional names	附加名称
 Address	地址
+Addresses of the reverse proxies (X-Forwarded-For is believed only from them)	反向代理的地址（仅信任来自这些地址的 X-Forwarded-For）
 Advanced	高级
 After a lost connection the program reconnects and goes on; nothing finished is sent again.	连接中断后，程序会重新连接并继续；已完成的部分不会重复发送。
 All	全部
@@ -227,6 +228,7 @@ Once	一次
 One volume (no resuming)	单个卷（不可续传）
 Only for a network folder that asks for a user name	仅适用于要求用户名的网络文件夹
 Open	打开
+Other host names the site may be reached by (besides IP addresses, localhost and the name of this computer)	可访问本站点的其他主机名（IP 地址、localhost 和本计算机名称除外）
 Owner	所有者
 Parallel jobs	并行作业数
 Parallel jobs: 1 to 16.	并行作业数：1 到 16。

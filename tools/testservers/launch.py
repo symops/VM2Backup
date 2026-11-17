@@ -118,6 +118,8 @@ QUIRKS = [   # name, mode, quirks, expect (ok | perm | transient | hostile)
     ('big', 'plain', 'bigdir=50000', 'ok'),
     ('lines5k', 'plain', 'hostile=lines5k', 'ok'),
     ('pasv_public', 'plain', 'pasv=public,epsv=refuse', 'ok'),
+    ('pasv_cgnat', 'plain', 'pasv=cgnat,epsv=refuse', 'ok'),
+    ('pasv_bounce', 'plain', 'pasv=bounce,epsv=refuse', 'ok'),
     ('size_long', 'plain', 'sizelie=long', 'data'),
     ('size_short', 'plain', 'sizelie=short', 'data'),
     ('listbomb', 'plain', 'listbomb', 'data'),

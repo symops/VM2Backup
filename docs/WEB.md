@@ -15,6 +15,8 @@ abort).  The Windows program is only a small control panel (service state, start
 | `require_2fa_admins` | `false` on a fresh `web.json` | `true` = an `admin` can sign in only with TOTP set up (values already stored are kept) |
 | `session_minutes` | `20` | idle timeout; absolute lifetime is 12 h |
 | `trust_proxy` | `false` | `X-Forwarded-For` is ignored |
+| `trusted_proxies` | `["127.0.0.1", "::1"]` | with `trust_proxy`: `X-Forwarded-For` is believed ONLY on a connection that comes from one of these addresses (and from the right: the first entry that is not itself a proxy of the list is the client); any other connection cannot set the client address |
+| `allowed_hosts` | `[]` | extra host names (DNS names) the site may be reached by; the `Host` header of every request must be an IP address, `localhost`, a name of this computer (short, DNS, NetBIOS) or one of these or a name in the site's own certificate (subjectAltName), otherwise `421` (DNS-rebinding guard) |
 
 A fresh `web.json` (no users, no `default_admin_created` flag) gets one user, **`admin` with the password `admin`** (role `admin`, PBKDF2 like
 every password; audit event `default_admin_created`).  It is created once: deleting every user later does not bring it back, and an
@@ -27,7 +29,7 @@ the login page says that no user is configured and how to get back in (`/reset-w
 On a fresh installation the site already runs: open `https://127.0.0.1:8443/` (the control panel of the Windows program has a button for it), sign in as `admin` / `admin` and change that password under **Web access, Users**.  Everything else is on the same page:
 
 * **Listening interfaces:** a checklist (localhost - always on, a disabled checkbox -, "All interfaces", every adapter from `web.interfaces.list`, extra addresses you add), the port, and for every entry whether it listens or why not.
-* **Security:** require 2FA for administrators, the idle timeout, trust of `X-Forwarded-For` (with a warning: only behind your own reverse proxy).
+* **Security:** require 2FA for administrators, the idle timeout, trust of `X-Forwarded-For` (with a warning: only behind your own reverse proxy) with the list of the proxies' addresses, and the extra host names of the site (`allowed_hosts`).
 * **Certificate:** subject / validity / fingerprint, "Create new self-signed" with extra names, "Upload PFX" (the file travels base64-encoded in the JSON body, 1 MB at most; the site never reads a certificate by a path on the server).
 * **Users:** add / edit / delete, role, password (strength hint), 2FA enrolment with a QR code drawn in the browser (plus the secret and the `otpauth://` link as text), recovery codes shown once, disable.
 * **Audit log:** the tail of `audit.log`.
@@ -40,7 +42,7 @@ web.users.totp_enroll {name}        -> {secret (base32, shown once), uri (otpaut
 web.users.totp_confirm {name, code} -> {recovery_codes[10]}   (shown once; 6-digit code from the authenticator)
 web.users.totp_disable {name}
 web.interfaces.list                 -> every adapter with its IPv4 / IPv6 addresses (for a checklist)
-web.settings.get / web.settings.set {enabled, bind: [...], port, require_2fa_admins, session_minutes, trust_proxy}   -> {settings, warnings[]}
+web.settings.get / web.settings.set {enabled, bind: [...], port, require_2fa_admins, session_minutes, trust_proxy, trusted_proxies: [ip...], allowed_hosts: [name...]}   -> {settings, warnings[]}
 web.cert.generate {names[]} / web.cert.import {pfx_base64 | pfx_path (local channel only), password}
 web.status                          -> listening per entry / address, certificate fingerprint, users, sessions
 web.audit.tail {lines}              -> {text}
@@ -91,13 +93,15 @@ netsh advfirewall firewall delete rule name="VM2Backup web"
 * Roles: `viewer` = state, servers.list, tasks.list, tasks.next, jobs.list, history.list, history.get, backups.list;
   `operator` = viewer + tasks.run, jobs.abort, backups.verify; `admin` = everything the service offers (including restore to ESXi / vCenter, `net.drives` / `net.browse` and the site's own `web.*` commands) except
   `service.shutdown`.  Everything else is 403.
+  **What a viewer sees of the servers:** `servers.list` gives a viewer only `id`, `name`, `type` (and `builtin`) of every server - no host, user, port, key or folder paths, no lock-out details; operator and admin get the full list (passwords stay masked, `has_password`).
+  `GET /api/me` without a sign-in answers only `authenticated: false` and `no_users`; the program version is given to a signed-in user only.
   **Role matrix, what the roles below admin may do with folders and servers:** an operator starts only SAVED tasks (`tasks.run {id}`: the target, `keep`, segment size, speed and the servers come from the task an administrator saved),
   aborts jobs and verifies backups; `backup.run` (a backup described by the request itself: any target server and folder, `keep` that deletes old copies, any registered server with its stored password) is **admin only**
   (an operator gets 403; the "Backup virtual machines..." button is hidden for him).  `backups.list` and `backups.verify` of a viewer / operator with a `directory` work only for the folders the service already knows
   (where its backups were written: `catalog.json`, plus the server's own default folder and its one-level sub-folders); any other folder is refused with an error, `backups.list` without `directory` lists the known ones.  An administrator is not restricted.
   Every start (`backup.run`, `tasks.run`) is written to the audit log with the user, his role, the source server, the VM list, the target server and folder and `keep` (for `tasks.run` taken from the saved task).
-* Sessions: 256-bit random ids in memory, idle 20 min, absolute 12 h, cookie `__Host-vm2b; Path=/; Secure; HttpOnly; SameSite=Strict`
-  (host-only), a per-session CSRF token sent in `X-CSRF-Token`.  A password / role change, 2FA change or user deletion ends the
+* Sessions: 256-bit random ids in memory, idle 20 min, absolute 12 h, cookie `__Host-vm2b_<port>; Path=/; Secure; HttpOnly; SameSite=Strict`
+  (host-only; **the port is part of the name** - browsers do not separate cookies by port, so another HTTPS service on the same host name but another port neither receives our session nor can set a cookie we would accept; the old name without a port is not read), a per-session CSRF token sent in `X-CSRF-Token`.  A password / role change, 2FA change or user deletion ends the
   user's sessions at once.  `POST /api/password` changes the own password.
 * Rate limiting: per IP and per user name (existing or not): after each failure a growing wait (1, 2, 4 ... 60 s), after 8 failures
   15 minutes; while waiting the attempt is answered `429` + `Retry-After` **without being evaluated**.
@@ -126,8 +130,10 @@ The UI is plain JS: no libraries, no inline scripts, no `innerHTML`, nothing fet
 ## Behind a reverse proxy
 
 The site only speaks HTTPS, so the proxy re-encrypts.  Keep it on `127.0.0.1`, set `trust_proxy: true` (the proxy's address must be
-loopback; the **last** `X-Forwarded-For` entry is used as the client address for rate limiting and the audit log), forward `Host`
-unchanged (the `Origin` check compares it) and do not strip `Cookie`.  nginx:
+loopback or listed in `trusted_proxies`; the **last** `X-Forwarded-For` entry that is not itself a listed proxy is used as the client address for rate limiting and the audit log), forward `Host`
+unchanged (the `Origin` check compares it; the name must be this computer's own, one of the names of the site's certificate or listed in `allowed_hosts`, otherwise the site answers `421`) and do not strip `Cookie`.
+**Limit:** a program on the same computer that connects from a listed address (the loopback, when the proxy is on this computer) is indistinguishable from the proxy and can set the address that is
+written to the audit log and used for the per-address limit; the per-name limit and the passwords still hold.  A proxy on another computer: list its address in `trusted_proxies` and take 127.0.0.1 / ::1 out.  nginx:
 
 ```
 location / {
@@ -141,7 +147,7 @@ location / {
 ```
 
 IIS ARR / Caddy / Traefik are the same idea.  The cookie is host-only (`__Host-`), so the proxy must serve the site on its own
-host name over HTTPS.
+host name over HTTPS (the cookie name carries the site's own port, not the proxy's).
 
 ## What is NOT protected / known limits
 
@@ -155,6 +161,7 @@ host name over HTTPS.
   decrypt them, so what keeps ordinary users out is the folder's ACL - since build 1.0.299 the data folder is `SYSTEM` + Administrators only
   (protected DACL, set by the service at start, also on an upgrade); only `logs\` stays writable for Users (the panel writes its log there).
   Changing the account the service runs as loses nothing; a standard (non-admin) service account needs full control of the folder (`icacls`).
+* **Restoring a foreign copy to ESXi trusts its configuration:** the `.vmx` of the archive is rewritten only for names and paths (`EsxiRewriteVmx`); the other keys (`guestinfo.*`, `serialN.fileName`, `isolation.*`, `sharedFolder*`) are carried over.  Restore only copies you made yourself, or look at the configuration first.
 * Denial of service by a network attacker is only limited (timeouts, caps, 429), not prevented; a per-user lockout lets anybody who
   knows a user name lock that user for 15 minutes (accepted trade-off; the local administrator is never locked out).
 * The self-signed certificate is ECDSA P-256 / SHA-256, 825 days; an imported PFX may hold RSA or EC (the key is kept as DER under DPAPI; the old RSA blob format is still read).

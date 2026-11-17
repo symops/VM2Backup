@@ -5,7 +5,7 @@
 #     nofeat nomlsd nosize nomdtm nonlst          the command answers 500/502 (nofeat: FEAT itself is unknown)
 #     list=unix|dos|eplf|none                      LIST format  (none: 502)
 #     nlst=names|paths|dotpaths|empty450           NLST flavour: bare names (default) / "dir/name" / "./name" / 450 "No files found"
-#     epsv=refuse|garbage|hang  pasv=zero|nat|nat172|garbage    EPSV refused / 229 without a port / never answered; PASV announces 0.0.0.0 / 192.168.. / 172.16.. / junk
+#     epsv=refuse|garbage|hang  pasv=zero|nat|nat172|garbage    EPSV refused / 229 without a port / never answered; PASV announces 0.0.0.0 / 192.168.. / 172.16.. / junk / public / cgnat (100.64/10) / bounce (a third party)
 #     banner=multi|120|421|554|spaces              welcome banner variants (multi-line 220-, a 120 "wait" first, 421 busy + close, 554 refused)
 #     login=nopass|acct|busy421|denied             USER answered 230 / PASS answered 332 / 421 / 530
 #     utf8off                                      FEAT without UTF8 (names are bytes either way)
@@ -324,7 +324,7 @@ class Session(threading.Thread):
         pt = s.getsockname()[1]
         k = self.q.get('pasv')
         if k == 'garbage': self.reply(227, 'Entering Passive Mode (what,is,this)'); return
-        ip = {'zero': '0,0,0,0', 'nat': '192,168,1,5', 'nat172': '172,16,9,9', 'public': '203,0,113,7'}.get(k, common.BIND.replace('.', ','))
+        ip = {'zero': '0,0,0,0', 'nat': '192,168,1,5', 'nat172': '172,16,9,9', 'public': '203,0,113,7', 'cgnat': '100,64,0,9', 'bounce': '198,51,100,23'}.get(k, common.BIND.replace('.', ','))
         if k == 'dead': pt = 1
         self.reply(227, 'Entering Passive Mode (%s,%d,%d).' % (ip, pt >> 8, pt & 255))
 
