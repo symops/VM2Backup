@@ -56,7 +56,7 @@ VM2B_TEST("gui", gui_service_stops_and_restarts)
     Svc s(c_, "guisd"); if (!s.up) return false;
     Str ctl = s.tmp.sub("ctl"); Str e; MakeDirs(ctl, e);
     Str result = s.tmp.sub("guitest-result.txt");
-    SetEnvironmentVariableW(L"VM2B_GUITEST_DIR", Wide(s.tmp.path).c_str()); SetEnvironmentVariableW(L"VM2B_GUITEST_ONLY", L"service_control");
+    SetEnvironmentVariableW(L"VM2B_GUITEST_DIR", Wide(s.tmp.path).c_str()); SetEnvironmentVariableW(L"VM2B_GUITEST_ONLY", L"service_control,wrong_server");
     Str cmd = "\"" + exe + "\" /pipe " + s.pipe + " /guitest " + result;
     Wide wc(cmd); size_t n = wcslen(wc.c_str()) + 1; Vec<wchar_t> w; w.resize(n); memcpy(w.data(), wc.c_str(), n * sizeof(wchar_t));
     STARTUPINFOW si; memset(&si, 0, sizeof(si)); si.cb = sizeof(si); PROCESS_INFORMATION pi;

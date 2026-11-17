@@ -70,6 +70,8 @@ DWORD WINAPI SvcThread(LPVOID p)
 // ---- what the panel shows --------------------------------------------------------------------------------------------------------
 struct PanelView {
     bool online = false;                          // the service answers on its pipe
+    bool blocked = false;                         // not online, and the program at the other end of the pipe is not the VM2Backup service (security review F9)
+    unsigned long holderPid = 0; Str holderName;  // ... which process, when it is known (the program file name only)
     int scm = SCM_STOPPED;                        // what the service manager says (when it does not answer)
     Str version, dataDir;
     int web = 0;                                  // 0 = off, 1 = listening, 2 = enabled but not listening
@@ -84,7 +86,7 @@ public:
         group(12, 8, 536, 156, TR("Service"));
         label(28, 32, 118, 20, TR("Service:")); label(150, 32, 386, 20, L"", PANEL_ID_STATE);
         label(28, 56, 118, 20, TR("Version:")); label(150, 56, 386, 20, L"", PANEL_ID_VER);
-        label(28, 80, 118, 20, TR("Data folder:")); label(150, 80, 386, 38, L"", PANEL_ID_DATA);
+        label(28, 80, 118, 20, TR("Data folder:"), PANEL_ID_DATALBL); label(150, 80, 386, 38, L"", PANEL_ID_DATA);
         label(28, 126, 118, 20, TR("Web site:")); label(150, 126, 386, 20, L"", PANEL_ID_WEB);
         button(PANEL_ID_START, 12, 176, 172, 30, TR("Start service")); button(PANEL_ID_STOP, 194, 176, 172, 30, TR("Stop service")); button(PANEL_ID_RESTART, 376, 176, 172, 30, TR("Restart service"));
         button(PANEL_ID_OPENWEB, 12, 216, 263, 30, TR("Open web interface"), true); button(PANEL_ID_LOGS, 285, 216, 263, 30, TR("Open logs folder"));
@@ -97,13 +99,23 @@ public:
     // ---- show a state
     void render(const PanelView& v) {
         if (!ctl(PANEL_ID_STATE)) return;
-        setText(PANEL_ID_STATE, v.online ? U8(TR("Running")) : v.scm == SCM_MISSING ? U8(TR("Not installed")) : U8(TR("Stopped")));
+        setText(PANEL_ID_STATE, v.online ? U8(TR("Running")) : v.blocked ? U8(TR("Blocked: the control channel is held by another program")) : v.scm == SCM_MISSING ? U8(TR("Not installed")) : U8(TR("Stopped")));
         setText(PANEL_ID_VER, v.online && !v.version.empty() ? v.version : Str("-"));
-        setText(PANEL_ID_DATA, v.online && !v.dataDir.empty() ? v.dataDir : Str("-"));
-        Str web = v.web == 1 ? Str::fmt(U8(TR("Listening on %s:%lld")).c_str(), v.host.c_str(), v.port) : v.web == 2 ? U8(TR("Enabled, but not listening")) : U8(TR("Off"));
+        // blocked: the "Data folder" row tells who holds the channel and what to do (the service itself may well be running: Start / Stop below act on the Windows service only)
+        if (v.blocked) {
+            setText(PANEL_ID_DATALBL, U8(TR("Held by:")));
+            setText(PANEL_ID_DATA, !v.holderName.empty() ? Str::fmt(U8(TR("%s (process %lu). Close that program, then restart the service. Start and Stop here control only the Windows service.")).c_str(), v.holderName.c_str(), v.holderPid)
+                                                          : U8(TR("A program that could not be identified. Close it, then restart the service. Start and Stop here control only the Windows service.")));
+        } else {
+            setText(PANEL_ID_DATALBL, U8(TR("Data folder:")));
+            setText(PANEL_ID_DATA, v.online && !v.dataDir.empty() ? v.dataDir : Str("-"));
+        }
+        Str web = v.blocked ? Str("-") : v.web == 1 ? Str::fmt(U8(TR("Listening on %s:%lld")).c_str(), v.host.c_str(), v.port) : v.web == 2 ? U8(TR("Enabled, but not listening")) : U8(TR("Off"));
         setText(PANEL_ID_WEB, web);
         bool installed = v.online || v.scm != SCM_MISSING;
-        enable(PANEL_ID_START, !m_busy && !v.online && installed); enable(PANEL_ID_STOP, !m_busy && v.online); enable(PANEL_ID_RESTART, !m_busy && installed);
+        // blocked: the buttons follow the Windows service (the pipe says nothing about it): Start while it is stopped, Stop while it runs
+        bool svcUp = v.online || (v.blocked && (v.scm == SCM_RUNNING || v.scm == SCM_PENDING));
+        enable(PANEL_ID_START, !m_busy && !svcUp && installed); enable(PANEL_ID_STOP, !m_busy && svcUp); enable(PANEL_ID_RESTART, !m_busy && installed);
     }
 
     void poll() {
@@ -114,7 +126,13 @@ public:
             if (m_polls > 0 && !m_wasOnline && m_adopt) { int l = (int)st.get("settings").get("language").integer(0); if (l != m_lang) { m_lang = l; adoptLanguage(); } }     // the service came back: its language setting is the truth
             Json w; Str e2;
             if (g_client.call("web.status", Json::object(), w, e2)) { m_web = w; v.web = !w.get("enabled").boolean() ? 0 : w.get("listening").boolean() ? 1 : 2; v.host = PanelUrlHost(w.get("address").str()); v.port = (long long)w.get("port").integer(8443); }
-        } else { v.scm = ScmState(); m_web = Json::object(); }
+        } else {
+            v.scm = ScmState(); m_web = Json::object();
+            if (g_client.failure() == vm2b::IPC_WRONG_SERVER) {
+                v.blocked = true; v.holderPid = g_client.holderPid();
+                Str img = g_client.holderImage(); int cut = img.rfind('\\'); v.holderName = cut >= 0 ? img.substr((size_t)cut + 1) : img;
+            }
+        }
         m_wasOnline = v.online; ++m_polls;
         m_view = v; render(v);
     }
@@ -140,6 +158,7 @@ public:
     }
 
     void openWeb() {
+        if (m_view.blocked) { message(U8(TR("Another program holds the control channel of the VM2Backup service, so this program does not talk to it. Close that program, then restart the service.")), true); return; }
         if (!m_view.online) { message(U8(TR("The VM2Backup service is not running, so there is no web site. Start the service first.")), true); return; }
         Json w; Str err;
         if (!g_client.call("web.status", Json::object(), w, err)) { message(ServiceError(err), true); return; }
@@ -192,7 +211,8 @@ public:
         // the texts of every state, the longest ones included, must fit their controls in every language
         PanelView a; a.online = true; a.version = "1.0.298.325"; a.dataDir = "C:\\Users\\Administrator.CORP\\AppData\\Roaming\\Some Long Folder Name\\VM2Backup\\Data"; a.web = 1; a.host = "[fe80::1234:5678:9abc:def0%25eth0]"; a.port = 65535;
         PanelView b; b.scm = SCM_STOPPED; PanelView c; c.scm = SCM_MISSING; PanelView d = a; d.web = 2; PanelView e = a; e.web = 0;
-        const PanelView* all[] = { &a, &b, &c, &d, &e };
+        PanelView f; f.blocked = true; f.scm = SCM_RUNNING; f.holderPid = 4294967295ul; f.holderName = "SomeVeryLongProgramNameOfAnotherVendor-Setup-x64.exe"; PanelView g = f; g.holderName.clear(); g.holderPid = 0; g.scm = SCM_STOPPED;     // blocked: the holder is known / not known
+        const PanelView* all[] = { &a, &b, &c, &d, &e, &f, &g };
         for (const PanelView* v : all) { render(*v); fitAll(); if (Form::s_layoutLog) checkLayout(*Form::s_layoutLog); }
         render(m_view);
     }
@@ -200,7 +220,7 @@ public:
         if (m_stepBusy) return; m_stepBusy = true;
         switch (m_stage++) {
         case 0: layoutVariants(); break;
-        default: printf("selftest: panel shown in %d states, no crash\n", 5); fflush(stdout); PostMessageW(hwnd(), WM_CLOSE, 0, 0); m_exitCode = 0; break;
+        default: printf("selftest: panel shown in %d states, no crash\n", 7); fflush(stdout); PostMessageW(hwnd(), WM_CLOSE, 0, 0); m_exitCode = 0; break;
         }
         m_stepBusy = false;
     }

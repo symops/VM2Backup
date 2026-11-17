@@ -152,7 +152,9 @@ void IpcServer::stop()
 }
 
 // ---- client ----------------------------------------------------------------------------------------------------
-IpcClient::IpcClient() : m_h(INVALID_HANDLE_VALUE) {}
+const char kWrongServerPrefix[] = "wrong server: ";
+
+IpcClient::IpcClient() : m_h(INVALID_HANDLE_VALUE), m_fail(IPC_OK), m_srvPid(0) {}
 IpcClient::~IpcClient() { close(); }
 void IpcClient::close() { if (m_h != INVALID_HANDLE_VALUE) { CloseHandle(m_h); m_h = INVALID_HANDLE_VALUE; } }
 
@@ -183,22 +185,23 @@ Str IpcClient::ServiceImagePath()
 
 static Str NormImage(const Str& p) { wchar_t full[MAX_PATH * 2]; DWORD n = GetFullPathNameW(Wide(p), MAX_PATH * 2, full, nullptr); return (n && n < MAX_PATH * 2 ? FromWide(full) : p).lower(); }
 
-// Is the process at the other end of the pipe the expected program?  "" = yes; else the reason.
-static Str CheckPipeServer(HANDLE h, const Str& expect)
+// Is the process at the other end of the pipe the expected program?  "" = yes; else the reason (it starts with kWrongServerPrefix); pid / img = what is known about it.
+static Str CheckPipeServer(HANDLE h, const Str& expect, ULONG& pid, Str& img)
 {
-    ULONG pid = 0;
-    if (!GetNamedPipeServerProcessId(h, &pid) || !pid) return Str::fmt("cannot tell which program is at the other end of the pipe (%lu)", (unsigned long)GetLastError());
+    pid = 0; img.clear(); Str pre = kWrongServerPrefix;
+    if (!GetNamedPipeServerProcessId(h, &pid) || !pid) { pid = 0; return pre + Str::fmt("cannot tell which program is at the other end of the pipe (%lu)", (unsigned long)GetLastError()); }
     HANDLE p = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-    if (!p) return Str::fmt("cannot look at the program at the other end of the pipe (process %lu, error %lu)", (unsigned long)pid, (unsigned long)GetLastError());
-    wchar_t img[MAX_PATH * 2]; DWORD n = MAX_PATH * 2; BOOL ok = QueryFullProcessImageNameW(p, 0, img, &n); CloseHandle(p);
-    if (!ok) return Str::fmt("cannot read the program file of the process at the other end of the pipe (process %lu)", (unsigned long)pid);
-    if (NormImage(FromWide(img)) != NormImage(expect)) return "the program at the other end of the pipe is not the VM2Backup service (process " + Str::fmt("%lu", (unsigned long)pid) + ", " + FromWide(img) + "): nothing was sent to it";
+    if (!p) return pre + Str::fmt("cannot look at the program at the other end of the pipe (process %lu, error %lu)", (unsigned long)pid, (unsigned long)GetLastError());
+    wchar_t w[MAX_PATH * 2]; DWORD n = MAX_PATH * 2; BOOL ok = QueryFullProcessImageNameW(p, 0, w, &n); CloseHandle(p);
+    if (!ok) return pre + Str::fmt("cannot read the program file of the process at the other end of the pipe (process %lu)", (unsigned long)pid);
+    img = FromWide(w);
+    if (NormImage(img) != NormImage(expect)) return pre + "the program at the other end of the pipe is not the VM2Backup service (process " + Str::fmt("%lu", (unsigned long)pid) + ", " + img + "): nothing was sent to it";
     return Str();
 }
 
 bool IpcClient::connect(const Str& name, int timeoutMs, Str& err)
 {
-    close();
+    close(); m_fail = IPC_OK; m_srvPid = 0; m_srvImage.clear();
     Wide path(PipePath(name));
     Str expect = m_expect; if (expect.empty() && name == kDefaultPipeName) expect = ServiceImagePath();
     DWORD t0 = GetTickCount();
@@ -208,13 +211,13 @@ bool IpcClient::connect(const Str& name, int timeoutMs, Str& err)
         if (m_h != INVALID_HANDLE_VALUE) break;
         DWORD e = GetLastError();
         if (e == ERROR_PIPE_BUSY) WaitNamedPipeW(path, 200);
-        else if (e == ERROR_ACCESS_DENIED) { err = "access denied: run the program as administrator"; return false; }
+        else if (e == ERROR_ACCESS_DENIED) { err = "access denied: run the program as administrator"; m_fail = IPC_DENIED; return false; }
         else Sleep(100);
-        if ((int)(GetTickCount() - t0) >= timeoutMs) { err = e == ERROR_FILE_NOT_FOUND ? "the VM2Backup service is not running" : Str::fmt("cannot connect to the service (%lu)", (unsigned long)e); return false; }
+        if ((int)(GetTickCount() - t0) >= timeoutMs) { m_fail = e == ERROR_FILE_NOT_FOUND ? IPC_NOT_RUNNING : IPC_OTHER; err = e == ERROR_FILE_NOT_FOUND ? "the VM2Backup service is not running" : Str::fmt("cannot connect to the service (%lu)", (unsigned long)e); return false; }
     }
     if (!expect.empty()) {
-        Str why = CheckPipeServer(m_h, expect);
-        if (!why.empty()) { close(); err = why; return false; }
+        ULONG pid = 0; Str img; Str why = CheckPipeServer(m_h, expect, pid, img);
+        if (!why.empty()) { close(); err = why; m_fail = IPC_WRONG_SERVER; m_srvPid = pid; m_srvImage = img; return false; }
     }
     DWORD mode = PIPE_READMODE_MESSAGE;
     SetNamedPipeHandleState(m_h, &mode, nullptr, nullptr);

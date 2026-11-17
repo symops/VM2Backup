@@ -1,7 +1,11 @@
 # English text <TAB> translation (\n line break). Empty = show English. Run tools/gen_lang.py --update after changing the sources.
+%s (process %lu). Close that program, then restart the service. Start and Stop here control only the Windows service.	%s (işlem %lu). Bu programı kapatın, ardından hizmeti yeniden başlatın. Burada Başlat ve Durdur yalnızca Windows hizmetini denetler.
 - Installing VM2Backup -	- VM2Backup yükleniyor -
 - Removing VM2Backup -	- VM2Backup kaldırılıyor -
+A program that could not be identified. Close it, then restart the service. Start and Stop here control only the Windows service.	Tanımlanamayan bir program. Onu kapatın, ardından hizmeti yeniden başlatın. Burada Başlat ve Durdur yalnızca Windows hizmetini denetler.
+Another program holds the control channel of the VM2Backup service, so this program does not talk to it. Close that program, then restart the service.	VM2Backup hizmetinin denetim kanalını başka bir program tutuyor, bu yüzden bu program onunla konuşmuyor. O programı kapatın, ardından hizmeti yeniden başlatın.
 Backup of virtual machines to a folder, FTP, FTP over TLS and SCP	Sanal makinelerin klasöre, FTP, FTP over TLS ve SCP'ye yedeklenmesi
+Blocked: the control channel is held by another program	Engellendi: denetim kanalı başka bir program tarafından tutuluyor
 Browse...	Gözat...
 Close	Kapat
 Closing the running VM2Backup and stopping its service...	Çalışan VM2Backup kapatılıyor ve hizmeti durduruluyor...
@@ -21,6 +25,7 @@ Error: the installation folder is not valid (a full path such as C:\\Programs\\V
 Error: the service could not be registered (are you an administrator?).	Hata: hizmet kaydedilemedi (yönetici misiniz?).
 Exit	Çıkış
 Failed.	Başarısız.
+Held by:	Tutan program:
 Install	Yükle
 Install to:	Yükleme konumu:
 Installed: version %s, %s	Yüklü: sürüm %s, %s

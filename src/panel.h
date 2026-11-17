@@ -3,7 +3,7 @@
 #include "app.h"
 
 enum { PANEL_ID_STATE = 3001, PANEL_ID_VER, PANEL_ID_DATA, PANEL_ID_WEB, PANEL_ID_START, PANEL_ID_STOP, PANEL_ID_RESTART, PANEL_ID_OPENWEB,
-       PANEL_ID_LOGS, PANEL_ID_LANGLBL, PANEL_ID_LANG };       // the Exit button has the id IDCANCEL (Esc presses it)
+       PANEL_ID_LOGS, PANEL_ID_LANGLBL, PANEL_ID_LANG, PANEL_ID_DATALBL };       // the Exit button has the id IDCANCEL (Esc presses it)
 
 enum { PANEL_SVC_START = 0, PANEL_SVC_STOP = 1, PANEL_SVC_RESTART = 2 };
 

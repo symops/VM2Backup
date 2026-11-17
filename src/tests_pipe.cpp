@@ -34,7 +34,10 @@ VM2B_TEST("service", pipe_client_checks_the_program_at_the_other_end)
     LONG before = h.calls;
     { IpcClient cli; cli.expectServerImage("C:\\Windows\\System32\\notepad.exe"); Str e2; bool ok = cli.connect(pipe, 3000, e2);
       if (e2.find("cannot tell") >= 0 || e2.find("cannot look") >= 0 || e2.find("cannot read") >= 0) { c_.skip("this system cannot tell the process behind a pipe"); srv.stop(); return true; }
-      T_CHECK(!ok); T_CHECK(!cli.connected()); T_CHECK(e2.find("not the VM2Backup service") >= 0); c_.note("refused: %s", e2.c_str()); }
+      T_CHECK(!ok); T_CHECK(!cli.connected()); T_CHECK(e2.find("not the VM2Backup service") >= 0); c_.note("refused: %s", e2.c_str());
+      // the refusal is a failure kind of its own ("wrong server"), not "no service": the panel shows "Blocked" with the program, not "Stopped"
+      T_CHECK(cli.failure() == IPC_WRONG_SERVER); T_CHECK(e2.starts_with(kWrongServerPrefix)); T_CHECK(cli.serverPid() == GetCurrentProcessId()); T_CHECK(cli.serverImage().lower() == MyExe().lower());
+      IpcClient none; Str e4; T_CHECK(!none.connect("vm2b-nobody-serves-this-pipe", 150, e4)); T_CHECK(none.failure() == IPC_NOT_RUNNING); T_CHECK(!e4.starts_with(kWrongServerPrefix)); }
     T_CHECK(h.calls == before);                                                          // nothing reached the server
     // no expectation on a custom pipe name: connects as before (the tests and /pipe rely on it)
     { IpcClient cli; T_CHECK(cli.connect(pipe, 3000, err)); Json r; T_CHECK(cli.call("echo", Json::object(), r, err)); }
@@ -58,7 +61,7 @@ VM2B_TEST("winreal", pipe_name_held_by_another_program_is_waited_out)
     Counting h; Str err;
     { IpcServer s1; bool ok = s1.start(pipe, &h, err, "D:(A;;GA;;;WD)"); T_CHECK(!ok); T_CHECK(err.find("already running") >= 0); c_.note("a held name, no waiting: %s", err.c_str()); }
     IpcServer s2; T_CHECK(s2.start(pipe, &h, err, "D:(A;;GA;;;WD)", true)); T_CHECK(s2.waiting());
-    { IpcClient cli; cli.expectServerImage("C:\\Windows\\System32\\notepad.exe"); Str e2; T_CHECK(!cli.connect(pipe, 2000, e2)); T_CHECK(e2.find("not the VM2Backup service") >= 0 || e2.find("cannot") >= 0); }
+    { IpcClient cli; cli.expectServerImage("C:\\Windows\\System32\\notepad.exe"); Str e2; T_CHECK(!cli.connect(pipe, 2000, e2)); T_CHECK(e2.find("not the VM2Backup service") >= 0 || e2.find("cannot") >= 0); T_CHECK(cli.failure() == IPC_WRONG_SERVER); }
     T_CHECK(h.calls == 0);
     CloseHandle(squat);                                                                  // the other program lets go
     bool took = false; for (int i = 0; i < 40 && !took; ++i) { if (!s2.waiting()) took = true; else Sleep(250); }
@@ -75,7 +78,7 @@ VM2B_TEST("winreal", pipe_default_name_client_checks_the_service)
     const char* sq = getenv("VM2B_SQUAT"); bool squat = sq && *sq == '1';
     IpcClient cli; Str err; bool ok = cli.connect(kDefaultPipeName, 4000, err);
     c_.note("default pipe, squatter %s: %s %s", squat ? "present" : "absent", ok ? "connected" : "refused", ok ? "" : err.c_str());
-    if (squat) { T_CHECK(!ok); T_CHECK(err.find("not the VM2Backup service") >= 0); return true; }
+    if (squat) { T_CHECK(!ok); T_CHECK(err.find("not the VM2Backup service") >= 0); T_CHECK(cli.failure() == IPC_WRONG_SERVER); T_CHECK(err.starts_with(kWrongServerPrefix)); return true; }      // (the panel shows this as "Blocked")
     if (!ok) { c_.skip(("no service on the default pipe: " + err).c_str()); return true; }
     Json st; T_CHECK(cli.call("state", Json::object(), st, err)); T_CHECK(st.get("version").str().size() > 3);          // the real service is accepted
     return true;

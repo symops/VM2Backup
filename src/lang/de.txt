@@ -1,7 +1,11 @@
 # English text <TAB> translation (\n line break). Empty = show English. Run tools/gen_lang.py --update after changing the sources.
+%s (process %lu). Close that program, then restart the service. Start and Stop here control only the Windows service.	%s (Prozess %lu). Schließen Sie dieses Programm und starten Sie den Dienst neu. Starten und Beenden steuern hier nur den Windows-Dienst.
 - Installing VM2Backup -	- VM2Backup wird installiert -
 - Removing VM2Backup -	- VM2Backup wird entfernt -
+A program that could not be identified. Close it, then restart the service. Start and Stop here control only the Windows service.	Ein Programm, das nicht identifiziert werden konnte. Schließen Sie es und starten Sie den Dienst neu. Starten und Beenden steuern hier nur den Windows-Dienst.
+Another program holds the control channel of the VM2Backup service, so this program does not talk to it. Close that program, then restart the service.	Ein anderes Programm belegt den Steuerkanal des VM2Backup-Dienstes, deshalb spricht dieses Programm nicht mit ihm. Schließen Sie das andere Programm und starten Sie den Dienst neu.
 Backup of virtual machines to a folder, FTP, FTP over TLS and SCP	Sicherung virtueller Maschinen in einen Ordner, per FTP, FTP over TLS und SCP
+Blocked: the control channel is held by another program	Blockiert: Der Steuerkanal wird von einem anderen Programm belegt
 Browse...	Durchsuchen...
 Close	Schließen
 Closing the running VM2Backup and stopping its service...	Die laufende VM2Backup wird geschlossen und ihr Dienst beendet...
@@ -21,6 +25,7 @@ Error: the installation folder is not valid (a full path such as C:\\Programs\\V
 Error: the service could not be registered (are you an administrator?).	Fehler: Der Dienst konnte nicht registriert werden (sind Sie Administrator?).
 Exit	Beenden
 Failed.	Fehlgeschlagen.
+Held by:	Belegt von:
 Install	Installieren
 Install to:	Installieren in:
 Installed: version %s, %s	Installiert: Version %s, %s

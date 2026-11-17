@@ -196,6 +196,32 @@ void ScenarioServiceControl()
     Check(MainAlive(), "the panel is fine after the restart");
 }
 
+// Another program holds the control channel (security review F9): the panel must not say "Stopped" / "Not installed" but "Blocked", name the holder and keep Start / Stop honest.
+// The test makes the panel's own client expect another program file at the other end of the pipe (g_expectServerImage), so the autotest process that hosts the service is "the other program".
+void ScenarioWrongServer()
+{
+    Str t;
+    Check(WaitLbl(PANEL_ID_STATE, U8(Tr("Running")), 15000), "wrong server: the service is running at the start: " + Lbl(PANEL_ID_STATE));
+    g_expectServerImage = "C:\\vm2b-not-the-service\\VM2BackupService.exe"; g_client.close();
+    Str blocked = U8(Tr("Blocked: the control channel is held by another program"));
+    Check(WaitLbl(PANEL_ID_STATE, blocked, 10000), "the panel shows Blocked, not Stopped: " + Lbl(PANEL_ID_STATE));
+    Check(Lbl(PANEL_ID_STATE) != U8(Tr("Stopped")) && Lbl(PANEL_ID_STATE) != U8(Tr("Not installed")), "not Stopped / Not installed");
+    Check(Lbl(PANEL_ID_DATALBL) == U8(Tr("Held by:")), "the row caption names the holder: " + Lbl(PANEL_ID_DATALBL));
+    Str holder = Lbl(PANEL_ID_DATA);                                                           // "vm2bautotest.exe (process 1234). Close that program, ..." (or the text for a program that could not be identified)
+    Check(holder.find("vm2bautotest.exe (") == 0 || holder == U8(Tr("A program that could not be identified. Close it, then restart the service. Start and Stop here control only the Windows service.")), "the holder is shown: " + holder);
+    Check(holder.find("process ") > 0 || holder.find("vm2bautotest") < 0, "the process id is shown with its program: " + holder);
+    Check(Lbl(PANEL_ID_VER) == "-" && Lbl(PANEL_ID_WEB) == "-", "version and web site are not claimed");
+    Check(WaitFor([&] { return Enabled(PANEL_ID_START) && !Enabled(PANEL_ID_STOP) && Enabled(PANEL_ID_RESTART); }, 10000), "the buttons follow the Windows service (here: reported stopped), not the pipe");
+    Click(Ctl(PANEL_ID_OPENWEB));
+    Check(Box(t) && t == U8(Tr("Another program holds the control channel of the VM2Backup service, so this program does not talk to it. Close that program, then restart the service.")), "Open web interface explains: " + t);
+    Check(MainAlive(), "the panel is fine while blocked");
+    // the other program lets go: back to normal, the row shows the data folder again
+    g_expectServerImage = Str(); g_client.close();
+    Check(WaitLbl(PANEL_ID_STATE, U8(Tr("Running")), 15000), "the panel shows Running again: " + Lbl(PANEL_ID_STATE));
+    Check(Lbl(PANEL_ID_DATALBL) == U8(Tr("Data folder:")) && Lbl(PANEL_ID_DATA).size() > 3 && Lbl(PANEL_ID_DATA) != "-", "the data folder is back: " + Lbl(PANEL_ID_DATA));
+    Check(WaitLbl(PANEL_ID_VER, VM2B_VER_STR, 4000), "the version is back");
+}
+
 // Esc presses Exit (IDCANCEL) and closes the panel: the last thing the test does
 void ScenarioEscCloses()
 {
@@ -207,11 +233,11 @@ DWORD WINAPI ScriptThread(void*)
     Sleep(1500);                                               // the window is up, the first poll done
     typedef void (*Fn)();
     struct Sc { const char* name; Fn fn; } list[] = {
-        { "state", ScenarioState }, { "open web", ScenarioOpenWeb }, { "languages", ScenarioLanguages }, { "window", ScenarioWindow }, { "service_control", ScenarioServiceControl },
+        { "state", ScenarioState }, { "open web", ScenarioOpenWeb }, { "languages", ScenarioLanguages }, { "window", ScenarioWindow }, { "service_control", ScenarioServiceControl }, { "wrong_server", ScenarioWrongServer },
     };
     wchar_t only[256] = L""; GetEnvironmentVariableW(L"VM2B_GUITEST_ONLY", only, 256); Str onlyS = U8(only);
     for (size_t i = 0; i < sizeof(list) / sizeof(list[0]); ++i) {
-        if (onlyS.empty() ? Str(list[i].name) == "service_control" : onlyS.find(list[i].name) < 0) continue;      // service_control needs the autotest to stop / start the service
+        if (onlyS.empty() ? (Str(list[i].name) == "service_control" || Str(list[i].name) == "wrong_server") : onlyS.find(list[i].name) < 0) continue;      // service_control needs the autotest to stop / start the service; wrong_server needs its service
         Log("SCENARIO", list[i].name);
         list[i].fn();
         Vec<HWND> left = Tops(); for (size_t k = 0; k < left.size(); ++k) { Log("INFO", "left open: " + WText(left[k])); PostMessageW(left[k], WM_CLOSE, 0, 0); } Pause(300);

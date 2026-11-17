@@ -1,7 +1,11 @@
 # English text <TAB> translation (\n line break). Empty = show English. Run tools/gen_lang.py --update after changing the sources.
+%s (process %lu). Close that program, then restart the service. Start and Stop here control only the Windows service.	%s(进程 %lu)。请关闭该程序,然后重新启动服务。此处的“启动”和“停止”只控制 Windows 服务。
 - Installing VM2Backup -	- 正在安装 VM2Backup -
 - Removing VM2Backup -	- 正在删除 VM2Backup -
+A program that could not be identified. Close it, then restart the service. Start and Stop here control only the Windows service.	无法识别的程序。请关闭它,然后重新启动服务。此处的“启动”和“停止”只控制 Windows 服务。
+Another program holds the control channel of the VM2Backup service, so this program does not talk to it. Close that program, then restart the service.	另一个程序占用了 VM2Backup 服务的控制通道,因此本程序不与其通信。请关闭该程序,然后重新启动服务。
 Backup of virtual machines to a folder, FTP, FTP over TLS and SCP	将虚拟机备份到文件夹、FTP、FTP over TLS 和 SCP
+Blocked: the control channel is held by another program	已阻止:控制通道被其他程序占用
 Browse...	浏览...
 Close	关闭
 Closing the running VM2Backup and stopping its service...	正在关闭运行中的 VM2Backup 并停止其服务...
@@ -21,6 +25,7 @@ Error: the installation folder is not valid (a full path such as C:\\Programs\\V
 Error: the service could not be registered (are you an administrator?).	错误: 无法注册服务(您是管理员吗?)。
 Exit	退出
 Failed.	失败。
+Held by:	占用者:
 Install	安装
 Install to:	安装到:
 Installed: version %s, %s	已安装: 版本 %s, %s

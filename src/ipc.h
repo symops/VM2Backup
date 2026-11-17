@@ -38,6 +38,11 @@ private:
     friend struct ClientArg;
 };
 
+// Why the last connect() failed (IpcClient::failure()): "wrong server" is a program at the other end of the pipe that is not the VM2Backup service (security
+// review F9), which is not the same as "no service" (nothing at the other end).  The error text of a wrong server starts with kWrongServerPrefix.
+enum IpcFailure { IPC_OK = 0, IPC_NOT_RUNNING, IPC_WRONG_SERVER, IPC_DENIED, IPC_OTHER };
+extern const char kWrongServerPrefix[];
+
 class IpcClient {
 public:
     IpcClient();
@@ -50,9 +55,12 @@ public:
     static Str ServiceImagePath();                                    // the registered program file of the service, else the one next to this program
     bool call(const char* cmd, const Json& args, Json& result, Str& err, int timeoutMs = 0);   // err holds the service's text on a refusal
     bool connected() const { return m_h != INVALID_HANDLE_VALUE; }
+    IpcFailure failure() const { return m_fail; }                      // of the last connect(): IPC_OK after a success
+    unsigned long serverPid() const { return m_srvPid; }                // with IPC_WRONG_SERVER: the process at the other end (0 = not known)
+    const Str& serverImage() const { return m_srvImage; }               // ... and its program file ("" = not known)
     void close();
 private:
-    HANDLE m_h; Str m_expect;
+    HANDLE m_h; Str m_expect; IpcFailure m_fail; unsigned long m_srvPid; Str m_srvImage;
 };
 
 } // namespace vm2b
