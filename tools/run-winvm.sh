@@ -26,7 +26,8 @@
 #   tz        (раунд 8, ПОСЛЕДНЯЯ перед sac) пояса с переходом на летнее время (tzutil), часы гостя Set-Date при отключённом w32time: родные тесты расписания + настоящая служба (guest/tzreal.ps1)
 #   launcher  (раунд 13) лаунчер установщика F7: папка в %TEMP%, DACL, удержание файлов, испорченный хеш (guest/launcher.ps1)
 #   sec       (раунд 13) F2 / F3 / F5 на настоящей службе (guest/sec.ps1)
-#   lowsec    (ревью безопасности, низкие находки) F9 на настоящей службе: имя канала занято другой программой, служба работает и потом занимает канал, клиент не доверяет чужому каналу (guest/lowsec.ps1); ещё НЕ прогонялась на настоящей Windows
+#   lowsec    (ревью безопасности, низкие находки) F9 на настоящей службе: имя канала занято другой программой, служба работает и потом занимает канал, клиент не доверяет чужому каналу (guest/lowsec.ps1);
+#   links     (раунд 16) F6 / F10 на настоящей NTFS (junction, symlink, hard link), V2BENC4 (подмена байта, неверный пароль), архив другой разрядности (guest/links.ps1)
 #   levels    (раунд 13) уровни xz 0-9 и потоки на 32-битной Windows: время, размер, пики памяти службы, restore / verify (guest/levels.ps1)
 #   webshots  (раунд 13) сайт в Edge на госте: горячий режим, уровни сжатия, языки (guest/webshots.ps1)
 #   uacyes    (раунд 13) настоящий запрос UAC, «Да» с хоста, повышенный установщик из удерживаемой папки (guest/uacyes.ps1)
@@ -47,7 +48,7 @@ set -u
 # Скрипт идёт часами, а bash читает его по кускам: правка файла посреди прогона ломает разбор ("syntax error near unexpected token"; так упал прогон
 # 26.10 раунд 2). Поэтому первым делом запускаем собственную копию.
 if [ -z "${VM2B_RUNWINVM_COPY:-}" ]; then
-  SELF_DIR=$(cd "$(dirname "$0")" && pwd); TMPC=$(mktemp /tmp/run-winvm.XXXXXX.sh); cp "$0" "$TMPC"
+  SELF_DIR=$(cd "$(dirname "$0")" && pwd); TMPC=$(mktemp "${TMPDIR:-/tmp}/run-winvm.XXXXXX.sh"); cp "$0" "$TMPC"
   VM2B_RUNWINVM_COPY=1 VM2B_RUNWINVM_DIR=$SELF_DIR exec bash "$TMPC" "$@"
 fi
 R=$(cd "$VM2B_RUNWINVM_DIR/.." && pwd); W=$R/.winvm; RES=$W/shared/results
@@ -500,6 +501,16 @@ if want sec; then
   gj 31-sec 3000 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\sec.ps1' > /dev/null; RC=$?
   tr -d '\r' < "$RES/31-sec.out" | grep -aE '^INFO' | cut -c1-400 | tee -a "$SUM"
   tally sec $RC 31-sec
+fi
+
+if want links; then
+  # раунд 16: F6 / F10 на настоящей NTFS через настоящую службу (junction, символические и жёсткие ссылки) + V2BENC4 (подмена байта, неверный пароль) + архив другой разрядности (guest/links.ps1)
+  gj 34-links 1800 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\links.ps1 links' > /dev/null; RC1=$?
+  gj 34-crypt 1800 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\links.ps1 crypt' > /dev/null; RC2=$?
+  [ -d "$W/shared/x64enc" ] || { VM2B_ARCHIVE_ENC=1 VM2B_ARCHIVE_ARCH=x64 python3 -I "$R/tools/make_x64_archive.py" "${TMPDIR:-/tmp}/x64enc" 1 > /dev/null 2>&1 && mkdir -p "$W/shared/x64enc" && cp -r "${TMPDIR:-/tmp}/x64enc/store" "${TMPDIR:-/tmp}/x64enc/files.sha1" "${TMPDIR:-/tmp}/x64enc/password.txt" "$W/shared/x64enc/"; }
+  gj 34-foreign 1800 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\vm2b\guest\links.ps1 foreign' > /dev/null; RC3=$?
+  for f in 34-links 34-crypt 34-foreign; do tr -d '\r' < "$RES/$f.out" | grep -aE '^INFO' | cut -c1-500 | tee -a "$SUM"; done
+  tally links $(( RC1 + RC2 + RC3 )) 34-links 34-crypt 34-foreign
 fi
 
 if want lowsec; then

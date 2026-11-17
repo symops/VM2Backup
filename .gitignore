@@ -47,3 +47,9 @@ cap.pcap*
 .winvm/shared/x64arch/
 /.winvm/guest-images/
 /.winvm/esxi2/
+/.winvm/hold
+/.winvm/shared/x64enc/
+/.winvm/shared/x86enc/
+/.winvm/shared/x64arch/
+/.winvm/shared/x86arch/
+/.winvm/shared/pki/

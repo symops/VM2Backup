@@ -1350,13 +1350,51 @@ verify 33 - 53 с (пик commit 3 - 77 МиБ), restore 38 - 57 с (4 - 77 Ми
 * Время `levels` на Windows 11 нельзя сравнивать с Windows 10 без учёта нагрузки хоста.
 * Явные потоки на большом наборе, 16 потоков и L8 T4, L9 T4 здесь не гонялись (сокращённая матрица по заданию).
 
+## Раунд 16: Windows 10 x86, фазы F6/F9/F10 и регрессия (цикл 5), 17.11.2026
+
+Настоящая Windows 10 Pro x86 22H2, 4 процессора, 3 ГБ ОЗУ, диск 70 ГБ (`DISK_SIZE=70G` заранее). Сборка 1.0.321.x (`./build.sh`, `ARCH=x86 ./build.sh`, `./package.sh`, список SHA-256 `VM2BHSH1`), ВМ с нуля одной командой `tools/run-winvm.sh x86 --keep --no-build --seed 171117 --phases ...` (установка Windows 1291 с, основной план 13 148 с, около 3,6 ч), затем на той же ВМ `--no-create --phases lowsec,links`. Журналы и снимки: `.winvm-results/x86-20261117-cycle5/` (вне git). Код продукта в этом раунде НЕ менялся (правились только обвязка и тесты), поэтому прогон `tools/run-tests.sh` на Wine не повторялся: он остаётся прогоном 17.11 (две последовательные прогонки, см. `docs/DEV.md`).
+
+### Основной прогон (финальная сборка, V2BENC4, подписанный токен, cookie с портом, Host-проверка, PASV-игнор)
+
+| Фаза | Итог |
+|---|---|
+| autotest core / service / gui | 118 / 0 (4 пропуска), 31 / 0, 4 / 0 (в core: `restore_never_follows_links_in_the_destination`, `restore_state_is_kept_outside_the_destination`, `temporary_files_are_created_exclusively`, `directory_source_does_not_read_files_replaced_by_links` на настоящей NTFS: настоящие junction, `CreateSymbolicLinkW`, жёсткие ссылки) |
+| winreal, verify | 13 / 0 (1 пропуск), 103 / 0 |
+| install, installer-acl, unicode | 32 / 0, 46 / 0, 2 / 0 |
+| web (cookie с портом, Host, TLS, вход, привязка адреса, DPAPI) | 38 / 0 |
+| net ftp / tls / http (PASV-игнор) | 35 / 2 (среда, см. ниже), 1 пропуск |
+| net ssh / scp, net esxi (эмуляторы) | 64 / 0 (1 пропуск), 79 / 0 (3 пропуска) |
+| smb, smbdrive, smbinfo, smbsign | 11 / 0, 1 / 0, 5 / 0, 10 / 0 |
+| svcacct, aclreal, restartjob | 46 / 0, 16 / 0, 12 / 0 |
+| big | 3 / 0 |
+| signinst, launcher, uacyes | 30 / 0, 18 / 0, 7 / 0 |
+| sec (F2, F3, F5, `servers.list` viewer, Host) | 20 / 0 |
+| webshots (вход и сессия с новым именем cookie, шесть языков) | 63 / 0 |
+
+Два падения `ftp_passive_active_and_listing_variants` и `ftp_active_mode_behind_a_nat` - среда, как в раунде 13: гость за NAT qemu (10.0.2.15), активное соединение сервера на хосте не доходит («425 Can't connect», «501 Rejected data connection to foreign address 10.0.2.15»). Пассивные профили (`pasv_public`, `pasv_cgnat`, `pasv_bounce`, F14) прошли.
+
+### Новые фазы
+
+* **`lowsec` (F9, 6 / 6 после правки обвязки; `33-lowsec-*`).** Служба остановлена; PowerShell занимает `\\.\pipe\VM2BackupService` (Everyone - полный доступ, 4 экземпляра); `Start-Service` -> служба Running, сайт 127.0.0.1:8443 отвечает (раньше она останавливалась); клиент канала с именем по умолчанию отказывает: `the program at the other end of the pipe is not the VM2Backup service (process 3464, C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe): nothing was sent to it`; после гибели захватчика служба сама занимает канал; `pipe_name_held_by_another_program_is_waited_out` и клиент против настоящей службы прошли (2 / 2). Ошибки ОБВЯЗКИ (первый прогон 5 / 2): захватчик не слушал канал (`NamedPipeServerStream` без `WaitForConnection`: клиент получал 231 `ERROR_PIPE_BUSY`, до проверки сервера дело не доходило) и `Test-Path` по каналу ненадёжен (заменён на `[IO.Directory]::GetFiles('\\.\pipe\')`). Продукт не менялся.
+* **`links` (F10 и F6 на настоящей службе, 23 / 23; `34-links`, `guest/links.ps1`; вся фаза `links` вместе с `crypt` и `foreign` - 44 / 44).** F10: источник «папка с ВМ» с junction, символической ссылкой на каталог, символической ссылкой на файл и жёсткой ссылкой внутри: задание завершается `Warning`, `skipped (links): jct, sym.vmdk, symdir`; в восстановленной копии метки секретного файла нет, настоящие файлы целы; жёсткая ссылка - обычная запись каталога, копируется как обычный файл (не находка; метка у неё своя). F6: восстановление в папку назначения с (а) junction на чужую папку вместо папки ВМ, (б) символической ссылкой на чужой файл вместо `disk.vmdk`, (в) junction вместо подпапки, (г) жёсткой ссылкой на чужой файл: все четыре `Failed` с сообщениями `refused: "..." in the destination is a link (junction / symbolic link / reparse point); ...` и `... has several hard links; a restore does not write into a file that is ...`; чужие файлы и папки за ссылками побайтно не тронуты, ничего не создано; чистая папка назначения - `Success`, хеши совпадают, служебных файлов в ней нет (кроме `vm2backup-meta.json`), состояние лежит в `C:\ProgramData\VM2Backup\restore-state`; после снятия junction тот же restore проходит (залипшего состояния нет). Ошибка обвязки (первый прогон 43 / 1): жёсткая ссылка на ТОТ ЖЕ секретный файл считалась «чтением за пределами корня»; ссылка - обычный файл, тест исправлен (своя метка). Вторая ошибка обвязки: `Write-Output` внутри функции попадал в её возвращаемое значение (проверки проходили случайно); исправлено (`[Console]::Out.WriteLine`), перепрогон 44 / 44.
+* **V2BENC4 (`crypt`, 15 / 15; `34-crypt`).** Копия с паролем: том начинается с `V2BENC4`; verify и restore с верным паролем, файлы побайтно равны; неверный пароль: `wrong password`, данных нет; подмена одного байта: в заголовке (смещение 12) - `wrong password` (заголовок аутентифицирован ключом: отличить от неверного пароля нельзя, данные не выдаются), в данных - `the encrypted archive is damaged`, в манифесте (`.enc.json`) - `the manifest of the backup does not match its authentication code: it was changed after the backup ...`. Ни падений, ни исключений.
+* **Архив другой разрядности (`foreign`, 6 / 6; `34-foreign`).** Шифрованный архив, сделанный 64-битной службой под Wine (`VM2B_ARCHIVE_ENC=1 tools/make_x64_archive.py`, пароль случайный, в git не попадает), читает 32-битная служба: list, verify, restore (58,8 МБ, 140,8 МБ исходных), хеши равны, неверный пароль отвергнут. Обратно: архив 32-битной службы с настоящей Windows читает 64-битная под Wine (`tools/read_foreign_archive.py`: list, verify, restore, хеши, неверный пароль, 6 / 6, `x86enc-read-by-x64-wine.txt`).
+
+### Вручную (снимки `shots/panel-f9-*.png`)
+
+Панель `VM2Backup.exe` при подменённом сервере канала (лже-сервер PowerShell под обычной сессией занимает имя до старта службы): панель показывает `Service: Stopped`, `Version: -`, `Web site: Off` и не передаёт ничего подменному серверу; служба при этом Running, сайт отвечает. После гибели лже-сервера панель показывает `Running`, версию, `C:\ProgramData\VM2Backup`, `Listening on 127.0.0.1:8443`. Замечание (не уязвимость): при отказе панель пишет «Stopped», а не «канал занят другой программой»; можно доработать текст.
+
+### Подтверждено / опровергнуто на настоящей Windows 10 x86
+
+F6, F9, F10 - подтверждены. F11 (V2BENC4: HKDF, аутентифицированный заголовок, случайный префикс nonce, MAC манифеста), F12 (подписанный токен возобновления: `restart job` 12 / 12 и `resume` в autotest), F13 (cookie с портом, Host - `web`, `webshots`, `sec`), F14 (PASV-игнор - `net ftp`), F15 - подтверждены существующими фазами без падений. Опровергнутых находок нет. Нерешённое: активный FTP за NAT qemu (среда), текст панели при подменённом канале.
+
 ## Results
 
 `.winvm-results/<os>-<time>/`: `summary.txt`, `results/*.out` (every job), `results/autotest-*.txt` (autotest logs), `results/shots/*.png`, `container.log`, `smbreal.log`.
 
-## Дополнение 08.11.2026: что добавлено по ревью безопасности и ещё НЕ прогонялось на настоящей Windows
+## Дополнение 08.11.2026: что добавлено по ревью безопасности (прогнано на настоящей Windows 10 x86 в раундах 13 и 16)
 
-Эти проверки написаны и проходят там, где их можно запустить (Wine), но права NTFS, UAC и повышенный запуск настоящая Windows покажет сама. Прогон на ВМ - следующий этап.
+Эти проверки написаны и проходят под Wine; права NTFS, UAC и повышенный запуск проверены на настоящей Windows 10 x86 (раунды 13 и 16: `installer-acl` 46 / 46, `launcher` 18 / 18, `uacyes` 7 / 7, `sec` 20 / 20).
 
 * Фаза `installer` (`tools/run-winvm.sh`, задание `08-installer-acl`): `.winvm/guest/instacl.ps1` + `instacl-user.ps1`. Ищем: установка вне Program Files (`C:\VM2B-acltest`) даёт защищённый DACL
   (`D:P`, SYSTEM и Administrators - полный доступ, Users - `0x1200a9`), обычный пользователь не подменяет `VM2BackupService.exe`; то же после обновления поверх (права перед ним испорчены `icacls`),
@@ -1367,9 +1405,9 @@ verify 33 - 53 с (пик commit 3 - 77 МиБ), restore 38 - 57 с (4 - 77 Ми
   (`tools/test-package-wine.sh`: изменённый хеш, имя `..\x`, имя с диском - установка отклонена, временная папка убрана). На настоящей Windows надо убедиться, что повышенный (UAC) установщик запускается из удерживаемого файла
   (общий доступ только на чтение допускает запуск, но это проверяется только там) и что папка `%TEMP%\VM2Backup-Setup-<32 hex>` не остаётся.
 
-## Дополнение 17.11.2026: низкие находки ревью безопасности (F6, F9-F15): что написано и НЕ прогонялось на настоящей Windows
+## Дополнение 17.11.2026: низкие находки ревью безопасности (F6, F9-F15): что написано (прогнано на настоящей Windows 10 x86 в раунде 16)
 
-Код исправлен и проверен под Wine (две последовательные прогонки `tools/run-tests.sh`, см. `docs/DEV.md`, «Безопасность: что исправлено»); виртуальная машина с Windows для этого этапа не поднималась. Что Wine не покажет и что ждёт гостевого прогона:
+Код исправлен и проверен под Wine (две последовательные прогонки `tools/run-tests.sh`, см. `docs/DEV.md`, «Безопасность: что исправлено»); гостевой прогон на настоящей Windows 10 x86 выполнен в раунде 16 (см. ниже, все пункты подтверждены). Что Wine не покажет:
 
 * **F6, ссылки в папке назначения (восстановление).** Тесты `restore/restore_never_follows_links_in_the_destination`, `restore/restore_state_is_kept_outside_the_destination`, `restore/temporary_files_are_created_exclusively` (`src/tests_links.cpp`) входят в фазу `autotest` (группы `restore`, `engine`: `02-at-core`).
   Под Wine ссылки - настоящие ссылки Linux (`ln -s` через `start /unix`; собственная `CreateSymbolicLinkW` Wine делает ссылку, которой Wine не видит). На Windows тесты сами делают `CreateSymbolicLinkW` (нужна привилегия) и **junction через `cmd /c mklink /J`** (привилегия не нужна), жёсткую ссылку `CreateHardLinkW`.

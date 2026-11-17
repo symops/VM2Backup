@@ -40,7 +40,11 @@ def core(cmd, **a):
     raise SystemExit('timeout ' + cmd)
 core('settings.set', level=LEVEL, threads=0)
 sv = core('servers.save', server={'type': 'directory', 'name': 'x64 src', 'path': wp(OUT + '/src')}); sid = sv['result']['id']
-el = {'source': {'server': sid, 'vms': ['vmX']}, 'target': {'server': 'local', 'directory': wp(OUT + '/store') + '\\{VM}'}, 'compress': {'codec': 'xz'}, 'encrypt': {'enabled': False}, 'verify': True, 'keep': 0, 'segment_mib': 0}
+ENC = os.environ.get('VM2B_ARCHIVE_ENC') == '1'      # раунд 16: шифрованный архив V2BENC4; пароль случайный, лежит в <выходная папка>/password.txt (в git не попадает)
+if ENC:
+    import secrets
+    PW = 'Aa1-' + secrets.token_hex(12); open(OUT + '/password.txt', 'w').write(PW)
+el = {'source': {'server': sid, 'vms': ['vmX']}, 'target': {'server': 'local', 'directory': wp(OUT + '/store') + '\\{VM}'}, 'compress': {'codec': 'xz'}, 'encrypt': ({'enabled': True, 'password': PW} if ENC else {'enabled': False}), 'verify': True, 'keep': 0, 'segment_mib': 0}
 tk = core('tasks.save', task={'name': 'x64-archive', 'enabled': True, 'elements': [el]}); tid = tk['result']['id']
 job = core('tasks.run', id=tid)['result']['job']
 for _ in range(3000):

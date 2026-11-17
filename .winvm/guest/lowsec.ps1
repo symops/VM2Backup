@@ -1,4 +1,4 @@
-# lowsec.ps1 <start|finish> (ревью безопасности F9, ОБЯЗАТЕЛЬНО на настоящей Windows: Wine не принуждает FILE_FLAG_FIRST_PIPE_INSTANCE):
+﻿# lowsec.ps1 <start|finish> (ревью безопасности F9, ОБЯЗАТЕЛЬНО на настоящей Windows: Wine не принуждает FILE_FLAG_FIRST_PIPE_INSTANCE):
 #   start:  служба остановлена; другая программа (powershell, Everyone - полный доступ) занимает имя канала VM2BackupService; служба ЗАПУСКАЕТСЯ и остаётся в Running
 #           (раньше «cannot create the pipe ... is the service already running?» и остановка навсегда), сайт на 127.0.0.1:8443 работает.
 #           Дальше хост запускает vm2bautotest --only pipe_default_name_client_checks_the_service с VM2B_SQUAT=1: клиент канала отказывается («not the VM2Backup service»).
@@ -6,7 +6,7 @@
 param([string]$Mode = 'start')
 . C:\vm2b\guest\lib.ps1
 $svc = 'VM2BackupService'; $pidFile = 'C:\vm2b\lowsec-squat.pid'
-function Pipe-Exists { Test-Path '\\.\pipe\VM2BackupService' }
+function Pipe-Exists { [bool](@([IO.Directory]::GetFiles('\\.\pipe\')) -contains '\\.\pipe\VM2BackupService') }      # раунд 16: Test-Path по каналу ненадёжен
 function Svc-Status { $s = Get-Service $svc -ErrorAction SilentlyContinue; if ($s) { [string]$s.Status } else { 'none' } }
 function Wait-Svc($want, $sec) { for ($i = 0; $i -lt $sec; $i++) { if ((Svc-Status) -eq $want) { return $true }; Start-Sleep -Seconds 1 }; $false }
 function Web-Ready { for ($i = 0; $i -lt 60; $i++) { $w = New-Web 'https://127.0.0.1:8443'; $r = Web-Login $w; if ($r.Status -eq 200 -and $r.Json.ok) { return $w }; Start-Sleep -Milliseconds 700 }; return $null }
@@ -17,7 +17,8 @@ if ($Mode -eq 'start') {
 $ps = New-Object System.IO.Pipes.PipeSecurity
 $ps.AddAccessRule((New-Object System.IO.Pipes.PipeAccessRule('Everyone', 'FullControl', 'Allow')))
 $s = New-Object System.IO.Pipes.NamedPipeServerStream('VM2BackupService', 'InOut', 4, 'Byte', 'None', 4096, 4096, $ps)
-Start-Sleep -Seconds 1800
+# настоящий захватчик СЛУШАЕТ (раунд 16: без WaitForConnection клиент получал 231 PIPE_BUSY и до проверки сервера дело не доходило)
+for ($k = 0; $k -lt 3000; $k++) { $s.WaitForConnection(); try { $s.Disconnect() } catch {} }
 '@
     $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($code))
     $p = Start-Process powershell -ArgumentList '-NoProfile', '-EncodedCommand', $enc -WindowStyle Hidden -PassThru
