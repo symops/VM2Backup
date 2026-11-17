@@ -358,7 +358,7 @@ VM2B_TEST("winreal", attributes_and_times_after_restore)
     c_.note("restored attributes: ro=0x%lx hidden=0x%lx system+hidden=0x%lx (not restored by design)", (unsigned long)ra, (unsigned long)ha, (unsigned long)sa);
     T_CHECK(!(ra & FILE_ATTRIBUTE_READONLY)); T_CHECK(!(ha & FILE_ATTRIBUTE_HIDDEN)); T_CHECK(!(sa & FILE_ATTRIBUTE_SYSTEM));
     // время записи: 2023-03-14 09:26:53 UTC, допуск 2 с (NTFS 100 нс, tar - секунды)
-    { HANDLE h = CreateFileW(FilePath(JoinPath(dest, "vm1\\hid.vmx")), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr); FILETIME w; T_CHECK(h != INVALID_HANDLE_VALUE && GetFileTime(h, nullptr, nullptr, &w)); CloseHandle(h);
+    { HANDLE h = CreateFileW(FilePath(JoinPath(dest, "vm1\\hid.vmx")), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr); FILETIME w = {}; T_CHECK(h != INVALID_HANDLE_VALUE && GetFileTime(h, nullptr, nullptr, &w)); CloseHandle(h);
       long long dt = (long long)(((unsigned long long)w.dwHighDateTime << 32 | w.dwLowDateTime) / 10000000ull) - (long long)(((unsigned long long)ft.dwHighDateTime << 32 | ft.dwLowDateTime) / 10000000ull);
       c_.note("mtime difference: %lld s", dt); T_CHECK(dt >= -2 && dt <= 2); }
     // существующий файл только для чтения в папке назначения: восстановление либо заменяет его, либо останавливается с ПОНЯТНОЙ ошибкой (молча пропускать нельзя)

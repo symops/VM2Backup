@@ -93,8 +93,8 @@ private:
     void clearFail(const Str& key);
 
     Str m_actor, m_actorIp;
-    Str actorName() const { return m_actor.empty() ? Str("local-admin") : m_actor; }
-    Str actorIp() const { return m_actor.empty() ? Str("pipe") : m_actorIp; }
+    Str actorName() const { if (m_actor.empty()) return Str("local-admin"); return m_actor; }
+    Str actorIp() const { if (m_actor.empty()) return Str("pipe"); return m_actorIp; }
     mutable CRITICAL_SECTION m_cs;
     Str m_dir, m_file, m_auditFile;
     Json m_doc;                                              // {settings, users, cert}

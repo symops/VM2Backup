@@ -395,7 +395,7 @@ bool SuiteDirs(Ctx& c_, const char* type)
             { bool in = false; for (const Str& n : names) if (n == name) in = true; T_CHECK(in); if (!home) T_CHECK(names.size() == 1); }
             T_CHECK(t->remove(name));
             // the same folder through a second target object
-            Target* t2 = MakeT(c_, type, d.dir, e); T_CHECK(t2 && ConnectNote(c_, t2));
+            Target* t2 = MakeT(c_, type, d.dir, e); T_CHECK(t2 && ConnectNote(c_, t2)); if (!t2) return false;
             T_CHECK(t2->list(names)); if (!home) T_CHECK(names.size() == 0);
             delete t2;
         }

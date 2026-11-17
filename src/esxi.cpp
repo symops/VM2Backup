@@ -74,7 +74,7 @@ static bool FolderRequest(HttpClient& c, const char* method, const Str& url0, co
             int sch = l.find("://");
             if (sch <= 0) return true;
             Str rest = l.substr((size_t)sch + 3); int sl = rest.find('/');
-            Str auth = sl >= 0 ? rest.substr(0, (size_t)sl) : rest; next = sl >= 0 ? rest.substr((size_t)sl) : Str("/");
+            Str auth = rest.substr(0, sl >= 0 ? (size_t)sl : (size_t)-1); if (sl >= 0) next = rest.substr((size_t)sl); else next = "/";
             Str hh = auth; int pp = 0;
             int col = auth.rfind(':'); if (col > 0 && auth.find(']') < col) { hh = auth.substr(0, (size_t)col); pp = atoi(auth.c_str() + col + 1); }
             if (hh.lower() != host.lower() || (pp != 0 && pp != port) || (pp == 0 && port != 443)) {
@@ -238,7 +238,8 @@ static Str SafeComponent(const Str& vm)
         Str b = o.substr(0, n).lower();
         if (b == "con" || b == "prn" || b == "aux" || b == "nul" || (n == 4 && (b.starts_with("com") || b.starts_with("lpt")) && b[3] >= '0' && b[3] <= '9')) o = "_" + o;
     }
-    return o.empty() ? Str("vm") : o;
+    if (o.empty()) return Str("vm");
+    return o;
 }
 
 // every component of an archive path made safe (a file named after a VM called "a:b" would otherwise make the backup impossible to restore)
@@ -276,7 +277,8 @@ static Str ThisComputer()
     char n[MAX_COMPUTERNAME_LENGTH + 2]; DWORD k = (DWORD)sizeof(n);
     Str out; if (GetComputerNameA(n, &k)) out = Str(n, (size_t)k);
     Str r; for (size_t i = 0; i < out.size(); ++i) r += (out[i] == ' ' || out[i] == ']' || out[i] == '[') ? '_' : out[i];
-    return r.empty() ? Str("host") : r;
+    if (r.empty()) return Str("host");
+    return r;
 }
 // the runs of this process that are between begin() and end(): a mark with this process's id but a token that is not here belongs to a run that is gone
 static CRITICAL_SECTION g_liveLock; static bool g_liveInit = false; static Vec<Str> g_liveTokens;
@@ -459,7 +461,7 @@ public:
         for (const VmData& v : all) {
             if (v.isTemplate || !v.haveConfig) continue;
             VmInfo i; i.name = v.name;
-            i.state = v.power == "poweredOn" ? "running" : v.power == "poweredOff" ? "stopped" : v.power == "suspended" ? "suspended" : v.power;
+            if (v.power == "poweredOn") i.state = "running"; else if (v.power == "poweredOff") i.state = "stopped"; else if (v.power == "suspended") i.state = "suspended"; else i.state = v.power;
             for (const LxFile& f : v.lx.files) i.size += f.size;
             Str ds, p; EsxiParseDsPath(v.vmPath, ds, p);
             i.extra = v.guest;
@@ -562,7 +564,7 @@ private:
             m_ver = v;
             const XmlNode* r;
             if (call("RetrieveServiceContent", Ref("_this", "ServiceInstance", "ServiceInstance"), r, false)) {
-                const XmlNode* rv = r->child("returnval");
+                [[clang::suppress]] const XmlNode* rv = r->child("returnval");      // call() returned true: resp was set (it is null only when call() returns false)
                 if (!rv) return fail("RetrieveServiceContent returned nothing");
                 m_rootFolder = rv->childText("rootFolder").trim(); m_pc = rv->childText("propertyCollector").trim();
                 m_viewMgr = rv->childText("viewManager").trim(); m_sessMgr = rv->childText("sessionManager").trim(); m_fileMgr = rv->childText("fileManager").trim(); m_vdm = rv->childText("virtualDiskManager").trim(); m_authMgr = rv->childText("authorizationManager").trim();
@@ -824,7 +826,7 @@ private:
             const XmlNode* info = objs.empty() ? nullptr : objs[0].get("info");
             if (!info && !objs.empty() && !objs[0].deniedPriv.empty()) {   // vCenter shows a task only to a user who may read the root folder (found on a real vCenter 7.0.3, round 4)
                 Str pr = objs[0].deniedPriv, ty = objs[0].deniedType, id = objs[0].deniedId;
-                Str lab = id.empty() ? Str("the inventory") : entityLabel(ty, id);
+                Str lab; if (id.empty()) lab = "the inventory"; else lab = entityLabel(ty, id);
                 return fail("the task " + task + " cannot be read: the user lacks the privilege \"" + pr + "\" on " + lab + " (the server shows the state of a task only to a user who has it there, also when the privilege is not inherited): give the user a role with this privilege on that object");
             }
             if (!info) return fail("the task has no state");
@@ -885,7 +887,7 @@ private:
             if (m_hasFault) { tr.ok = false; tr.faultType = m_faultType; tr.faultMsg = m_faultMsg; return true; }
             return false;
         }
-        const XmlNode* rv = r->child("returnval");
+        [[clang::suppress]] const XmlNode* rv = r->child("returnval");      // call() returned true: resp was set (it is null only when call() returns false)
         if (!rv || rv->text.trim().empty()) return fail(Str(method) + " returned no task");
         return waitTask(rv->text.trim(), timeoutSec, tr, honourAbort);
     }
@@ -1240,7 +1242,7 @@ private:
     static Str CloneDescriptorText(const Str& raw, const Str& flatBase, const Str& adapter) {
         Str out; size_t i = 0;
         while (i < raw.size()) {
-            int e = raw.find('\n', i); Str line = e < 0 ? raw.substr(i) : raw.substr(i, (size_t)e - i);
+            int e = raw.find('\n', i); Str line = raw.substr(i, e < 0 ? (size_t)-1 : (size_t)e - i);
             i = e < 0 ? raw.size() : (size_t)e + 1;
             if (line.ends_with("\r")) line = line.substr(0, line.size() - 1);
             if (line.starts_with("CID=")) line = "CID=fffffffe";                    // fixed: the same bytes after a resume
@@ -1982,7 +1984,7 @@ bool Impl::pack(TarWriter& tar, Progress* pr, Str& warning)
                 if ((r.status == 503 || r.status == 500 || r.status == 502 || r.status == 504) && attempt < 2) { m_files->close(); Sleep(500); continue; }
                 have = true;
             }
-            if (r.status == 416) { shrank = true; m_files->close(); }
+            if (r.status == 416) { m_files->close(); }                       // nothing to read: delivered < left, "the file shrank" below
             else if (r.status != 200 && r.status != 206) {
                 m_files->close();
                 Str hint;
@@ -2703,7 +2705,7 @@ static Str BaseName(const Str& v0)
 {
     Str v = VmxUnescape(v0);
     Str ds, p; Str b = v; if (EsxiParseDsPath(v, ds, p)) b = p;
-    int k = b.rfind('/'); return k >= 0 ? b.substr((size_t)k + 1) : b;
+    int k = b.rfind('/'); if (k >= 0) return b.substr((size_t)k + 1); return b;
 }
 static Vec<Str> Lines(const Str& t)
 {

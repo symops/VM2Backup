@@ -272,7 +272,7 @@ const SmbApi* volatile g_api = &kRealApi;
 
 const SmbApi& Api() { return *g_api; }
 
-Str Mapped(const Str& unc) { return Api().mapPath ? Api().mapPath(unc) : unc; }
+Str Mapped(const Str& unc) { if (Api().mapPath) return Api().mapPath(unc); return unc; }
 
 // The connections we made: a share is cancelled when the last holder lets go.
 struct Reg {
@@ -283,7 +283,7 @@ struct Reg {
 };
 Reg& GetReg() { static Reg r; return r; }
 
-Str ServerOf(const Str& root) { Str r = root.lower(); int c = r.find('\\', 2); return c > 0 ? r.substr(0, (size_t)c) : r; }
+Str ServerOf(const Str& root) { Str r = root.lower(); int c = r.find('\\', 2); if (c > 0) return r.substr(0, (size_t)c); return r; }
 
 } // namespace
 

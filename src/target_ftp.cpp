@@ -582,7 +582,7 @@ void FtpTarget::parseNames(const Str& text, int kind, Vec<Str>& out)
     size_t pos = 0;
     while (pos <= text.size()) {
         int nl = text.find('\n', pos);
-        Str line = nl < 0 ? text.substr(pos) : text.substr(pos, (size_t)nl - pos);
+        Str line = text.substr(pos, nl < 0 ? (size_t)-1 : (size_t)nl - pos);
         pos = nl < 0 ? text.size() + 1 : (size_t)nl + 1;
         while (line.size() && (line[line.size() - 1] == '\r' || line[line.size() - 1] == '\n')) line.resize(line.size() - 1);
         if (line.empty()) continue;

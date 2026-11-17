@@ -33,7 +33,8 @@ bool Client::call(const char* cmd, const Json& args, Json& result, Str& err)
 
 struct AsyncJob { Client* c; HWND h; int tag; Str cmd; Json args; };
 
-static DWORD WINAPI AsyncThread(LPVOID p)
+// The result `r` is handed to the receiving window (WM_APP_ASYNC handler frees it); the analyzer does not follow ownership through PostMessage.
+[[clang::suppress]] static DWORD WINAPI AsyncThread(LPVOID p)
 {
     AsyncJob* j = (AsyncJob*)p;
     AsyncResult* r = new AsyncResult; r->tag = j->tag;

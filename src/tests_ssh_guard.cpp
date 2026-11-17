@@ -60,7 +60,7 @@ struct AuthCounts { int failedPw, failedKey, accepted, connections; };
 AuthCounts Counts(Ctx& c, size_t from)
 {
     Sleep(700);                                                   // sshd writes its log asynchronously
-    Str all = ReadLog(c); Str t = all.size() > from ? all.substr(from) : Str();
+    Str all = ReadLog(c); Str t; if (all.size() > from) t = all.substr(from);
     AuthCounts r; r.failedPw = CountOf(t, "Failed password for"); r.failedKey = CountOf(t, "Failed publickey for");
     r.accepted = CountOf(t, "Accepted password for") + CountOf(t, "Accepted publickey for"); r.connections = CountOf(t, "Connection from ");
     return r;

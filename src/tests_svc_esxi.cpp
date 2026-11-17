@@ -343,7 +343,7 @@ VM2B_TEST("svcesxi", esxi_through_service_all_profiles)
         if (variant == 1) { ds = "datastore2"; powerOn = true; }
         if (variant == 2) { usePool = poolId; if (e.vcenter()) { useFolder = folderId; useHost = hostId; } }
         if (variant == 3) newName = "R" + Str::fmt("%u", c_.rnd(100000)) + " " + kNames[c_.rnd(7)];
-        int regBefore = ctl.counter("reg:RegisterVM"), dirs0 = TotalDirs(e);
+        int regBefore = ctl.counter("reg:RegisterVM"), dirs0;
         Json op = GuiOptions(newName, dc, variant == 1 ? ds : Str(), useFolder, usePool, useHost, powerOn);
         Json rjob; Str rj; T_CHECK(StartOp(s, "backups.restore_esxi", RestoreArgs(bdir, archive, pw, srv, op), rj));
         Str rs = s.waitJob(rj, 90000); T_CHECK(rs == "Success" || rs == "Gone");
@@ -459,7 +459,7 @@ VM2B_TEST("svcesxi", restore_esxi_abort_and_service_restart)
     Str archive = rec.get("results").at(0).get("archive").str(); i64 raw = rec.get("results").at(0).get("raw").integer();
     Json bl = s.ok("backups.list", [] { Json a = Obj(); a["server"] = "local"; return a; }()); Str bdir = bl.get("backups").at(0).get("directory").str();
     Str dc = e.vcenter() ? f.spec.dc : Str("ha-datacenter");
-    int histBase = s.historyCount(), dirs0 = TotalDirs(e);
+    int histBase, dirs0 = TotalDirs(e);
     double mbit = (double)raw * 8.0 / 1e6 / 7.0; if (mbit < 0.05) mbit = 0.05;                    // the upload would take about 7 s
     Json lim = Obj(); lim["speed_limit_mbit"] = mbit; s.ok("settings.set", lim);
     Str stateDir = JoinPath(s.opt.dataDir, "restore-state");
@@ -1021,7 +1021,7 @@ VM2B_TEST("svcweb", web_self_administration_over_https)
     WebCli adm(port, fp), opr(port, fp);
     T_CHECK(adm.login("root", pwA.c_str()) == 200); T_CHECK(opr.login("oper", pwO.c_str()) == 200);
     auto set = [&](WebCli& w, const Json& a, Json* r = nullptr) { Json x; int hs = w.post("web.settings.set", a, &x); if (r) *r = x; return hs == 200 && x.get("ok").boolean(); };
-    auto errOf = [&](WebCli& w, const char* cmd, const Json& a) { Json x; w.post(cmd, a, &x); return x.get("ok").boolean() ? Str() : (x.get("error").str().empty() ? Str("?") : x.get("error").str()); };
+    auto errOf = [&](WebCli& w, const char* cmd, const Json& a) { Json x; w.post(cmd, a, &x); if (x.get("ok").boolean()) return Str(); Str er = x.get("error").str(); if (er.empty()) er = "?"; return er; };
     // 1. the site cannot switch itself off; the local channel still can
     { Json a = Obj(); a["enabled"] = false; Str e = errOf(adm, "web.settings.set", a); T_CHECK(e.find("switched off") >= 0); T_CHECK(Cmd(s, "web.status").get("enabled").boolean()); T_CHECK(adm.post("state", Obj()) == 200); }
     // 2. the bind list must keep a loopback entry

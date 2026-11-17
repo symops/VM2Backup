@@ -3312,7 +3312,7 @@ VM2B_TEST("esxi", esxi_cold_orphan_foreign_lock_and_unlock_vm)
         }
         if (c_.coin()) {
             // the administrator releases the VM: our lock goes, the VM runs again, the foreign lock stays
-            Str er, msg; VmSource* src = NewEsxiSource(e.coldCfg(), er); T_CHECK(src != nullptr);
+            Str er, msg; VmSource* src = NewEsxiSource(e.coldCfg(), er); T_CHECK(src != nullptr); if (!src) return false;
             T_CHECK(static_cast<EsxiSource*>(src)->unlockVm(f.spec.name, msg)); T_CHECK(Contains(msg, "released 1")); delete src;
             T_CHECK(PowerOf(ctl, f.spec.name) == "poweredOn"); T_CHECK(!HasVm2bLock(ctl, f.spec.name));
             Str er2, msg2; VmSource* s2 = NewEsxiSource(e.coldCfg(), er2); T_CHECK(static_cast<EsxiSource*>(s2)->unlockVm(f.spec.name, msg2)); T_CHECK(Contains(msg2, "not held")); delete s2;

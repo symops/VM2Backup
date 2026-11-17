@@ -47,13 +47,14 @@ HWND Ctl(int id) { return GetDlgItem(g_wnd, id); }
 UINT g_dpi = 96;
 int Sc(int v) { return MulDiv(v, (int)g_dpi, 96); }
 
-void Say(const wchar_t* fmt, ...)
+// the copy for the log window is freed by the window (WM_APP_LOG handler) or here when the post failed; the analyzer does not follow it through PostMessage
+[[clang::suppress]] void Say(const wchar_t* fmt, ...)
 {
     wchar_t line[600];
     va_list ap; va_start(ap, fmt); _vsnwprintf(line, 590, fmt, ap); va_end(ap);
     line[590] = 0;
     Log(L"%s", line);
-    if (!g_silent && g_wnd) PostMessageW(g_wnd, WM_APP_LOG, 0, (LPARAM)_wcsdup(line));
+    if (!g_silent && g_wnd) { wchar_t* copy = _wcsdup(line); if (copy && !PostMessageW(g_wnd, WM_APP_LOG, 0, (LPARAM)copy)) free(copy); }       // the window frees the copy when it takes it
 }
 
 bool KnownFolder(const KNOWNFOLDERID& id, wchar_t* out)

@@ -272,7 +272,7 @@ void HttpClient::applyCookies(const HttpHeaders& h)
     for (size_t i = 0; i < h.size(); ++i) {
         if (!IEq(h.names[i], "Set-Cookie")) continue;
         Str v = h.values[i];
-        int sc = v.find(';'); Str nv = sc >= 0 ? v.substr(0, (size_t)sc) : v;
+        int sc = v.find(';'); Str nv = v.substr(0, sc >= 0 ? (size_t)sc : (size_t)-1);
         int eq = nv.find('='); if (eq <= 0) continue;
         Str name = nv.substr(0, (size_t)eq).trim(), val = nv.substr((size_t)eq + 1).trim();
         bool remove = val.empty();

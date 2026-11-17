@@ -598,7 +598,7 @@ VM2B_TEST("service", rpc_hostile_arguments_fuzz)
     Json baseSettings = Json::object(); baseSettings["max_history"] = 100; baseSettings["level"] = 3; baseSettings["retry_attempts"] = 3; baseSettings["threads"] = 2;
     int answered = 0, accepted = 0;
     for (int i = 0; i < 700; ++i) {
-        Json a = Json::object(); const char* cmd = "state";
+        Json a = Json::object(); const char* cmd;                                      // every case of the switch (default included) sets it
         switch (c_.rnd(12)) {
         case 0: cmd = "servers.save"; a["server"] = baseServer; a["server"]["name"] = Str::fmt("Fuzzed dir %d", (int)c_.rnd(4)); break;
         case 1: cmd = "tasks.save"; a["task"] = baseTask; a["task"]["name"] = Str::fmt("Fuzzed %d", (int)c_.rnd(6)); break;

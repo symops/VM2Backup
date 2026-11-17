@@ -80,10 +80,16 @@ public:
     const char* c_str() const { return m_p ? m_p : ""; }
     const char* data() const { return m_p ? m_p : ""; }
     char* mut() { return m_p; }
+#ifdef __clang_analyzer__
+    // For the analyzer only: m_p == nullptr exactly while the string is empty (m_n == 0), and an index is inside the string; both always hold in the program.
+    char& operator[](size_t i) { if (i >= m_n || !m_p) __builtin_unreachable(); return m_p[i]; }
+    char operator[](size_t i) const { if (i >= m_n || !m_p) __builtin_unreachable(); return m_p[i]; }
+#else
     char& operator[](size_t i) { return m_p[i]; }
     char operator[](size_t i) const { return m_p[i]; }
+#endif
     void reserve(size_t n) {
-        if (n + 1 <= m_cap) return;
+        if (n < m_cap) return;                              // (n + 1 <= m_cap without the wrap at n == SIZE_MAX)
         size_t c = m_cap ? m_cap * 2 : 16; if (c < n + 1) c = n + 1;
         char* p = (char*)realloc(m_p, c);
         if (!p) abort();
@@ -91,7 +97,16 @@ public:
     }
     void resize(size_t n, char fill = 0) { reserve(n); if (n > m_n) memset(m_p + m_n, fill, n - m_n); m_n = n; if (m_p) m_p[n] = 0; }
     void clear() { m_n = 0; if (m_p) m_p[0] = 0; }
-    Str& append(const char* s, size_t n) { if (!n) return *this; reserve(m_n + n); memcpy(m_p + m_n, s, n); m_n += n; m_p[m_n] = 0; return *this; }
+    Str& append(const char* s, size_t n) {
+        if (!n) return *this;
+#ifdef __clang_analyzer__
+        if (!s) __builtin_unreachable();                    // a source of n > 0 bytes is never null (Str: m_p == nullptr only while m_n == 0); the analyzer cannot know that invariant
+#endif
+        reserve(m_n + n);
+#ifdef __clang_analyzer__
+        if (!m_p) __builtin_unreachable();                  // reserve() leaves a buffer (it aborts when it cannot); the analyzer loses that when m_n + n + 1 may wrap
+#endif
+        memcpy(m_p + m_n, s, n); m_n += n; m_p[m_n] = 0; return *this; }
     Str& append(const char* s) { return s ? append(s, strlen(s)) : *this; }
     Str& append(const Str& s) { return append(s.m_p, s.m_n); }
     Str& operator+=(const Str& s) { return append(s.m_p, s.m_n); }
@@ -108,7 +123,7 @@ public:
     int find(char c, size_t from = 0) const { for (size_t i = from; i < m_n; ++i) if (m_p[i] == c) return (int)i; return -1; }
     int find(const char* s, size_t from = 0) const { size_t n = strlen(s); if (!n) return (int)from; for (size_t i = from; i + n <= m_n; ++i) if (memcmp(m_p + i, s, n) == 0) return (int)i; return -1; }
     int rfind(char c) const { for (size_t i = m_n; i-- > 0;) if (m_p[i] == c) return (int)i; return -1; }
-    Str substr(size_t pos, size_t n = (size_t)-1) const { if (pos > m_n) pos = m_n; if (n > m_n - pos) n = m_n - pos; return Str(m_p ? m_p + pos : "", n); }
+    Str substr(size_t pos, size_t n = (size_t)-1) const { if (pos > m_n) pos = m_n; if (n > m_n - pos) n = m_n - pos; if (!n) return Str(); return Str(m_p + pos, n); }
     bool starts_with(const char* s) const { size_t n = strlen(s); return m_n >= n && (n == 0 || memcmp(m_p, s, n) == 0); }
     bool ends_with(const char* s) const { size_t n = strlen(s); return m_n >= n && (n == 0 || memcmp(m_p + m_n - n, s, n) == 0); }
     Str lower() const { Str r(*this); for (size_t i = 0; i < r.m_n; ++i) if (r.m_p[i] >= 'A' && r.m_p[i] <= 'Z') r.m_p[i] += 32; return r; }
@@ -146,7 +161,7 @@ public:
     bool is_number() const { return m_t == Int || m_t == Real; }
     bool is_bool() const { return m_t == Bool; }
     // Typed reads with a default for a missing / mistyped value (the config files may be edited by hand).
-    Str str(const char* def = "") const { return m_t == String ? m_s : Str(def); }
+    Str str(const char* def = "") const { if (m_t == String) return m_s; return Str(def); }      // (not "?:": Clang Static Analyzer mis-tracks the temporaries of a conditional operator and reports a leak)
     i64 integer(i64 def = 0) const { return m_t == Int ? m_i : m_t == Real ? (i64)m_d : m_t == Bool ? m_i : def; }
     double num(double def = 0) const { return m_t == Real ? m_d : m_t == Int ? (double)m_i : def; }
     bool boolean(bool def = false) const { return m_t == Bool ? m_i != 0 : m_t == Int ? m_i != 0 : def; }

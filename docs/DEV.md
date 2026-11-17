@@ -190,13 +190,22 @@ depends on it. A new group with external resources registers its own teardown th
 * **Clang Static Analyzer** (`csa`): остаются только ложные срабатывания, перечисленные ниже.
 * **CodeQL** `cpp-security-and-quality`: остаются только ложные / допустимые находки, перечисленные ниже.
 
-Что считается ложным и почему (не подавлено в коде, чтобы не засорять исходники; при следующем прогоне те же строки):
+**Clang Static Analyzer: как подавлено (18.11.2026).** До правок прогон (без `tests_esxi.cpp`, он не проходил) давал 455 находок: 386 `unix.Malloc`, 50 `unix.cstring.NullArg`, 7 `core.CallAndMessage`, 5 `deadcode.DeadStores`, 4 `UndefReturn` и по одной других; после правок 0 (по всем 62 файлам `src/*.cpp`). Подавлено точечно, поведение продукта и ABI не менялись:
 
-* CSA `unix.Malloc` «утечка m_p» (около 60 мест, `config.cpp`, `esxi.cpp`, `http.cpp`, ...): анализатор не видит, что `Str`
-  владеет буфером (`~Str` делает `free`, перемещение обнуляет источник); утечки нет (разбор путей по коду).
-* CSA `unix.cstring.NullArg` в `Str::append`: `m_p == nullptr` только при `m_n == 0`, а при `n == 0` функция выходит раньше `memcpy`.
-* CSA `esxi.cpp:550/844` «null»: `call()` возвращает `true` только после `resp = &body->kids[0]`.
-* CSA `client.cpp:45`: `AsyncResult` освобождает окно-получатель `WM_APP_ASYNC`; при неудачном `PostMessage` - `delete r`.
+* **Класс `Str` (`src/base.h`).** Почти все `unix.Malloc` «утечка m_p» были одной причиной: анализатор неверно ведёт временные объекты условного оператора `?:` (`return c ? m_s : Str(def)`), конструктор копирования временного считается новым владельцем без деструктора.
+  Исправлено переписыванием без `?:` с `Str` в `Json::str()`, `XmlNode::childText()`, `HttpHeaders::value()`, `actorName()` / `actorIp()` и в нескольких местах `esxi.cpp`, `http.cpp`, `target_*.cpp`, `winutil.cpp` и тестов (`if (...) return ...; return ...;` вместо `?:`; в `substr` длина берётся без ветвления по `Str`). Это обычный код, не подавление.
+  `unix.cstring.NullArg` в `Str::append` и `core.uninitialized.UndefReturn` в `operator[]`: инварианты класса (`m_p == nullptr` только при `m_n == 0`, источник из `n > 0` байт не равен null, после `reserve()` буфер есть, индекс внутри строки) записаны под `#ifdef __clang_analyzer__` как `__builtin_unreachable()`; в собираемую программу это не попадает.
+  `reserve()` сравнивает `n < m_cap` вместо `n + 1 <= m_cap` (одно и то же без переполнения при `n == SIZE_MAX`).
+* **`[[clang::suppress]]` с причиной в коде** (clang 21; `build.sh` собирает тем же clang, атрибут на сборку не влияет): `AsyncThread` в `src/client.cpp` и `Say` в `src/vm2bsetup.cpp` (результат передаётся окну через `PostMessage`, окно освобождает его в обработчике `WM_APP_ASYNC` / `WM_APP_LOG`, анализатор не следит за владением через сообщение окна);
+  `src/esxi.cpp`, две строки `r->child("returnval")` после `call()` (`call()` возвращает `true` только после `resp = &body->kids[0]`).
+* **Исправлено по существу:** мёртвые записи (`esxi.cpp` `shrank` в ветке 416, `panelutil.cpp` `best`, `tests_deep.cpp` `cmd`, `tests_svc_esxi.cpp` `dirs0` / `histBase`); `tests_winreal.cpp` читал `FILETIME` без инициализации при неудачном `GetFileTime` (теперь `= {}`); в тестах `tests_smb.cpp`, `tests_ssh.cpp`, `tests_ftp.cpp`, `tests_esxi.cpp` после проверки на `nullptr` без выхода шло разыменование (теперь выход).
+
+**Параллельный запуск и лимиты.** `tools/codecheck.sh csa` запускает `tools/csa-file.sh` по каждому `src/*.cpp` параллельно (`CSA_JOBS`, по умолчанию 8) с таймаутом на файл (`CSA_TIMEOUT`, секунд, по умолчанию 1500); весь прогон 7,5 минуты (`CSA_JOBS=12`) вместо двадцати минут в один поток.
+`src/tests_esxi.cpp` (77 тестов, 3,5 тыс. строк) не зависает: одной тяжёлой функции нет, каждая из 77 тестовых функций занимает 5-10 секунд (бюджет узлов по умолчанию 225 тыс. исчерпывается из-за вложенных `Str` / `Json` в каждом `T_CHECK`), всего около 9,5 минуты в один поток; первая попытка прошлого анализа была остановлена на седьмой минуте, не дойдя до конца.
+Для него `csa-file.sh` задаёт `max-nodes=30000`, `max-symbol-complexity=40`, `-analyzer-max-loop 2`: файл проходит за 1 мин 22 с; с `CSA_ESXI_NODES=0` ограничения снимаются: полный анализ занимает 9 мин 38 с. Оба прогона дали одно и то же: после исправления одного разыменования `nullptr` (`esxi_cold_orphan_foreign_lock_and_unlock_vm`) находок нет.
+
+Что осталось ложным и допустимым (не подавлено в коде):
+
 * CodeQL `unused-static-function` (713): тесты регистрируются макросом `VM2B_TEST` (статический объект); `non-constant-format`
   в `vm2bsetup.cpp` / `main.cpp`: формат берётся из `TR("литерал")` (встроенные переводы), данных пользователя в нём нет;
   `stack-address-escape` (`m_active = this`, указатели на функции) - не адрес стека; `schedule.cpp:256` - `mktime`,

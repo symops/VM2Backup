@@ -14,7 +14,7 @@ struct HttpHeaders {
     void add(const Str& n, const Str& v) { names.push_back(n); values.push_back(v); }
     void set(const Str& n, const Str& v);                    // replaces all headers of that name
     const Str* get(const char* n) const;                     // first one, case-insensitive; nullptr when absent
-    Str value(const char* n, const char* def = "") const { const Str* s = get(n); return s ? *s : Str(def); }
+    Str value(const char* n, const char* def = "") const { const Str* s = get(n); if (s) return *s; return Str(def); }      // (no "?:" with a Str: Clang Static Analyzer mis-tracks the temporaries of a conditional operator and reports a leak)
     size_t size() const { return names.size(); }
     void clear() { names.clear(); values.clear(); }
 };

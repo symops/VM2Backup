@@ -20,7 +20,7 @@ struct XmlNode {
     Str attr(const char* local, const char* def = "") const;
     bool hasAttr(const char* local) const;
     Str xsiType() const;                                              // xsi:type without its prefix ("" when absent); attr("xsi:type") is the raw one
-    Str childText(const char* local, const char* def = "") const { const XmlNode* c = child(local); return c ? c->text : Str(def); }
+    Str childText(const char* local, const char* def = "") const { const XmlNode* c = child(local); if (c) return c->text; return Str(def); }      // (no "?:" with a Str: Clang Static Analyzer mis-tracks the temporaries of a conditional operator and reports a leak)
     size_t countChildren(const char* local) const;
 };
 

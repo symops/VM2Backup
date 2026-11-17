@@ -95,7 +95,7 @@ Str JoinPath(const Str& a, const Str& b)
 Str PathBase(const Str& p)
 {
     int i = p.rfind('\\'), j = p.rfind('/'); if (j > i) i = j;
-    return i < 0 ? p : p.substr((size_t)i + 1);
+    if (i < 0) return p; return p.substr((size_t)i + 1);
 }
 
 double UnixNow()

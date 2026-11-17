@@ -12,9 +12,10 @@ SK=/root/.claude/skills/symo-codecheck/scripts
 case "$1" in
 warn) { ARCH=x64 ./build.sh 2>&1; ARCH=x86 ./build.sh 2>&1; } | grep -iE "warning:|error" || echo "0 warnings" ;;
 csa)
-    CF=$(tools/deps-env.sh x64 cflags | sed "s|-I\(\S*\)|-isystem \1|")
-    # shellcheck disable=SC2086
-    sh "$SK/analyze.sh" "$R/src" -DVM2B_HAVE_FTP -DVM2B_HAVE_SSH -DVM2B_HAVE_ESXI $CF > "$OUT/csa.log" 2>&1; tail -1 "$OUT/csa.log" ;;
+    # Параллельно по файлам (CSA_JOBS, по умолчанию 8), у каждого файла свой таймаут (CSA_TIMEOUT, секунд), подробности в tools/csa-file.sh.
+    W=$D/csa-parts; rm -rf "$W"; mkdir -p "$W"
+    ls src/*.cpp | sed 's|.*/||' | xargs -P "${CSA_JOBS:-8}" -I{} sh -c 'tools/csa-file.sh {} > "$0/{}.out" 2>&1' "$W"
+    cat "$W"/*.out > "$OUT/csa.log"; echo "== $(grep -c 'warning:' "$OUT/csa.log") warning(s) in $R/src" | tee -a "$OUT/csa.log" ;;
 codeql)
     CQ=/home/symo/Claude/tools/codeql/bundle-2.27.4/codeql
     printf '#!/bin/sh\ncd %s\nARCH=x64 OUT=%s/qlout TMPDIR=%s exec sh ./build.sh\n' "$R" "$D" "$D" > "$D/qlbuild.sh"; chmod +x "$D/qlbuild.sh"

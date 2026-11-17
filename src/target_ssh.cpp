@@ -265,7 +265,7 @@ i64 ScpReader::read(void* p, size_t n)
     if (m_left == 0) {
         // the trailing ack from the server, ours back
         Str msg; bool fatalErr;
-        if (!ScpAck(m_ch, msg, fatalErr)) { m_state = 3; return fatalErr ? fail("scp: " + msg, false) : fail(m_ch->err.empty() ? Str("connection lost") : m_ch->err, m_ch->err.empty() ? true : m_ch->transient); }
+        if (!ScpAck(m_ch, msg, fatalErr)) { m_state = 3; return fatalErr ? fail("scp: " + msg, false) : fail(m_ch->err.empty() ? "connection lost" : m_ch->err.c_str(), m_ch->err.empty() ? true : m_ch->transient); }
         u8 zero = 0; m_ch->write(&zero, 1);
         m_state = 1; return 0;
     }

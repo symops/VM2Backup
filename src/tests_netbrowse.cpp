@@ -24,7 +24,7 @@ FNet* g_n = nullptr;
 
 Str Lower(const Str& s) { return s.lower(); }
 FServer* Find(const Str& host) { for (size_t i = 0; i < g_n->servers.size(); ++i) if (Lower(g_n->servers[i].name) == Lower(host)) return &g_n->servers[i]; return nullptr; }
-Str HostOf(const Str& r) { Str t = r.substr(2); int c = t.find('\\'); return c >= 0 ? t.substr(0, (size_t)c) : t; }
+Str HostOf(const Str& r) { Str t = r.substr(2); int c = t.find('\\'); if (c >= 0) return t.substr(0, (size_t)c); return t; }
 
 unsigned long FAdd(const wchar_t* remote, const wchar_t* user, const wchar_t* pass)
 {

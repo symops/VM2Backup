@@ -28,7 +28,7 @@ struct FakeNet {
 };
 FakeNet g_f;
 
-Str ServerPart(const Str& r) { int c = r.find('\\', 2); return c > 0 ? r.substr(0, (size_t)c) : r; }
+Str ServerPart(const Str& r) { int c = r.find('\\', 2); if (c > 0) return r.substr(0, (size_t)c); return r; }
 
 unsigned long FakeAdd(const wchar_t* remote, const wchar_t* user, const wchar_t* pass)
 {
@@ -51,7 +51,7 @@ unsigned long FakeAdd(const wchar_t* remote, const wchar_t* user, const wchar_t*
 
 unsigned long FakeCancel(const wchar_t* remote, int force)
 {
-    Str r = FromWide(remote).lower(); ++g_f.cancels; g_f.log.push_back(Str("cancel ") + r + (force ? " force" : ""));
+    Str r = FromWide(remote).lower(); ++g_f.cancels; g_f.log.push_back(Str("cancel ") + r + Str(force ? " force" : ""));
     Str srv = ServerPart(r);
     for (size_t i = g_f.conns.size(); i-- > 0;) if (g_f.conns[i].starts_with((srv + "|").c_str())) { g_f.conns.erase(i); return 0; }
     return 2250;
@@ -225,7 +225,7 @@ VM2B_TEST("smb", wnet_flows)
     }
     // wrong password / wrong user: permanent, nothing about the password in the text, nothing left connected
     {
-        Str e; Target* t = NewSmb(SmbCfg("\\\\fileserver\\backup", "backupuser", "wrong-" "S3cr3t-Pa55"), e); T_CHECK(t != nullptr);
+        Str e; Target* t = NewSmb(SmbCfg("\\\\fileserver\\backup", "backupuser", "wrong-" "S3cr3t-Pa55"), e); T_CHECK(t != nullptr); if (!t) return false;
         T_CHECK(!t->connect()); T_CHECK(!t->transient); T_CHECK(t->err.find("password") >= 0); note(t->err);
         T_CHECK(!t->reconnect()); T_CHECK(!t->transient); note(t->err);
         delete t; T_CHECK(SmbOpenConnections() == 0);
@@ -407,7 +407,7 @@ VM2B_TEST("smb", retention_and_resume_in_a_later_run)
     BackupOptions o; o.kdfIterations = 3000; o.codec.level = 1; o.segmentBytes = 512 * 120; o.verify = false; o.keep = 2;
     o.retry.attempts = 4; o.retry.baseDelayMs = 1; o.retry.maxDelayMs = 2;
     for (int i = 0; i < 4; ++i) {
-        Str e; Target* t = NewSmb(SmbCfg("\\\\fileserver\\backup", "backupuser", kSecret, "keep"), e); T_CHECK(t != nullptr);
+        Str e; Target* t = NewSmb(SmbCfg("\\\\fileserver\\backup", "backupuser", kSecret, "keep"), e); T_CHECK(t != nullptr); if (!t) return false;
         VmSource* src = NewDirectorySource(vms); Manifest m; Str w, err; T_CHECK(BackupVm(*src, vm, *t, o, nullptr, m, w, err)); delete src;
         delete t; Sleep(1100);                                   // the archive names carry a one-second stamp
     }
@@ -504,9 +504,9 @@ VM2B_TEST("smb", directory_source_and_drive_letters)
     Str msg = SmbDriveUnavailableMessage(path); T_CHECK(msg.find("not available to the service") >= 0 && msg.find("UNC path") >= 0 && msg.find("convert") >= 0);
     T_CHECK(SmbDriveUnavailableMessage("C:\\x").find("drive") < 0 || GetDriveTypeW(L"C:\\") == DRIVE_NO_ROOT_DIR);
     T_CHECK(SmbDriveUnavailableMessage("\\\\h\\s").empty()); T_CHECK(SmbDriveUnavailableMessage("relative\\x").empty());
-    Json lc = Json::object(); lc["type"] = "local"; lc["path"] = path; Target* lt = MakeTarget(lc, e); T_CHECK(lt != nullptr);
+    Json lc = Json::object(); lc["type"] = "local"; lc["path"] = path; Target* lt = MakeTarget(lc, e); T_CHECK(lt != nullptr); if (!lt) return false;
     T_CHECK(!lt->connect()); T_CHECK(lt->err.find("not available to the service") >= 0); delete lt;
-    Json ds = Json::object(); ds["type"] = "directory"; ds["path"] = path; VmSource* d2 = MakeSource(ds, e); T_CHECK(d2 != nullptr);
+    Json ds = Json::object(); ds["type"] = "directory"; ds["path"] = path; VmSource* d2 = MakeSource(ds, e); T_CHECK(d2 != nullptr); if (!d2) return false;
     Vec<VmInfo> v2; T_CHECK(!d2->list(v2)); T_CHECK(d2->err.find("not available to the service") >= 0); delete d2;
     // resolving a typed drive path in the GUI: a drive that is not a network drive is refused with a reason
     Str unc, re; T_CHECK(!SmbResolveDrivePath(path, unc, re)); T_CHECK(!re.empty());

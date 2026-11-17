@@ -39,7 +39,7 @@ bool Pick(const Json& st, Str& host)
             int r = Rank(a); if (r < best) { best = r; bestAddr = a; }
         }
     }
-    if (best == 99) { Str a = st.get("address").str(); if (a.empty()) return false; bestAddr = a; best = Rank(a); }
+    if (best == 99) { Str a = st.get("address").str(); if (a.empty()) return false; bestAddr = a; }
     if (IsWildcard(bestAddr)) bestAddr = bestAddr.find(':') >= 0 ? "::1" : "127.0.0.1";
     host = bestAddr; return true;
 }

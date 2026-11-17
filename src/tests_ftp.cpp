@@ -394,7 +394,7 @@ VM2B_TEST("http", http_get_framing_random)
             T_CHECK(r.status == 200); T_CHECK(r.body != nullptr);
             if (kind == 0) T_CHECK(r.contentLength == (i64)n); else T_CHECK(r.contentLength == -1);
             bool good = false; i64 got = DrainPattern(r.body, good);
-            if (got != (i64)n || !good) c_.note("%s: got %lld want %llu good=%d err=%s", path.c_str(), (long long)got, (unsigned long long)n, (int)good, r.body->err.c_str());
+            if (got != (i64)n || !good) c_.note("%s: got %lld want %llu good=%d err=%s", path.c_str(), (long long)got, (unsigned long long)n, (int)good, r.body ? r.body->err.c_str() : "");
             T_CHECK(got == (i64)n); T_CHECK(good);
             if (kind >= 2 && i + 1 < reqs) ++expectConnects;      // these end the connection: the next request opens a new one
         }
