@@ -21,7 +21,7 @@ for a possible restore in `/home/symo/Claude/.wip/gui-full-backup/` (sources, la
   (SSH by libssh2; SFTP is not supported). The service cannot see the drive letters of a user: use the UNC path. A folder with VMs may also lie on a network share.
 
 * **Archive:** tar split into independent volumes, compressed with xz (LZMA2, the only compressor: levels 0-9 = the real xz presets `xz -0` .. `xz -9`, default 7, a task without a level takes the one of the Settings, see `docs/WEB.md` "Compression levels"; archives are `*.tar.xz[.enc]`; the number of compression threads is a setting, Auto by default), optionally encrypted
-  (AES-256-GCM, PBKDF2), every volume with a SHA-256 in the manifest.
+  (AES-256-GCM with separate keys derived from a PBKDF2 key, the volume header and the manifest authenticated), every volume with a SHA-256 in the manifest.
 * **Resume:** a backup, a verification and a restore continue after a lost connection (volume by volume) and after a restart of
   the service. Restore to ESXi uploads whole files (HTTP PUT cannot append): a lost connection re-sends the current file.
 * **Restore:** to a folder, or to an ESXi host / vCenter (files are uploaded and the VM is registered); both from the web site's Backup Explorer ("Restore to": Folder / ESXi host or vCenter, with the same choices as the old Windows dialog; admin role only, because the service writes as SYSTEM / connects with stored credentials).
