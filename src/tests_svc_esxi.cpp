@@ -202,6 +202,20 @@ bool HistoryOf(Svc& s, const Str& jobId, Json& rec, int ms = 30000)
     return false;
 }
 
+// waits (by the state, not by the clock) until a restore job is in the middle of its upload: the job still runs (is waiting for its turn or runs), the new VM folder is on the host
+// (more folders than `dirs0`) and the resume state of the restore has been written; false = the job ended first or `ms` passed
+bool WaitUploading(Svc& s, const Env& e, int dirs0, const Str& stateDir, const Str& jobId, int ms = 30000)
+{
+    DWORD t0 = GetTickCount();
+    while ((int)(GetTickCount() - t0) < ms) {
+        Str js = JobRow(s, jobId).get("status").str(); if (js != "Running" && js != "Waiting") return false;          // ended (or gone) before the upload was seen
+        Vec<FI> st; Walk(stateDir, "", st);
+        if (TotalDirs(e) > dirs0 && !st.empty()) return true;
+        Sleep(20);
+    }
+    return false;
+}
+
 // starts an operation job (verify / restore / restore_esxi); finish = true waits for it
 bool StartOp(Svc& s, const char* cmd, const Json& a, Str& jobId)
 {
@@ -435,7 +449,8 @@ VM2B_TEST("svcesxi", restore_esxi_speed_limit_setting)
     // the same limit set while a restore runs is followed by the running job (the scheduler tick re-reads it)
     Json slow = Obj(); slow["speed_limit_mbit"] = mbit; s.ok("settings.set", slow);
     Str n3 = f.spec.name + " retuned"; Str j3; T_CHECK(StartOp(s, "backups.restore_esxi", RestoreArgs(bdir, archive, "", srv, GuiOptions(n3, dc, "", "", "", "", false)), j3));
-    Sleep(300); Json off2 = Obj(); off2["speed_limit_mbit"] = 0; s.ok("settings.set", off2);
+    { double sn = 0; for (int i = 0; i < 150 && sn == 0; ++i) { Json row = JobRow(s, j3); if (!row.is_null() && row.get("limit_mbit").num() > 0) sn = row.get("limit_mbit").num(); else Sleep(20); } T_CHECK(sn > 0); }     // the job runs with the limit (was Sleep(300))
+    Json off2 = Obj(); off2["speed_limit_mbit"] = 0; s.ok("settings.set", off2);
     bool freed = false; for (int i = 0; i < 100 && !freed; ++i) { Json row = JobRow(s, j3); freed = row.is_null() || row.get("limit_mbit").num() == 0; if (!freed) Sleep(20); }
     T_CHECK(freed);
     st = s.waitJob(j3, 90000); T_CHECK(st == "Success" || st == "Gone");
@@ -466,7 +481,7 @@ VM2B_TEST("svcesxi", restore_esxi_abort_and_service_restart)
 
     // ---- a. cancel (jobs.abort): the job ends "Abort", the host keeps nothing, no state is left
     Str nameA = f.spec.name + " cancelled"; Str ja; T_CHECK(StartOp(s, "backups.restore_esxi", RestoreArgs(bdir, archive, "", srv, GuiOptions(nameA, dc, "", "", "", "", false)), ja));
-    Sleep(1200);
+    T_CHECK(WaitUploading(s, e, dirs0, stateDir, ja));                                                         // (was Sleep(1200): the upload is rate limited to about 7 s)
     T_CHECK(JobRow(s, ja).get("status").str() == "Running");
     { Json ab = Obj(); ab["id"] = ja; s.ok("jobs.abort", ab); }
     Str sa1 = s.waitJob(ja, 60000); T_CHECK(sa1 == "Abort" || sa1 == "Gone"); if (sa1 != "Abort" && sa1 != "Gone") c_.note("abort ended as '%s'", sa1.c_str());
@@ -478,7 +493,7 @@ VM2B_TEST("svcesxi", restore_esxi_abort_and_service_restart)
     // ---- b. the service restarts in the middle of a restore: the job pauses (no history row, nothing registered, the uploaded files stay)
     Str nameB = f.spec.name + " interrupted"; Json opB = GuiOptions(nameB, dc, "", "", "", "", false);
     Str jb; T_CHECK(StartOp(s, "backups.restore_esxi", RestoreArgs(bdir, archive, "", srv, opB), jb));
-    Sleep(2500);
+    T_CHECK(WaitUploading(s, e, dirs0, stateDir, jb));                                                         // (was Sleep(2500))
     T_CHECK(JobRow(s, jb).get("status").str() == "Running");
     int dirsDuring = TotalDirs(e);
     T_CHECK(s.restart()); if (c_.failed) return false;
