@@ -35,7 +35,7 @@ Target* DLocal(const Str& path) { Json tc = Json::object(); tc["type"] = "local"
 RetryPolicy DFast() { RetryPolicy r; r.attempts = 2; r.baseDelayMs = 1; r.maxDelayMs = 2; return r; }
 
 // Rewrites the manifest so that sizes and hashes match the volume files as they are NOW (segments past `keepSegs` are dropped).
-Str g_rehashErr;
+Str g_rehashErr, g_rehashPw;      // g_rehashPw: the password of an encrypted copy (the manifest is signed again, as the writer would)
 bool Rehash(Target& t, const Str& store, Manifest m, size_t keepSegs)
 {
     if (keepSegs < m.segments.size()) m.segments.resize(keepSegs);
@@ -49,7 +49,7 @@ bool Rehash(Target& t, const Str& store, Manifest m, size_t keepSegs)
         for (int k = 0; k < 32; ++k) all.push_back(h[k]);
     }
     u8 d[32]; Sha256(all.data(), all.size(), d); m.sha256 = HexEncode(d, 32);
-    Str js = m.toJson().dump(true);
+    Str js; if (!ManifestText(m, g_rehashPw, js)) { g_rehashErr = "manifest text"; return false; }
     for (int attempt = 0; attempt < 3; ++attempt) {                      // (the host may be loaded by other test runs: one failed write was seen once in ~20 runs, not reproducible)
         if (t.put_bytes(m.archive + ".json", js.data(), js.size())) return true;
         g_rehashErr = "put manifest: " + t.err; Sleep(300);
@@ -76,7 +76,7 @@ VM2B_TEST("engine", deep_bitflip_every_byte_rehashed)
     for (int enc = 0; enc < 2; ++enc) {
         Str root = tmp.sub(Str::fmt("vms%d", enc).c_str()); MakeTinyVm(c_, root, 1500 + (size_t)c_.rnd(1500), 2);
         BackupOptions o; o.kdfIterations = 1000; o.retry = DFast(); o.codec.level = 1 + enc * 4; o.segmentBytes = (u64)512 * 4000; o.verify = false;
-        if (enc) o.password = "flip-pw";
+        if (enc) o.password = "flip-pw"; g_rehashPw = o.password;
         Str store = tmp.sub(Str::fmt("s%d", enc).c_str()); Target* t = DLocal(store); VmSource* src = NewDirectorySource(root);
         Manifest m; Str w, err; T_CHECK(BackupVm(*src, "vm", *t, o, nullptr, m, w, err)); delete src;
         T_CHECK(m.segments.size() == 1);
@@ -123,7 +123,7 @@ VM2B_TEST("engine", deep_missing_tail_volumes_rehashed)
     for (int enc = 0; enc < 2; ++enc) {
         Str root = tmp.sub(Str::fmt("vms%d", enc).c_str()); MakeTinyVm(c_, root, 60000, 3);
         BackupOptions o; o.kdfIterations = 1000; o.retry = DFast(); o.codec.level = 1; o.segmentBytes = 512 * 40; o.verify = false;
-        if (enc) o.password = "tail-pw";
+        if (enc) o.password = "tail-pw"; g_rehashPw = o.password;
         Str store = tmp.sub(Str::fmt("s%d", enc).c_str()); Target* t = DLocal(store); VmSource* src = NewDirectorySource(root);
         Manifest m; Str w, err; T_CHECK(BackupVm(*src, "vm", *t, o, nullptr, m, w, err)); delete src;
         T_CHECK(m.segments.size() >= 3);
@@ -145,14 +145,14 @@ VM2B_TEST("engine", deep_missing_tail_volumes_rehashed)
 
 
 // Settings that arrive over RPC / the web site: hostile numbers and types are refused up front (they were stored and later
-// overflowed int / shifts, or made archives that the decryptor refuses: kdf_iterations > 100000000).
+// overflowed int / shifts, or made archives that the decryptor refuses: kdf_iterations > 10000000, or < 100000: a weak key for a new copy).
 VM2B_TEST("service", settings_hostile_values_are_refused)
 {
     DTmp tmp(c_, "set");
     Config cfg; Str e; T_CHECK(cfg.open(tmp.sub("data"), e));
     struct Bad { const char* k; Json v; };
     Bad bad[] = {
-        {"kdf_iterations", Json((i64)100000001)}, {"kdf_iterations", Json((i64)4294967296ll)}, {"kdf_iterations", Json((i64)999)}, {"kdf_iterations", Json("600000")},
+        {"kdf_iterations", Json((i64)10000001)}, {"kdf_iterations", Json((i64)100000001)}, {"kdf_iterations", Json((i64)4294967296ll)}, {"kdf_iterations", Json((i64)999)}, {"kdf_iterations", Json((i64)99999)}, {"kdf_iterations", Json("600000")},
         {"segment_mib", Json((i64)1 << 40)}, {"segment_mib", Json((i64)-1)}, {"segment_mib", Json(1e30)},
         {"retry_base_sec", Json((i64)3000000)}, {"retry_max_sec", Json((i64)1 << 33)}, {"retry_base_sec", Json((i64)0)}, {"retry_base_sec", Json("2")},
         {"speed_limit_mbit", Json(1e30)}, {"speed_limit_mbit", Json(-1.0)}, {"speed_limit_mbit", Json("fast")},
@@ -169,7 +169,7 @@ VM2B_TEST("service", settings_hostile_values_are_refused)
         T_CHECK(!ok && !er.empty());
     }
     T_CHECK(cfg.settings().dump() == bs);                                         // nothing of it was stored
-    Json good = Json::object(); good["kdf_iterations"] = (i64)100000000; good["segment_mib"] = (i64)0; good["retry_base_sec"] = (i64)86400; good["speed_limit_mbit"] = 1000.5;
+    Json good = Json::object(); good["kdf_iterations"] = (i64)10000000; good["segment_mib"] = (i64)0; good["retry_base_sec"] = (i64)86400; good["speed_limit_mbit"] = 1000.5;
     good["level"] = (i64)9; good["threads"] = (i64)64; good["prevent_sleep"] = true; good["language"] = (i64)3;
     Str er; T_CHECK(cfg.setSettings(good, er));
     // the same limits for a task element

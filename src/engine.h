@@ -81,6 +81,8 @@ struct Segment { u64 size; u64 raw; Str sha256; Segment() : size(0), raw(0) {} }
 struct Manifest {
     int version; Str vm, archive, source, sha256, stamp; double created; Str codec; int level; bool encrypted;   // codec: the name in the manifest, only "xz" can be restored
     u64 size, rawSize, segmentBytes; u32 kdfIterations; Vec<Segment> segments;
+    Str saltHex, pwcheck, mac;     // encrypted copies: the KDF salt (hex), a short password check and the HMAC of the manifest (see ManifestAuth)
+    Str macInput;                  // read from a file: the canonical text the MAC covers (the manifest without "mac")
     double downFrom, downTo;       // not stored: the VM was shut down for the backup from .. to (unix times), 0 = it was not (ESXi cold backup of a running VM)
     Manifest() : version(3), created(0), codec("xz"), level(0), encrypted(false), size(0), rawSize(0), segmentBytes(0), kdfIterations(0), downFrom(0), downTo(0) {}
     Str volumeName(size_t i) const { return archive + Str::fmt(".%05d", (int)i + 1); }
@@ -97,12 +99,18 @@ struct BackupOptions {
     bool verify;                   // re-read and check the written backup
     bool allowLive;                // copy a running VM (not consistent)
     u32 kdfIterations;             // PBKDF2 iterations for the key (stored in the archive; the tests use a small number)
+    Str tokenSecret;               // 32 secret bytes of the service (data folder): the resume token of an UNENCRYPTED copy is signed with a key made from it; empty = unsigned (tests)
     u64 segmentBytes;              // size of a volume in tar bytes, a multiple of 512 (0 = one volume: no resuming)
     bool resume;                   // continue an interrupted backup of this VM when there is one
     RetryPolicy retry;
     RateLimiter* limiter;          // the bandwidth limit of the transfer to the target (shared, may change while running); null = unlimited
     BackupOptions() : keep(0), verify(true), allowLive(false), kdfIterations(kEncIterationsDefault), segmentBytes((u64)kDefaultSegmentMiB << 20), resume(true), limiter(nullptr) {}
 };
+
+// Encrypted copies: the manifest (*.json) carries an HMAC made with a key of the password (HKDF label "manifest-mac"); the check is part of verify and restore
+// when a password is given.  false + err: the password is wrong ("wrong password") or the manifest was changed after it was written.
+bool ManifestText(const Manifest& m, const Str& password, Str& out);       // the file text (with the MAC of an encrypted copy)
+bool CheckManifestAuth(const Manifest& m, const Str& password, Str& err);
 
 struct ReadOptions {               // for verify and restore
     bool resume;                   // restore: continue from the state file in the destination

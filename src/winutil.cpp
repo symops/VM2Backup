@@ -144,4 +144,42 @@ Str SafeName(const Str& s)
     return r;
 }
 
+Str FinalPathOfHandle(HANDLE h)
+{
+    wchar_t buf[4096]; DWORD n = GetFinalPathNameByHandleW(h, buf, 4096, FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+    if (!n || n >= 4096) return Str();
+    Str s = FromWide(buf);
+    if (s.starts_with("\\\\?\\UNC\\")) s = "\\\\" + s.substr(8); else if (s.starts_with("\\\\?\\")) s = s.substr(4);
+    while (s.size() > 3 && s[s.size() - 1] == '\\') s = s.substr(0, s.size() - 1);
+    return s;
+}
+
+// Paths are equal without regard to case (any alphabet: the system's own ordinal case folding, not the ASCII-only Str::lower).
+bool PathsEqualI(const Str& a, const Str& b)
+{
+    Wide wa(a), wb(b);
+    return CompareStringOrdinal(wa.c_str(), -1, wb.c_str(), -1, TRUE) == CSTR_EQUAL;
+}
+
+Str FinalPathOfPath(const Str& path)
+{
+    HANDLE h = CreateFileW(FilePath(path), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return Str();
+    Str s = FinalPathOfHandle(h); CloseHandle(h); return s;
+}
+
+bool HandleIsReparse(HANDLE h)
+{
+    FILE_ATTRIBUTE_TAG_INFO ti;
+    return GetFileInformationByHandleEx(h, FileAttributeTagInfo, &ti, sizeof(ti)) && (ti.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT);
+}
+
+bool FinalPathInside(const Str& finalPath, const Str& finalRoot)
+{
+    if (finalPath.empty() || finalRoot.empty()) return true;
+    if (finalPath.size() < finalRoot.size()) return false;
+    if (!PathsEqualI(finalPath.substr(0, finalRoot.size()), finalRoot)) return false;
+    return finalPath.size() == finalRoot.size() || finalPath[finalRoot.size()] == '\\' || finalRoot[finalRoot.size() - 1] == '\\';
+}
+
 } // namespace vm2b

@@ -1,13 +1,18 @@
 // VM2Backup — cryptography on OpenSSL (libcrypto, static): hashes, HMAC, PBKDF2, AES-GCM, random numbers, and the stream
 // encryption of backups.
 //
-// Backup encryption format "V2BENC3" — one per volume file of a backup (see engine.h):
-//   "V2BENC3\n" | salt(16) | iterations(4, big endian) | volume index(4, big endian) | blocks...
+// Backup encryption format "V2BENC4" - one per volume file of a backup (see engine.h):
+//   header (40 bytes) = "V2BENC4\n" | salt(16) | iterations(4, big endian) | volume index(4, big endian) | nonce prefix(8) | blocks...
 //   block = length(4, big endian) | AES-256-GCM(ciphertext || 16-byte tag) of up to 1 MiB of data
-//   key = PBKDF2-HMAC-SHA256(password, salt, iterations) (the same for all volumes of a backup);
-//   nonce = volume index(4) || block index(8, big endian); additional data = 0x00 (more blocks follow in this volume),
-//   0x01 (the last block of the volume) or 0x02 (the last block of the last volume of the backup). The indexes and the
-//   last-block flags are authenticated, so a removed, reordered, swapped or cut-off block / volume is detected.
+//   master = PBKDF2-HMAC-SHA256(password, salt, iterations) (the same for all volumes of a backup);
+//   keys: HKDF-Expand(master, label) with a label of its own per purpose: data ("vm2b-v4-data": AES-GCM of the blocks),
+//   the manifest MAC, the resume check and the resume token (see engine.cpp) - one key is never used for two jobs;
+//   nonce = prefix(8) || block index(4, big endian); the prefix is RANDOM and new for every volume that is written, so a volume that is
+//   written again (resume / retry) with other content never repeats a nonce under the same key;
+//   additional data = the whole 40-byte header || 0x00 (more blocks follow in this volume), 0x01 (the last block of the volume) or
+//   0x02 (the last block of the last volume of the backup). The header (salt, iterations, volume, prefix), the indexes and the
+//   last-block flags are authenticated, so a changed header, a removed, reordered, swapped or cut-off block / volume is detected.
+//   Reading refuses 1000 > iterations or iterations > 10,000,000 before any key derivation (a planted volume cannot stall a restore).
 #pragma once
 #include "stream.h"
 
@@ -43,7 +48,13 @@ private:
     void* m_obj;                 // the 32-byte key
 };
 
-enum { kEncIterationsDefault = 600000 };
+enum { kEncIterationsDefault = 600000, kEncIterationsMin = 100000, kEncIterationsMax = 10000000, kEncHeaderBytes = 40 };
+static const char kKeyLabelData[] = "vm2b-v4-data", kKeyLabelManifest[] = "vm2b-v4-manifest-mac", kKeyLabelResumeCheck[] = "vm2b-v4-resume-check", kKeyLabelResumeToken[] = "vm2b-v4-resume-token";
+
+// HKDF-Expand of the master key into a key for one purpose (label above).
+bool DeriveSubKey(const u8 master[32], const char* label, u8 out[32]);
+// master key -> data key of a volume
+bool DeriveDataKey(const Str& password, const u8 salt[16], u32 iterations, u8 key[32]);
 
 // PBKDF2 key of a backup; the last few results are cached (a backup of 1000 volumes derives the key once).
 bool DeriveBackupKey(const Str& password, const u8 salt[16], u32 iterations, u8 key[32]);
@@ -55,13 +66,14 @@ public:
     ~EncryptSink();
     void setLastVolume(bool last) { m_lastVolume = last; }        // default true (a single-volume archive); call before finish()
     const u8* salt() const { return m_salt; }
+    void setNoncePrefixForTests(const u8 prefix[8]) { memcpy(m_prefix, prefix, 8); }
     bool write(const void* p, size_t n) override;
     bool finish() override;
     void abort() override { m_out->abort(); }
 private:
     bool emit(bool last);
     Sink* m_out; AesGcm m_aes; Bytes m_buf; u32 m_volume; u64 m_index; bool m_ok, m_done, m_header, m_lastVolume;
-    Str m_pw; u32 m_iter; u8 m_salt[16];
+    Str m_pw; u32 m_iter; u8 m_salt[16], m_prefix[8], m_hdr[kEncHeaderBytes];
 };
 
 class DecryptSource : public Source {
@@ -72,7 +84,7 @@ public:
     bool finalVolume() const { return m_final; }                 // valid at the end of data: the volume was marked as the last of the backup
 private:
     bool nextBlock();
-    Source* m_in; Str m_pw; AesGcm m_aes; Bytes m_plain; size_t m_pos; u32 m_volume; u64 m_index; bool m_hdr, m_eof, m_wrongPw, m_failed, m_final;
+    Source* m_in; Str m_pw; AesGcm m_aes; Bytes m_plain; size_t m_pos; u32 m_volume; u64 m_index; bool m_hdr, m_eof, m_wrongPw, m_failed, m_final; u8 m_h[kEncHeaderBytes];
 };
 
 // Feeds everything through unchanged and keeps the SHA-256 and the size of what passed (the manifest of a backup).

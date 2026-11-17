@@ -711,13 +711,13 @@ namespace { struct HoldTmp { HANDLE h; DWORD ms; }; DWORD WINAPI ReleaseLater(LP
 
 VM2B_TEST("smb", config_save_waits_for_a_held_tmp_file)
 {
-    // an indexer / scanner holding config.json.tmp from the previous save for a moment: the next save waits instead of failing
+    // an indexer / scanner holding the file that is being replaced (the temporary file has a name of its own every time since the F6 fix, so only the target can be held): the save waits instead of failing
     Tmp tmp(c_, "cfgtmp"); Str dir = tmp.sub("data"), e; MakeDirs(dir, e);
-    Str tmpPath = JoinPath(dir, "x.json.tmp"); Wide wt(tmpPath);
-    HANDLE h = CreateFileW(wt.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr); T_CHECK(h != INVALID_HANDLE_VALUE); if (h == INVALID_HANDLE_VALUE) return false;
+    Str tmpPath = JoinPath(dir, "x.json"); Wide wt(tmpPath); { Str old = "{\"a\":0}\n"; T_CHECK(WriteWholeFile(tmpPath.c_str(), old.data(), old.size(), e)); }
+    HANDLE h = CreateFileW(wt.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr); T_CHECK(h != INVALID_HANDLE_VALUE); if (h == INVALID_HANDLE_VALUE) return false;
     HoldTmp ht = { h, 700 }; HANDLE th = CreateThread(nullptr, 0, ReleaseLater, &ht, 0, nullptr);
     DWORD t0 = GetTickCount(); Str body = "{\"a\":1}\n"; bool ok = WriteWholeFile(JoinPath(dir, "x.json").c_str(), body.data(), body.size(), e);
-    c_.note("save with the .tmp file held for 700 ms: %s after %lu ms %s", ok ? "ok" : "FAILED", (unsigned long)(GetTickCount() - t0), e.c_str());
+    c_.note("save with the target held for 700 ms: %s after %lu ms %s", ok ? "ok" : "FAILED", (unsigned long)(GetTickCount() - t0), e.c_str());
     WaitForSingleObject(th, 5000); CloseHandle(th);
     T_CHECK(ok); T_CHECK(ReadAll(JoinPath(dir, "x.json")) == body);
     return true;
@@ -729,9 +729,10 @@ VM2B_TEST("smb", config_failed_save_leaves_no_ghost_record)
     Config cfg; T_CHECK(cfg.open(dir, e));
     size_t n0 = cfg.servers().size();
     Json sv = Json::object(); sv["type"] = "smb"; sv["name"] = "Ghost"; sv["path"] = "\\\\h\\s"; sv["user"] = "u"; sv["password"] = "pw-ghost-1"; Json saved;
-    Str blocker = JoinPath(dir, "config.json.tmp"); T_CHECK(MakeDirs(blocker, e));            // a folder where the temporary file must be: the write cannot succeed
+    // a folder where config.json must be: the temporary file is written (its name is a new one every time, it cannot be blocked), but cannot replace the folder
+    Str blocker = JoinPath(dir, "config.json"); DeleteFileW(FilePath(blocker)); T_CHECK(MakeDirs(blocker, e));
     bool ok = cfg.saveServer(sv, saved, e);
-    c_.note("save with an unwritable config.json.tmp: ok=%d err=[%s], servers %d -> %d", ok ? 1 : 0, e.c_str(), (int)n0, (int)cfg.servers().size());
+    c_.note("save over a folder named config.json: ok=%d err=[%s], servers %d -> %d", ok ? 1 : 0, e.c_str(), (int)n0, (int)cfg.servers().size());
     T_CHECK(!ok); T_CHECK(!e.empty()); T_CHECK(cfg.servers().size() == n0);                     // the failed save is not in the list (it used to stay in memory: the record existed, the answer had no id)
     RemoveTree(blocker);
     T_CHECK(cfg.saveServer(sv, saved, e)); T_CHECK(!saved.get("id").str().empty()); T_CHECK(cfg.servers().size() == n0 + 1);

@@ -38,8 +38,9 @@ struct ServiceOptions {
     void (*onShutdown)();                          // called when a client sends service.shutdown (the shell stops the service)
     int stopJobWaitMs;                             // service stop: how long running jobs get to end (default 60000); tests shorten it
     int stopThreadWaitMs;                          // then: how long to wait for each job's thread before the job is abandoned (default 5000)
+    bool pipeKeepTrying;                           // the pipe name is held by another process at the start: go on (scheduler, web site) and take the pipe when it is free (the real service); false = refuse to start (tests)
     int webDefault;                                // the web site on a first start: -1 = on (127.0.0.1:8443), unless the environment has VM2B_WEB_DEFAULT=0 (tests); 0 = off; 1 = on
-    ServiceOptions() : pipeSddl(nullptr), tickMs(1000), clock(nullptr), onShutdown(nullptr), stopJobWaitMs(60000), stopThreadWaitMs(5000), webDefault(-1) {}
+    ServiceOptions() : pipeSddl(nullptr), tickMs(1000), clock(nullptr), onShutdown(nullptr), stopJobWaitMs(60000), stopThreadWaitMs(5000), pipeKeepTrying(false), webDefault(-1) {}
 };
 
 class Job;
@@ -63,6 +64,7 @@ public:
     // The folders a non-administrator may look into (backups.list / backups.verify with a `directory`): those where this service has already written
     // backups for the server (catalog.json) and the server's own default folder with its sub-folders.  Anything else is refused for the roles below admin.
     bool knownBackupDirectory(const Str& serverId, const Str& dir);
+    Str tokenSecret();                             // 32 secret bytes of the service (resume-secret.bin in the data folder): signs the resume tokens of unencrypted copies
 
 private:
     friend class Job;
@@ -91,6 +93,7 @@ private:
 
     Config m_cfg; ServiceOptions m_opt; IpcServer m_ipc; WebServer m_web; HANDLE m_sched; volatile LONG m_stop;
     mutable CRITICAL_SECTION m_cs; Vec<Job*> m_jobs; Vec<Job*> m_abandoned; HANDLE m_slots; int m_slotCount;
+    Str m_tokenSecret;
     Vec<Str> m_claims;                             // "server|folder|vm" of the backups running now: two jobs never write the same VM into the same folder at once
     Json m_catalog;                                // [{server, directory}] places where backups were made
     i64 m_lastTick, m_statePersisted; bool m_started;      // m_statePersisted: when the scheduler last wrote state.json (last_check is kept in memory in between)

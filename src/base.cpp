@@ -412,17 +412,22 @@ bool ReadWholeFile(const char* path, Bytes& out, Str& err, size_t maxSize)
 
 bool WriteWholeFile(const char* path, const void* p, size_t n, Str& err)
 {
-    Str tmp = Str(path) + ".tmp";
+    // The temporary file has a name of its own every time and is created EXCLUSIVELY (CREATE_NEW): a file / link of that name that somebody put there
+    // beforehand is never written through (security review F6); the old fixed "<name>.tmp" with CREATE_ALWAYS followed a planted link.
+    Str tmp;
 #ifdef _WIN32
+    static volatile LONG s_tmpSeq = 0;
     wchar_t w[4096], wt[4106];
-    if (!Widen(path, w, 4096) || !Widen(tmp.c_str(), wt, 4106)) { err = "bad path"; return false; }
+    if (!Widen(path, w, 4096)) { err = "bad path"; return false; }
     HANDLE f = INVALID_HANDLE_VALUE;
-    for (int attempt = 0;; ++attempt) {                                  // the .tmp file of the previous save may still be held for a moment by a scanner / indexer (the previous write's close is being scanned): wait, do not lose the save
-        f = CreateFileW(wt, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    for (int attempt = 0;; ++attempt) {
+        tmp = Str(path) + Str::fmt(".%08lx%04lx.tmp", (unsigned long)(GetTickCount() * 2654435761u + GetCurrentProcessId()), (unsigned long)InterlockedIncrement(&s_tmpSeq) & 0xffff);
+        if (!Widen(tmp.c_str(), wt, 4106)) { err = "bad path"; return false; }
+        f = CreateFileW(wt, GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
         if (f != INVALID_HANDLE_VALUE) break;
         DWORD le = GetLastError();
-        if (attempt >= 12 || (le != ERROR_SHARING_VIOLATION && le != ERROR_LOCK_VIOLATION && le != ERROR_ACCESS_DENIED)) { SetLastError(le); err = WinErr("cannot write", tmp.c_str()); return false; }
-        Sleep(150);
+        if (attempt >= 40 || (le != ERROR_FILE_EXISTS && le != ERROR_ALREADY_EXISTS && le != ERROR_SHARING_VIOLATION && le != ERROR_LOCK_VIOLATION && le != ERROR_ACCESS_DENIED)) { SetLastError(le); err = WinErr("cannot write", tmp.c_str()); return false; }
+        if (le != ERROR_FILE_EXISTS && le != ERROR_ALREADY_EXISTS) Sleep(100);        // a scanner / indexer holds the folder for a moment: wait, do not lose the save
     }
     size_t done = 0; bool ok = true;
     while (done < n) {
@@ -441,6 +446,7 @@ bool WriteWholeFile(const char* path, const void* p, size_t n, Str& err)
     }
     return true;
 #else
+    static unsigned s_natSeq = 0; tmp = Str(path) + Str::fmt(".%08x.tmp", (unsigned)++s_natSeq);
     FILE* f = fopen(tmp.c_str(), "wb");
     if (!f) { err = Str::fmt("cannot write %s", tmp.c_str()); return false; }
     bool ok = n == 0 || fwrite(p, 1, n, f) == n;

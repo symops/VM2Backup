@@ -78,12 +78,30 @@ bool AesGcm::decrypt(const u8 nonce[12], const void* aad, size_t aadLen, const v
 }
 
 // ---- stream encryption -----------------------------------------------------------------------------------------
-static const char kMagic[8] = { 'V', '2', 'B', 'E', 'N', 'C', '3', '\n' };
+static const char kMagic[8] = { 'V', '2', 'B', 'E', 'N', 'C', '4', '\n' };
 static const size_t kChunk = 1 << 20;
 
 static void PutBe32(u8* p, u32 v) { p[0] = (u8)(v >> 24); p[1] = (u8)(v >> 16); p[2] = (u8)(v >> 8); p[3] = (u8)v; }
 static u32 GetBe32(const u8* p) { return (u32)p[0] << 24 | (u32)p[1] << 16 | (u32)p[2] << 8 | p[3]; }
-static void Nonce(u32 volume, u64 index, u8 out[12]) { PutBe32(out, volume); for (int i = 0; i < 8; ++i) out[4 + i] = (u8)(index >> (56 - 8 * i)); }
+// nonce = the volume's random 8-byte prefix || the 32-bit block counter
+static void Nonce(const u8 prefix[8], u32 index, u8 out[12]) { memcpy(out, prefix, 8); PutBe32(out + 8, index); }
+
+// HKDF-Expand (RFC 5869) with a 32-byte pseudo-random key and one output block: T(1) = HMAC(prk, info || 0x01).
+bool DeriveSubKey(const u8 master[32], const char* label, u8 out[32])
+{
+    size_t n = strlen(label); Bytes in; in.resize(n + 1); memcpy(in.data(), label, n); in[n] = 1;
+    HmacSha256(master, 32, in.data(), in.size(), out);
+    return true;
+}
+
+bool DeriveDataKey(const Str& password, const u8 salt[16], u32 iterations, u8 key[32])
+{
+    u8 master[32];
+    if (!DeriveBackupKey(password, salt, iterations, master)) return false;
+    DeriveSubKey(master, kKeyLabelData, key);
+    OPENSSL_cleanse(master, 32);
+    return true;
+}
 
 // A small cache: key = PBKDF2(password, salt, iterations), found again by a hash of those three (the password itself is not kept).
 namespace {
@@ -114,6 +132,7 @@ EncryptSink::EncryptSink(Sink* out, const Str& password, u32 iterations, const u
     : m_out(out), m_volume(volume), m_index(0), m_ok(true), m_done(false), m_header(false), m_lastVolume(true), m_pw(password), m_iter(iterations)
 {
     if (salt) memcpy(m_salt, salt, 16); else if (!RandomBytes(m_salt, 16)) m_ok = false;
+    if (!RandomBytes(m_prefix, 8)) m_ok = false;            // fresh for every written volume: a volume that is written again (resume, retry) never repeats a nonce
     m_buf.reserve(kChunk + 1);
 }
 EncryptSink::~EncryptSink() {}
@@ -122,17 +141,19 @@ bool EncryptSink::emit(bool last)
 {
     if (!m_header) {
         u8 key[32];
-        if (!DeriveBackupKey(m_pw, m_salt, m_iter, key) || !m_aes.init(key)) return fail("encryption: key derivation failed");
-        memset(key, 0, 32);
-        u8 h[32]; memcpy(h, kMagic, 8); memcpy(h + 8, m_salt, 16); PutBe32(h + 24, m_iter); PutBe32(h + 28, m_volume);
-        if (!m_out->write(h, sizeof(h))) return failFrom(m_out);
+        if (m_iter < 1000 || m_iter > kEncIterationsMax) return fail("encryption: the number of iterations is out of range");      // (the settings keep it at 100000 or more; the engine tests use small numbers)
+        if (!DeriveDataKey(m_pw, m_salt, m_iter, key) || !m_aes.init(key)) return fail("encryption: key derivation failed");
+        OPENSSL_cleanse(key, 32);
+        memcpy(m_hdr, kMagic, 8); memcpy(m_hdr + 8, m_salt, 16); PutBe32(m_hdr + 24, m_iter); PutBe32(m_hdr + 28, m_volume); memcpy(m_hdr + 32, m_prefix, 8);
+        if (!m_out->write(m_hdr, kEncHeaderBytes)) return failFrom(m_out);
         m_header = true;
     }
+    if (m_index >= 0xffffffffull) return fail("encryption: too many blocks in one volume");
     size_t n = m_buf.size();
     Bytes ct; ct.resize(4 + n + 16);
-    u8 nonce[12]; Nonce(m_volume, m_index, nonce);
-    u8 aad = last ? (m_lastVolume ? 2 : 1) : 0;
-    if (!m_aes.encrypt(nonce, &aad, 1, m_buf.data(), n, ct.data() + 4, ct.data() + 4 + n)) return fail("encryption failed");
+    u8 nonce[12]; Nonce(m_prefix, (u32)m_index, nonce);
+    u8 aad[kEncHeaderBytes + 1]; memcpy(aad, m_hdr, kEncHeaderBytes); aad[kEncHeaderBytes] = last ? (m_lastVolume ? 2 : 1) : 0;      // the whole header is authenticated with every block
+    if (!m_aes.encrypt(nonce, aad, sizeof(aad), m_buf.data(), n, ct.data() + 4, ct.data() + 4 + n)) return fail("encryption failed");
     PutBe32(ct.data(), (u32)(n + 16));
     ++m_index;
     m_buf.clear();
@@ -170,16 +191,15 @@ DecryptSource::DecryptSource(Source* in, const Str& password, u32 volume)
 bool DecryptSource::nextBlock()
 {
     if (!m_hdr) {
-        u8 h[32];
-        i64 r = ReadFull(*m_in, h, sizeof(h));
+        i64 r = ReadFull(*m_in, m_h, kEncHeaderBytes);
         if (r < 0) { err = m_in->err; transient = m_in->transient; return false; }
-        if (r != (i64)sizeof(h) || memcmp(h, kMagic, 8) != 0) { err = "not an encrypted VM2Backup archive"; return false; }
-        u32 iter = GetBe32(h + 24);
-        if (iter < 1000 || iter > 100000000) { err = "bad encryption header"; return false; }
-        if (GetBe32(h + 28) != m_volume) { err = "the volumes of the backup are in a wrong order or from another backup"; return false; }
+        if (r != (i64)kEncHeaderBytes || memcmp(m_h, kMagic, 8) != 0) { err = "not an encrypted VM2Backup archive"; return false; }
+        u32 iter = GetBe32(m_h + 24);
+        if (iter < 1000 || iter > kEncIterationsMax) { err = "bad encryption header"; return false; }          // refused up front: a planted volume cannot hold the restore in a key derivation for minutes
+        if (GetBe32(m_h + 28) != m_volume) { err = "the volumes of the backup are in a wrong order or from another backup"; return false; }
         u8 key[32];
-        if (!DeriveBackupKey(m_pw, h + 8, iter, key) || !m_aes.init(key)) { err = "key derivation failed"; return false; }
-        memset(key, 0, 32);
+        if (!DeriveDataKey(m_pw, m_h + 8, iter, key) || !m_aes.init(key)) { err = "key derivation failed"; return false; }
+        OPENSSL_cleanse(key, 32);
         m_hdr = true;
     }
     u8 lb[4];
@@ -192,11 +212,11 @@ bool DecryptSource::nextBlock()
     r = ReadFull(*m_in, blk.data(), len);
     if (r < 0) { err = m_in->err; transient = m_in->transient; return false; }
     if ((u32)r != len) { err = "the encrypted archive is cut off"; transient = true; return false; }
-    u8 nonce[12]; Nonce(m_volume, m_index, nonce);
+    u8 nonce[12]; Nonce(m_h + 32, (u32)m_index, nonce);
     m_plain.resize(len - 16);
     // which flag was it written with? 0 = more blocks follow, 1 = last of the volume, 2 = last of the whole backup
-    u8 aad = 0; int which = -1;
-    for (int f = 0; f < 3; ++f) { aad = (u8)f; if (m_aes.decrypt(nonce, &aad, 1, blk.data(), len - 16, m_plain.data(), blk.data() + len - 16)) { which = f; break; } }
+    u8 aad[kEncHeaderBytes + 1]; memcpy(aad, m_h, kEncHeaderBytes); int which = -1;
+    for (int f = 0; f < 3; ++f) { aad[kEncHeaderBytes] = (u8)f; if (m_aes.decrypt(nonce, aad, sizeof(aad), blk.data(), len - 16, m_plain.data(), blk.data() + len - 16)) { which = f; break; } }
     if (which < 0) { m_wrongPw = m_index == 0; err = m_index == 0 ? "wrong password or the archive is damaged" : "the encrypted archive is damaged"; transient = false; return false; }
     ++m_index; m_pos = 0;
     if (which > 0) {

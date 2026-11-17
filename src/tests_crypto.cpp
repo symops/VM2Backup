@@ -1,12 +1,13 @@
-// Autotests of the OpenSSL-backed crypto: the V2BENC3 format must stay byte-identical to what the original (Windows CNG) code wrote.
+// Autotests of the OpenSSL-backed crypto: the V2BENC4 format (see crypto.h) must stay byte-identical to what an independent implementation writes.
 #include "autotest.h"
 #include "crypto.h"
 
 namespace vm2b {
 
 // Fixed vector made by an independent implementation (Python: hashlib PBKDF2 + `cryptography` AES-GCM):
-// password "pw-\xc3\xbc", salt 00 01 .. 0f, 2000 iterations, volume 3, two blocks (1 MiB flag 0, 10 bytes flag 2).
-VM2B_TEST("core", crypto_v2benc3_fixed_vector)
+// password "pw-\xc3\xbc", salt 00 01 .. 0f, 2000 iterations, volume 3, nonce prefix a0 .. a7, two blocks (1 MiB flag 0, 10 bytes flag 2);
+// data key = HKDF-Expand(PBKDF2 master, "vm2b-v4-data"), AAD = the 40-byte header || flag (security review F11: separate keys, authenticated header, random nonce prefix).
+VM2B_TEST("core", crypto_v2benc4_fixed_vector)
 {
     Bytes plain; plain.resize((1 << 20) + 10);
     for (size_t i = 0; i < plain.size(); ++i) plain[i] = (u8)(i * 7 + i / 251);
@@ -15,12 +16,13 @@ VM2B_TEST("core", crypto_v2benc3_fixed_vector)
     MemSink ms;
     {
         EncryptSink es(&ms, pw, 2000, salt, 3);
+        static const u8 prefix[8] = { 0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7 }; es.setNoncePrefixForTests(prefix);
         T_CHECK(es.write(plain.data(), 1000)); T_CHECK(es.write(plain.data() + 1000, plain.size() - 1000)); T_CHECK(es.finish());
     }
     Bytes enc = ms.data;
     u8 h[32]; Sha256(enc.data(), enc.size(), h);
-    T_CHECK(enc.size() == 1048658);
-    T_CHECK(HexEncode(h, 32) == "d99ef932512b6f0299fec6e75af82b76dd38baf7fe37c6279737e686b68447b7");
+    T_CHECK(enc.size() == 1048666);
+    T_CHECK(HexEncode(h, 32) == "c94ec6683ac9bba6a5a636117e08421b55f15800f614c82f097e6eddf8c8aebe");
     Sha256(plain.data(), plain.size(), h);
     T_CHECK(HexEncode(h, 32) == "78cdad0dc0c6576184fb7075c98a8c5b1b5b4d3dcde135b27b2effbbdd56f6d7");
     // and the other way: decrypt what the independent implementation would have written (same bytes)
@@ -34,6 +36,22 @@ VM2B_TEST("core", crypto_v2benc3_fixed_vector)
     T_CHECK(d2.read(b1, 16) < 0 && d2.wrongPassword());
     enc[100000] ^= 1; MemSource s3(enc.data(), enc.size()); DecryptSource d3(&s3, pw, 3);
     T_CHECK(ReadFull(d3, back.data(), back.size()) != (i64)plain.size());
+    return true;
+}
+
+// F11: the sub-keys of one master key are different per purpose, HKDF-Expand matches RFC 5869 (test case 1 uses an Extract step, so the expand is checked
+// against an independent computation: T(1) = HMAC(PRK, info || 01)).
+VM2B_TEST("core", crypto_subkeys_are_separate)
+{
+    u8 master[32]; for (int i = 0; i < 32; ++i) master[i] = (u8)(i * 3 + 1);
+    u8 a[32], b[32], c[32], d[32], e[32];
+    T_CHECK(DeriveSubKey(master, kKeyLabelData, a)); T_CHECK(DeriveSubKey(master, kKeyLabelManifest, b)); T_CHECK(DeriveSubKey(master, kKeyLabelResumeCheck, c)); T_CHECK(DeriveSubKey(master, kKeyLabelResumeToken, d));
+    T_CHECK(DeriveSubKey(master, kKeyLabelData, e));
+    T_CHECK(memcmp(a, e, 32) == 0);
+    const u8* all[4] = { a, b, c, d };
+    for (int i = 0; i < 4; ++i) { T_CHECK(memcmp(all[i], master, 32) != 0); for (int j = i + 1; j < 4; ++j) T_CHECK(memcmp(all[i], all[j], 32) != 0); }
+    u8 want[32]; Bytes in; const char* lab = kKeyLabelData; in.resize(strlen(lab) + 1); memcpy(in.data(), lab, strlen(lab)); in[strlen(lab)] = 1; HmacSha256(master, 32, in.data(), in.size(), want);
+    T_CHECK(memcmp(a, want, 32) == 0);
     return true;
 }
 

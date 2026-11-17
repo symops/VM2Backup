@@ -13,6 +13,7 @@ Json Manifest::toJson() const
     Json a = Json::array();
     for (const Segment& s : segments) { Json o = Json::object(); o["size"] = s.size; o["raw"] = s.raw; o["sha256"] = s.sha256; a.push(o); }
     j["segments"] = a;
+    if (encrypted) { j["salt"] = saltHex; j["pwcheck"] = pwcheck; }
     return j;
 }
 
@@ -32,6 +33,8 @@ bool Manifest::fromJson(const Json& j, Manifest& m)
         if (s.sha256.size() != 64) return false;
         m.segments.push_back(s);
     }
+    m.saltHex = j.get("salt").str(); m.pwcheck = j.get("pwcheck").str(); m.mac = j.get("mac").str();
+    { Json c = j; c.remove("mac"); m.macInput = c.dump(true); }
     return !m.archive.empty() && !m.vm.empty() && !m.segments.empty() && m.archive.find('/') < 0 && m.archive.find('\\') < 0;
 }
 
@@ -240,22 +243,41 @@ Str OptionsKey(const BackupOptions& o)
     return Str::fmt("%s|%d|%d|%llu|%u", CodecName(), CodecEffectiveLevel(o.codec), o.password.empty() ? 0 : 1, (unsigned long long)o.segmentBytes, o.kdfIterations);
 }
 
+// The sub-key of a purpose (HKDF label) of the key of a backup: the data key, the manifest MAC, the resume check and the resume token are four different keys.
+bool SubKeyOf(const Str& pw, const u8 salt[16], u32 iter, const char* label, u8 out[32])
+{
+    u8 master[32];
+    if (iter < 1000 || iter > kEncIterationsMax || !DeriveBackupKey(pw, salt, iter, master)) return false;
+    DeriveSubKey(master, label, out);
+    memset(master, 0, 32);
+    return true;
+}
+
 Str PasswordCheck(const Str& pw, const u8 salt[16], u32 iter)
 {
     if (pw.empty()) return "";
     u8 key[32], mac[32];
-    if (!DeriveBackupKey(pw, salt, iter, key)) return "?";
+    if (!SubKeyOf(pw, salt, iter, kKeyLabelResumeCheck, key)) return "?";
     HmacSha256(key, 32, "vm2b-resume-check", 17, mac);
     memset(key, 0, 32);
     return HexEncode(mac, 8);
 }
 
 // The token of a source may carry the VM's configuration files (an ESXi .vmx, .nvram): on an encrypted backup it is not written to the target in clear text.
-Str ProtectToken(const Str& pw, const u8 salt[16], u32 iter, const Str& token)
+// An unencrypted backup keeps it readable but SIGNED ("m1:<hmac>:<token>", key = HKDF of the service's secret): whoever can write to the storage cannot
+// change the power state / the snapshot name in it; a token that fails the check makes the interrupted copy start over (the caller sees an empty result).
+Str ProtectToken(const Str& pw, const u8 salt[16], u32 iter, const Str& token, const Str& secret = Str())
 {
-    if (pw.empty() || token.empty()) return token;
+    if (token.empty()) return token;
+    if (pw.empty()) {
+        if (secret.size() != 32) return token;
+        u8 key[32], mac[32]; DeriveSubKey((const u8*)secret.data(), "vm2b-v4-token-sign", key);
+        Str in = Str("vm2b-resume-token-v1\n") + HexEncode(salt, 16) + "\n" + token;
+        HmacSha256(key, 32, in.data(), in.size(), mac); memset(key, 0, 32);
+        return "m1:" + HexEncode(mac, 16) + ":" + token;
+    }
     u8 key[32], nonce[12], tag[16];
-    if (!DeriveBackupKey(pw, salt, iter, key) || !RandomBytes(nonce, 12)) return Str();
+    if (!SubKeyOf(pw, salt, iter, kKeyLabelResumeToken, key) || !RandomBytes(nonce, 12)) return Str();
     AesGcm aes; Bytes out; out.resize(12 + token.size() + 16);
     bool ok = aes.init(key) && aes.encrypt(nonce, "vm2b-resume-token", 17, token.data(), token.size(), out.data() + 12, tag);
     memset(key, 0, 32);
@@ -264,16 +286,30 @@ Str ProtectToken(const Str& pw, const u8 salt[16], u32 iter, const Str& token)
     return "e1:" + Base64Encode(out.data(), out.size());
 }
 
-Str UnprotectToken(const Str& pw, const u8 salt[16], u32 iter, const Str& token)
+// ok = false: the token is not trustworthy (damaged / signed with another secret / stripped of its signature).
+Str UnprotectToken(const Str& pw, const u8 salt[16], u32 iter, const Str& token, bool& ok, const Str& secret = Str())
 {
-    if (!token.starts_with("e1:")) return token;
-    if (pw.empty()) return Str();
-    Bytes in; if (!Base64Decode(token.c_str() + 3, token.size() - 3, in) || in.size() < 28) return Str();
-    u8 key[32]; if (!DeriveBackupKey(pw, salt, iter, key)) return Str();
+    ok = true;
+    if (token.empty()) return token;
+    if (!token.starts_with("e1:")) {
+        if (!pw.empty()) { ok = false; return Str(); }                                 // an encrypted copy has only encrypted tokens
+        if (secret.size() != 32) return token.starts_with("m1:") ? Str() : token;       // no secret (tests): unsigned tokens as before
+        if (!token.starts_with("m1:") || token.size() < 3 + 32 + 1 || token[35] != ':') { ok = false; return Str(); }
+        u8 key[32], mac[32]; DeriveSubKey((const u8*)secret.data(), "vm2b-v4-token-sign", key);
+        Str body = token.substr(36), in = Str("vm2b-resume-token-v1\n") + HexEncode(salt, 16) + "\n" + body;
+        HmacSha256(key, 32, in.data(), in.size(), mac); memset(key, 0, 32);
+        Str want = HexEncode(mac, 16), got = token.substr(3, 32); u8 d = 0; for (size_t i = 0; i < 32; ++i) d |= (u8)(want[i] ^ got[i]);
+        if (d) { ok = false; return Str(); }
+        return body;
+    }
+    if (pw.empty()) { ok = false; return Str(); }
+    Bytes in; if (!Base64Decode(token.c_str() + 3, token.size() - 3, in) || in.size() < 28) { ok = false; return Str(); }
+    u8 key[32]; if (!SubKeyOf(pw, salt, iter, kKeyLabelResumeToken, key)) { ok = false; return Str(); }
     AesGcm aes; Bytes out; out.resize(in.size() - 28);
-    bool ok = aes.init(key) && aes.decrypt(in.data(), "vm2b-resume-token", 17, in.data() + 12, in.size() - 28, out.data(), in.data() + in.size() - 16);
+    bool g = aes.init(key) && aes.decrypt(in.data(), "vm2b-resume-token", 17, in.data() + 12, in.size() - 28, out.data(), in.data() + in.size() - 16);
     memset(key, 0, 32);
-    return ok ? Str((const char*)out.data(), out.size()) : Str();
+    if (!g) { ok = false; return Str(); }
+    return Str((const char*)out.data(), out.size());
 }
 
 struct Journal {
@@ -343,7 +379,7 @@ bool BackupVm(VmSource& src, const Str& vm, Target& target, const BackupOptions&
     const bool enc = !o.password.empty();
 
     // 1. is there an interrupted backup of this VM that can be continued?
-    Journal jr; bool resuming = false;
+    Journal jr; bool resuming = false; Str resumeWarn;
     if (o.resume && o.segmentBytes) {
         Vec<ResumeInfo> rs; Str e2, e4;
         if (WithRetry(target, rp, pr, "resume", e4, [&]() { return ListResumable(target, &vm, rs, e2); })) {
@@ -363,7 +399,10 @@ bool BackupVm(VmSource& src, const Str& vm, Target& target, const BackupOptions&
                     }
                 }
                 bool same = allThere && j.options == OptionsKey(o) && j.pwcheck == PasswordCheck(o.password, j.salt, o.kdfIterations);
-                if (same && !resuming) { jr = j; jr.token = UnprotectToken(o.password, j.salt, o.kdfIterations, j.token); resuming = true; }
+                bool tokOk = true; Str tok;
+                if (same) tok = UnprotectToken(o.password, j.salt, o.kdfIterations, j.token, tokOk, o.tokenSecret);
+                if (same && !tokOk) { same = false; resumeWarn = "the resume token of the interrupted backup failed its check (changed on the storage?): it was started over"; }
+                if (same && !resuming) { jr = j; jr.token = tok; resuming = true; }
                 else { Str e3; RemoveAllOf(target, rs[i].archive, e3); }       // another setting or password: this partial backup is of no use
             }
         }
@@ -373,6 +412,7 @@ bool BackupVm(VmSource& src, const Str& vm, Target& target, const BackupOptions&
     Str fp, token, w2;
     if (!src.begin(vm, o.allowLive, resuming ? jr.token : Str(), fp, token, w2)) { err = src.err; return false; }
     warning = w2;
+    if (!resumeWarn.empty()) { if (!warning.empty()) warning += "; "; warning += resumeWarn; }
     if (resuming && jr.fingerprint != fp) {                                   // the VM changed since: the partial copy does not belong to it
         Str e3; RemoveAllOf(target, jr.archive, e3);
         Str why = src.restartReason();
@@ -405,11 +445,12 @@ bool BackupVm(VmSource& src, const Str& vm, Target& target, const BackupOptions&
     }
     mf.vm = vm; mf.source = src.kind(); mf.codec = CodecName(); mf.level = CodecEffectiveLevel(o.codec); mf.encrypted = enc;
     mf.segmentBytes = o.segmentBytes; mf.kdfIterations = enc ? o.kdfIterations : 0;
+    if (enc) { mf.saltHex = HexEncode(salt, 16); mf.pwcheck = PasswordCheck(o.password, salt, o.kdfIterations); }
 
     WriteCtx wc; wc.target = &target; wc.opt = &o; wc.mf = &mf; wc.pr = pr; wc.done = &done; memcpy(wc.salt, salt, 16);
     Json jb = Json::object();
     jb["version"] = 1; jb["vm"] = vm; jb["archive"] = mf.archive; jb["stamp"] = mf.stamp; jb["created"] = mf.created; jb["options"] = OptionsKey(o);
-    jb["pwcheck"] = PasswordCheck(o.password, salt, o.kdfIterations); jb["fingerprint"] = fp; jb["token"] = ProtectToken(o.password, salt, o.kdfIterations, token); jb["salt"] = HexEncode(salt, 16);
+    jb["pwcheck"] = PasswordCheck(o.password, salt, o.kdfIterations); jb["fingerprint"] = fp; jb["token"] = ProtectToken(o.password, salt, o.kdfIterations, token, o.tokenSecret); jb["salt"] = HexEncode(salt, 16);
     wc.journalBase = jb;
 
     // 4. passes: each one writes the volumes that are still missing; a transient failure gives another pass after reconnecting
@@ -454,7 +495,8 @@ bool BackupVm(VmSource& src, const Str& vm, Target& target, const BackupOptions&
     mf.segments = done;
     for (const Segment& s : done) { mf.size += s.size; mf.rawSize += s.raw; }
     mf.sha256 = RootHash(done);
-    Str js = mf.toJson().dump(true);
+    Str js;
+    if (!ManifestText(mf, o.password, js)) { err = "key derivation failed (manifest)"; src.end(true); return false; }
     for (int attempt = 0;; ++attempt) {
         if (target.put_bytes(mf.archive + ".json", js.data(), js.size())) break;
         if (!target.transient || attempt >= rp.attempts) { err = target.err; src.end(true); return false; }
@@ -480,6 +522,35 @@ bool BackupVm(VmSource& src, const Str& vm, Target& target, const BackupOptions&
         }
     }
     if (o.keep > 0) { Vec<Str> removed; Str pe; PruneBackups(target, vm, o.keep, removed, pe, mf.archive); }
+    return true;
+}
+
+// The text of the manifest file: for an encrypted copy with the "mac" (HMAC of the canonical text without it, key of the manifest from the password and the salt / iterations in `m`).
+bool ManifestText(const Manifest& m, const Str& password, Str& out)
+{
+    Json mj = m.toJson(); Str canon = mj.dump(true);
+    if (m.encrypted) {
+        Bytes salt; u8 key[32], mac[32];
+        if (!HexDecode(m.saltHex.c_str(), m.saltHex.size(), salt) || salt.size() != 16 || !SubKeyOf(password, salt.data(), m.kdfIterations, kKeyLabelManifest, key)) return false;
+        HmacSha256(key, 32, canon.data(), canon.size(), mac); memset(key, 0, 32);
+        mj["mac"] = HexEncode(mac, 32);
+    }
+    out = mj.dump(true);
+    return true;
+}
+
+bool CheckManifestAuth(const Manifest& m, const Str& password, Str& err)
+{
+    if (!m.encrypted) return true;
+    Bytes salt;
+    if (m.kdfIterations < 1000 || m.kdfIterations > kEncIterationsMax || !HexDecode(m.saltHex.c_str(), m.saltHex.size(), salt) || salt.size() != 16) { err = "the manifest of the encrypted backup is damaged (salt or iterations)"; return false; }
+    if (PasswordCheck(password, salt.data(), m.kdfIterations) != m.pwcheck) { err = "wrong password"; return false; }
+    u8 key[32], mac[32];
+    if (!SubKeyOf(password, salt.data(), m.kdfIterations, kKeyLabelManifest, key)) { err = "key derivation failed (manifest)"; return false; }
+    HmacSha256(key, 32, m.macInput.data(), m.macInput.size(), mac); memset(key, 0, 32);
+    Str want = HexEncode(mac, 32), got = m.mac; u8 d = got.size() == want.size() ? 0 : 1;
+    for (size_t i = 0; i < want.size() && i < got.size(); ++i) d |= (u8)(want[i] ^ got[i]);
+    if (d) { err = "the manifest of the backup does not match its authentication code: it was changed after the backup was written"; return false; }
     return true;
 }
 
@@ -517,6 +588,13 @@ Str SafeText(const Str& s)
 {
     Str o; for (size_t i = 0; i < s.size() && i < 16; ++i) { unsigned char ch = (unsigned char)s[i]; o += (ch >= 32 && ch < 127) ? (char)ch : '?'; }
     return o.empty() ? Str("none") : o;
+}
+
+// A codec other than xz is refused first: its message does not depend on the (then pointless) check of the manifest's authentication code.
+bool ManifestCodecOk(const Manifest& m, Str& err)
+{
+    if (CodecNameOk(m.codec.c_str())) return true;
+    err = "this backup uses an unsupported compression '" + SafeText(m.codec) + "'; only xz is supported"; return false;
 }
 
 // ---- the reading side: the volumes as one stream -----------------------------------------------------------------
@@ -658,8 +736,6 @@ private:
     bool m_haveFail = false; size_t m_failVol = 0; u64 m_failPos = 0; int m_stuck = 0;
 };
 
-const char* const kRestoreState = ".vm2b-restore.json";
-
 } // namespace
 
 bool VerifyBackup(Target& target, const Str& archive, const Str& password, Progress* pr, Manifest* m, Str& err)
@@ -677,6 +753,7 @@ bool VerifyBackup(Target& target, const Str& archive, const Str& password, const
     if (mout) *mout = m;
     if (m.sha256 != RootHash(m.segments)) { err = "the manifest is damaged (its checksum list does not match)"; return false; }
     bool deep = !m.encrypted || !password.empty();
+    if (m.encrypted && !password.empty() && (!ManifestCodecOk(m, err) || !CheckManifestAuth(m, password, err))) return false;
     SegmentedReader rd(target, m, password, deep, ro, pr);
     if (deep) {
         TarReader tr(&rd);
@@ -695,43 +772,70 @@ bool VerifyBackup(Target& target, const Str& archive, const Str& password, const
 namespace {
 
 // ---- the local folder as a restore destination -------------------------------------------------------------------
+// Security review F6: the restore runs as SYSTEM, so a link that somebody planted INSIDE the destination (a junction / symbolic link where a folder or a file
+// is going to be, a hard link to somebody else's file) must never be followed: every component below the destination is checked for a reparse point before it
+// is used, the opened handle is checked again (a link put there in between) and its final path must lie inside the destination.  The state of an interrupted
+// restore is not kept in the destination (a file there can be planted) but in the service's data folder (ReadOptions::stateDir) or, for a direct caller, in the temporary folder.
 class LocalWriter : public RestoreWriter {
 public:
-    explicit LocalWriter(const Str& dir) : m_dir(dir), m_cur(INVALID_HANDLE_VALUE) {}
+    explicit LocalWriter(const Str& dir) : m_dir(dir.replace_all("/", "\\")), m_cur(INVALID_HANDLE_VALUE) { while (m_dir.size() > 3 && m_dir.ends_with("\\")) m_dir = m_dir.substr(0, m_dir.size() - 1); }
     ~LocalWriter() override { closeCur(); }
     const char* kind() const override { return "local"; }
     bool canResumeInsideFile() const override { return true; }
     bool foldsCase() const override { return true; }
-    Str stateFile(const ReadOptions&, const Str&, const Str&) override { return JoinPath(m_dir, kRestoreState); }
-    bool prepare(const Manifest&, bool) override { Str e; if (!MakeDirs(m_dir, e)) return fail(e); return true; }
-    bool makeDir(const Str& rel) override { Str e; if (!MakeDirs(full(rel), e)) return fail(e); return true; }
+    Str stateFile(const ReadOptions& ro, const Str& archive, const Str& root) override {
+        Str dir = ro.stateDir;
+        if (dir.empty()) { wchar_t t[MAX_PATH]; GetTempPathW(MAX_PATH, t); dir = FromWide(t); }
+        { Str e; MakeDirs(dir, e); }
+        Str id = Str("local|") + m_dir.lower() + "|" + archive + "|" + root; u8 h[32]; Sha256(id.data(), id.size(), h);
+        return JoinPath(dir, "vm2b-restore-local-" + HexEncode(h, 8) + ".json");
+    }
+    // The destination folder's identity (volume, file index, creation time): a state is valid only for the very folder it was made for - a folder that was
+    // deleted and made again does not have the files an old state counts as done.
+    Json saveState() override { Json j = Json::object(); Str id = destIdentity(); j["dest"] = id; return j; }
+    bool loadState(const Json& j) override { Str id = destIdentity(); return !id.empty() && j.get("dest").str() == id; }
+    bool prepare(const Manifest&, bool) override {
+        Str e; if (!MakeDirs(m_dir, e)) return fail(e);
+        m_rootFinal = FinalPathOfPath(m_dir);
+        return true;
+    }
+    bool makeDir(const Str& rel) override { Str e; if (!safeDirs(rel.replace_all("/", "\\"), e)) return fail(e); return true; }
     bool canContinue(const RestoreFile& f) override {
         if (f.resumeAt == 0) return true;
-        HANDLE h = CreateFileW(FilePath(full(f.rel)), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        Str e; if (!checkExisting(full(f.rel), e)) return false;
+        HANDLE h = CreateFileW(FilePath(full(f.rel)), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
         if (h == INVALID_HANDLE_VALUE) return false;
         LARGE_INTEGER sz; sz.QuadPart = 0;
-        bool ok = GetFileSizeEx(h, &sz) && (u64)sz.QuadPart >= f.resumeAt;
+        bool ok = verifyHandle(h, full(f.rel), e) && GetFileSizeEx(h, &sz) && (u64)sz.QuadPart >= f.resumeAt;
         CloseHandle(h);
         return ok;
     }
     bool writeFile(const RestoreFile& f, Source& body, RestoreTick* tick) override {
-        Str path = full(f.rel);
+        Str path = full(f.rel), e;
         if (f.resumeAt) {                                                         // the rest of a file that was open when an earlier run stopped
-            m_cur = CreateFileW(FilePath(path), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+            if (!checkExisting(path, e)) return fail(e);
+            m_cur = CreateFileW(FilePath(path), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
             if (m_cur == INVALID_HANDLE_VALUE) return fail(LastErrorText("cannot open", path));
+            if (!verifyHandle(m_cur, path, e)) { closeCur(); return fail(e); }
             LARGE_INTEGER p; p.QuadPart = (LONGLONG)f.resumeAt; SetFilePointerEx(m_cur, p, nullptr, FILE_BEGIN); SetEndOfFile(m_cur);
         } else {
-            int cut = path.rfind('\\'); Str me; if (cut > 0 && !MakeDirs(path.substr(0, (size_t)cut), me)) return fail(me);
-            m_cur = CreateFileW(FilePath(path), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+            int cut = f.rel.rfind('/'); { int c2 = f.rel.rfind('\\'); if (c2 > cut) cut = c2; }
+            if (cut > 0 && !safeDirs(f.rel.substr(0, (size_t)cut).replace_all("/", "\\"), e)) return fail(e);
+            if (!checkExisting(path, e)) return fail(e);
+            // OPEN_ALWAYS + FILE_FLAG_OPEN_REPARSE_POINT: a link that appeared after the check is opened as the link itself and refused below; nothing is truncated
+            // before the handle is known to be an ordinary file with one name (a hard link to somebody else's file would be emptied by CREATE_ALWAYS)
+            m_cur = CreateFileW(FilePath(path), GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
             if (m_cur == INVALID_HANDLE_VALUE) return fail(LastErrorText("cannot create", path));
+            if (!verifyHandle(m_cur, path, e)) { closeCur(); return fail(e); }
+            SetEndOfFile(m_cur);
         }
         Bytes buf; buf.resize(1 << 20); i64 k;
         while ((k = body.read(buf.data(), buf.size())) > 0) {
             const u8* d = buf.data(); size_t left = (size_t)k;
             while (left) {
                 DWORD w = 0;
-                if (!WriteFile(m_cur, d, left > (1u << 24) ? (1u << 24) : (DWORD)left, &w, nullptr)) { Str e = LastErrorText("cannot write", f.rel); closeCur(true); return fail(e); }
-                if (!w) { Str e = Str("cannot write ") + f.rel + ": the system accepted no data"; closeCur(true); return fail(e); }
+                if (!WriteFile(m_cur, d, left > (1u << 24) ? (1u << 24) : (DWORD)left, &w, nullptr)) { Str e2 = LastErrorText("cannot write", f.rel); closeCur(true); return fail(e2); }
+                if (!w) { Str e2 = Str("cannot write ") + f.rel + ": the system accepted no data"; closeCur(true); return fail(e2); }
                 d += w; left -= w;
             }
             if (tick) tick->chunk((size_t)k);
@@ -748,7 +852,74 @@ public:
 private:
     Str full(const Str& rel) const { return JoinPath(m_dir, rel.replace_all("/", "\\")); }
     void closeCur(bool flush = false) { if (m_cur != INVALID_HANDLE_VALUE) { if (flush) FlushFileBuffers(m_cur); CloseHandle(m_cur); m_cur = INVALID_HANDLE_VALUE; } }
-    Str m_dir; HANDLE m_cur;
+
+    static Str LinkRefusal(const Str& path) { return "refused: \"" + path + "\" in the destination is a link (junction / symbolic link / reparse point); a restore never follows links - remove it or restore to another folder"; }
+    // 1 = does not exist, 0 = exists (attributes in `a`), -1 = cannot tell (error text in e)
+    static int AttrsOf(const Str& path, DWORD& a, Str& e) {
+        a = GetFileAttributesW(FilePath(path));
+        if (a != INVALID_FILE_ATTRIBUTES) return 0;
+        DWORD le = GetLastError();
+        if (le == ERROR_FILE_NOT_FOUND || le == ERROR_PATH_NOT_FOUND) return 1;
+        SetLastError(le); e = LastErrorText("cannot examine", path); return -1;
+    }
+    // the folders below the destination, one by one: made when missing, never a link, never a file
+    bool safeDirs(const Str& relDir, Str& e) {
+        Str cur = m_dir; size_t pos = 0;
+        while (pos < relDir.size()) {
+            size_t end = pos; while (end < relDir.size() && relDir[end] != '\\') ++end;
+            Str part = relDir.substr(pos, end - pos); pos = end + 1;
+            if (part.empty()) continue;
+            cur = JoinPath(cur, part);
+            DWORD a = 0; int r = AttrsOf(cur, a, e);
+            if (r < 0) return false;
+            if (r == 1) {
+                if (!CreateDirectoryW(FilePath(cur), nullptr) && GetLastError() != ERROR_ALREADY_EXISTS) { e = LastErrorText("cannot create", cur); return false; }
+                r = AttrsOf(cur, a, e); if (r != 0) { if (r > 0) e = "cannot create " + cur; return false; }      // looked at again: a link put in between
+            }
+            if (a & FILE_ATTRIBUTE_REPARSE_POINT) { e = LinkRefusal(cur); return false; }
+            if (!(a & FILE_ATTRIBUTE_DIRECTORY)) { e = "cannot create the folder \"" + cur + "\": a file of that name is in the way"; return false; }
+            if (!sameAsExpected(cur, relSoFar(relDir, pos), e)) return false;                 // the real place of the folder is where its name says
+        }
+        return true;
+    }
+    static Str relSoFar(const Str& relDir, size_t pos) { size_t n = pos > relDir.size() ? relDir.size() : pos; while (n > 0 && relDir[n - 1] == '\\') --n; return relDir.substr(0, n); }
+    // the real (final) path of an existing path must be the destination's own real path plus the names below it: a link, a junction or a mount point anywhere on the way ends elsewhere
+    bool sameAsExpected(const Str& path, const Str& rel, Str& e) {
+        if (m_rootFinal.empty()) return true;
+        Str want = expectedFinal(rel);
+        HANDLE h = CreateFileW(FilePath(path), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+        if (h == INVALID_HANDLE_VALUE) return true;                                           // (cannot be opened: the write will say why)
+        Str fin = FinalPathOfHandle(h); CloseHandle(h);
+        if (!fin.empty() && !PathsEqualI(fin, want)) { e = LinkRefusal(path); return false; }
+        return true;
+    }
+    // a path that is about to be written: it may exist (an earlier restore, an older copy) but only as an ordinary file
+    bool checkExisting(const Str& path, Str& e) {
+        DWORD a = 0; int r = AttrsOf(path, a, e);
+        if (r < 0) return false;
+        if (r == 1) return true;
+        if (a & FILE_ATTRIBUTE_REPARSE_POINT) { e = LinkRefusal(path); return false; }
+        if (a & FILE_ATTRIBUTE_DIRECTORY) { e = "cannot write the file \"" + path + "\": a folder of that name is in the way"; return false; }
+        return sameAsExpected(path, relOf(path), e);
+    }
+    Str relOf(const Str& path) const { Str pfx = m_dir.ends_with("\\") ? m_dir : m_dir + "\\"; return path.size() > pfx.size() ? path.substr(pfx.size()) : Str(); }
+    Str expectedFinal(const Str& rel) const { return (m_rootFinal.ends_with("\\") ? m_rootFinal : m_rootFinal + "\\") + rel; }
+    // the open handle: not a reparse point, one name only (a hard link to a file elsewhere), and the final path inside the destination
+    bool verifyHandle(HANDLE h, const Str& path, Str& e) {
+        if (HandleIsReparse(h)) { e = LinkRefusal(path); return false; }
+        BY_HANDLE_FILE_INFORMATION bi;
+        if (GetFileInformationByHandle(h, &bi) && bi.nNumberOfLinks > 1) { e = "refused: \"" + path + "\" has several hard links; a restore does not write into a file that is also somebody else's"; return false; }
+        { Str fin = FinalPathOfHandle(h); if (!m_rootFinal.empty() && !fin.empty() && !PathsEqualI(fin, expectedFinal(relOf(path)))) { e = "refused: \"" + path + "\" leads outside the destination folder (a link on the way)"; return false; } }
+        return true;
+    }
+    Str destIdentity() const {
+        HANDLE h = CreateFileW(FilePath(m_dir), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+        if (h == INVALID_HANDLE_VALUE) return Str();
+        BY_HANDLE_FILE_INFORMATION bi; Str id;
+        if (GetFileInformationByHandle(h, &bi)) id = Str::fmt("%08lx:%08lx%08lx:%08lx%08lx", (unsigned long)bi.dwVolumeSerialNumber, (unsigned long)bi.nFileIndexHigh, (unsigned long)bi.nFileIndexLow, (unsigned long)bi.ftCreationTime.dwHighDateTime, (unsigned long)bi.ftCreationTime.dwLowDateTime);
+        CloseHandle(h); return id;
+    }
+    Str m_dir, m_rootFinal; HANDLE m_cur;
 };
 
 // The data of the current tar entry as a Source for the writer; remembers that the archive (not the writer) failed.
@@ -826,6 +997,7 @@ bool RestoreRun::run(Manifest* mout, Str& err)
     if (mout) *mout = m_m;
     if (m_m.sha256 != RootHash(m_m.segments)) { err = "the manifest is damaged (its checksum list does not match)"; return false; }
     if (m_m.encrypted && m_pw.empty()) { err = "the backup is encrypted: a password is needed"; return false; }
+    if (m_m.encrypted && (!ManifestCodecOk(m_m, err) || !CheckManifestAuth(m_m, m_pw, err))) return false;
 
     m_rd = new SegmentedReader(m_target, m_m, m_pw, true, m_ro, m_pr);
     m_tr = new TarReader(m_rd);

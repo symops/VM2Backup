@@ -167,8 +167,9 @@ bool ServiceCore::start(const ServiceOptions& o, Str& err)
     if (ReadWholeFile(JoinPath(dir, "catalog.json").c_str(), b, e, 16 << 20)) { Json c; if (Json::parse((const char*)b.data(), b.size(), c, e) && c.is_array()) m_catalog = c; }
     m_stop = 0; m_lastTick = now();
     m_sched = CreateThread(nullptr, 0, SchedulerThread, this, 0, nullptr);
-    if (!m_ipc.start(o.pipeName.empty() ? Str(kDefaultPipeName) : o.pipeName, this, err, o.pipeSddl)) { InterlockedExchange(&m_stop, 1); WaitForSingleObject(m_sched, 5000); CloseHandle(m_sched); m_sched = nullptr; return false; }
+    if (!m_ipc.start(o.pipeName.empty() ? Str(kDefaultPipeName) : o.pipeName, this, err, o.pipeSddl, o.pipeKeepTrying)) { InterlockedExchange(&m_stop, 1); WaitForSingleObject(m_sched, 5000); CloseHandle(m_sched); m_sched = nullptr; return false; }
     m_started = true;
+    if (m_ipc.waiting()) Log(L"the pipe name is held by another program: the service runs without the local channel and takes it as soon as it is free");
     { Str werr; if (!m_web.start(this, m_cfg.dataDir(), werr, WebDefaultOn(o))) Log(L"web administration not started: %s", Wide(werr).c_str()); }
     Log(L"service started, data in %s", Wide(dir).c_str());
     return true;
@@ -403,12 +404,12 @@ void ServiceCore::backupElement(Job* j, const Json& el, const Str& taskName, Jso
           o.codec = CodecOptions(lj.is_number() ? (int)lj.integer() : (int)settings.get("level").integer(kCodecDefaultLevel), (int)settings.get("threads").integer(0)); }
         if (el.get("encrypt").get("enabled").boolean()) o.password = el.get("encrypt").get("password").str();
         o.resume = el.get("resume").boolean(true); o.keep = (int)el.get("keep").integer(0); o.verify = el.get("verify").boolean(true); o.allowLive = el.get("allow_live").boolean(false);
-        o.kdfIterations = (u32)settings.get("kdf_iterations").integer(kEncIterationsDefault);
+        { i64 ki = settings.get("kdf_iterations").integer(kEncIterationsDefault); o.kdfIterations = (u32)(ki < kEncIterationsMin ? kEncIterationsMin : ki > kEncIterationsMax ? kEncIterationsMax : ki); }     // an old, weaker value of the settings is raised
         i64 seg = el.has("segment_mib") && !el.get("segment_mib").is_null() ? el.get("segment_mib").integer() : settings.get("segment_mib").integer(kDefaultSegmentMiB);
         o.segmentBytes = (u64)seg << 20;
         o.retry.attempts = (int)settings.get("retry_attempts").integer(8); o.retry.baseDelayMs = (int)settings.get("retry_base_sec").integer(2) * 1000; o.retry.maxDelayMs = (int)settings.get("retry_max_sec").integer(60) * 1000;
         if (settings.get("retry_base_ms").integer(0) > 0) o.retry.baseDelayMs = (int)settings.get("retry_base_ms").integer();       // for tests
-        o.limiter = &j->limiter;
+        o.limiter = &j->limiter; o.tokenSecret = tokenSecret();
         Manifest m; Str warn, berr;
         // Another job that backs up the same VM into the same folder (two tasks that fire together) would adopt or delete the journal and the
         // volumes of this one: wait until it is done.
@@ -494,6 +495,8 @@ void ServiceCore::runJob(Job* j)
             ReadOptions ro; ro.retry.attempts = (int)settings.get("retry_attempts").integer(8); ro.retry.baseDelayMs = (int)settings.get("retry_base_sec").integer(2) * 1000; ro.retry.maxDelayMs = (int)settings.get("retry_max_sec").integer(60) * 1000;
             if (settings.get("retry_base_ms").integer(0) > 0) ro.retry.baseDelayMs = (int)settings.get("retry_base_ms").integer();
             ro.limiter = &j->limiter; j->set(&Job::phase, j->kind);
+            ro.stateDir = JoinPath(m_cfg.dataDir(), "restore-state");        // the state of an interrupted restore stays in the service's protected folder, never in the destination (F6)
+            { Str se; MakeDirs(ro.stateDir, se); }
             Manifest m; bool ok;
             EsxiRestoreResult eres; bool isEsxi = j->kind == "restore_esxi";
             if (isEsxi) {
@@ -504,8 +507,6 @@ void ServiceCore::runJob(Job* j)
                     const Json& op = j->args.get("options"); EsxiRestoreOptions eo;
                     eo.vmName = op.get("vm_name").str(); eo.datacenter = op.get("datacenter").str(); eo.datastore = op.get("datastore").str(); eo.folder = op.get("folder").str();
                     eo.pool = op.get("pool").str(); eo.host = op.get("host").str(); eo.powerOn = op.get("power_on").boolean(false);
-                    ro.stateDir = JoinPath(m_cfg.dataDir(), "restore-state");
-                    { Str se; MakeDirs(ro.stateDir, se); }       // the engine writes the state file there and does not make the folder: without it a paused / restarted restore could never continue
                     ok = RestoreToEsxi(*t, j->args.get("archive").str(), es, eo, j->args.get("password").str(), ro, j, &eres, err);
                     m.archive = j->args.get("archive").str(); m.vm = eres.vmName;
                 }
@@ -680,6 +681,24 @@ static Str NormDirForCompare(const Str& d)
     return x;
 }
 
+// The secret that signs the resume tokens of unencrypted backups (security review F12): made once, kept in the data folder (SYSTEM + Administrators only).
+// Not readable / not writable: empty, then the tokens are not signed (and an unsigned token is accepted as before).
+static CRITICAL_SECTION g_tokCs; static INIT_ONCE g_tokOnce = INIT_ONCE_STATIC_INIT;
+static BOOL CALLBACK TokInit(PINIT_ONCE, PVOID, PVOID*) { InitializeCriticalSection(&g_tokCs); return TRUE; }
+Str ServiceCore::tokenSecret()
+{
+    InitOnceExecuteOnce(&g_tokOnce, TokInit, nullptr, nullptr);
+    EnterCriticalSection(&g_tokCs);
+    if (m_tokenSecret.size() != 32) {
+        Str path = JoinPath(m_cfg.dataDir(), "resume-secret.bin"); Bytes b; Str e;
+        if (FileExists(path) && ReadWholeFile(path.c_str(), b, e, 1024) && b.size() == 32) m_tokenSecret = Str((const char*)b.data(), 32);
+        else { u8 r[32]; if (RandomBytes(r, 32) && WriteWholeFile(path.c_str(), r, 32, e)) m_tokenSecret = Str((const char*)r, 32); memset(r, 0, 32); }
+    }
+    Str out = m_tokenSecret;
+    LeaveCriticalSection(&g_tokCs);
+    return out;
+}
+
 bool ServiceCore::knownBackupDirectory(const Str& serverId, const Str& dirIn)
 {
     Json srv; if (!m_cfg.server(serverId, true, srv)) return false;
@@ -730,7 +749,7 @@ bool ServiceCore::listTarget(const Json& args, Json& result, Str& err)
         if (!t) continue;
         Vec<Manifest> ms; Vec<ResumeInfo> rs; Str le;
         if (t->connect() && ListBackups(*t, nullptr, ms, le)) {
-            for (const Manifest& m : ms) { Json o = m.toJson(); o.remove("segments"); o["volumes"] = (u64)m.segments.size(); o["server"] = serverId; o["directory"] = dirs[d]; found.push(o); }
+            for (const Manifest& m : ms) { Json o = m.toJson(); o.remove("segments"); o.remove("salt"); o.remove("pwcheck"); /* the key-derivation salt and the password check of an encrypted copy are not for the listing */ o["volumes"] = (u64)m.segments.size(); o["server"] = serverId; o["directory"] = dirs[d]; found.push(o); }
             ListResumable(*t, nullptr, rs, le);
             for (const ResumeInfo& r : rs) { Json o = Json::object(); o["vm"] = r.vm; o["archive"] = r.archive; o["stamp"] = r.stamp; o["created"] = r.created; o["volumes_done"] = r.volumesDone; o["stored_bytes"] = r.storedBytes; o["raw_bytes"] = r.rawBytes; o["server"] = serverId; o["directory"] = dirs[d]; resumable.push(o); }
             if (!t->auth_failed) authOk(serverId);

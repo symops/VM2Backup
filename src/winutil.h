@@ -34,6 +34,14 @@ Str  LocalStamp(double unixTime);              // "20261024-153045"
 Str  LocalIso(double unixTime);                // "2026-10-24T15:30:45"
 enum { kMaxNameBytes = 200 };                       // longest VM-name part of a file / folder name we create
 Str  TruncateUtf8(const Str& s, size_t maxBytes);
+// Links (security review F6 / F10): the real path behind an open handle, "\\?\" removed (compare with PathsEqualI / FinalPathInside, which ignore case in every alphabet; empty = the system could not tell: the caller does not refuse then);
+// FinalPathOfPath is the same for a path; HandleIsReparse: the handle is a link / junction itself (it was opened with FILE_FLAG_OPEN_REPARSE_POINT);
+// FinalPathInside: `path` is `root` or lies below it (both from FinalPathOf*, an empty one counts as inside).
+Str  FinalPathOfHandle(HANDLE h);
+bool PathsEqualI(const Str& a, const Str& b);
+Str  FinalPathOfPath(const Str& path);
+bool HandleIsReparse(HANDLE h);
+bool FinalPathInside(const Str& finalPath, const Str& finalRoot);
 Str  SafeName(const Str& s);                   // a VM name made into a file name: letters, digits, . _ - kept
 
 } // namespace vm2b

@@ -819,4 +819,118 @@ VM2B_TEST("engine", throttle_accuracy_and_lifting)
     return true;
 }
 
+
+// ---- security review F11 / F12: the manifest of an encrypted copy is authenticated, the resume token cannot be changed on the storage -------------
+static bool PutText(Target& t, const Str& name, const Str& text) { return t.put_bytes(name, text.data(), text.size()); }
+static bool GetText(Target& t, const Str& name, Str& text) { Bytes b; if (!t.get_bytes(name, b, 64 << 20)) return false; text = Str((const char*)b.data(), b.size()); return true; }
+
+VM2B_TEST("engine", manifest_of_an_encrypted_copy_is_authenticated)
+{
+    TmpDir tmp(c_, "mmac");
+    Str root = tmp.sub("vms"); Vec<FileRec> files; MakeVm(c_, root, "vm", files, 60000);
+    Target* t = LocalTargetAt(tmp.sub("store")); VmSource* src = NewDirectorySource(root);
+    BackupOptions o; o.codec.level = 1; o.password = "mac-pw"; o.kdfIterations = 3000; o.retry = FastRetry();
+    Manifest m; Str w, err; T_CHECK(BackupVm(*src, "vm", *t, o, nullptr, m, w, err));
+    Str good; T_CHECK(GetText(*t, m.archive + ".json", good));
+    T_CHECK(good.find("\"mac\"") >= 0 && good.find("\"salt\"") >= 0 && good.find("\"pwcheck\"") >= 0);
+    T_CHECK(VerifyBackup(*t, m.archive, o.password, nullptr, nullptr, err));
+    // a wrong password is still "wrong password" (not a manifest complaint)
+    T_CHECK(!VerifyBackup(*t, m.archive, "other", nullptr, nullptr, err)); T_CHECK(err.find("wrong password") >= 0);
+    // every field of the manifest is covered: change one at a time, the password check passes, the MAC does not
+    const char* edits[][2] = { { "\"vm\": \"vm\"", "\"vm\": \"vx\"" }, { "\"stamp\": \"", "\"stamp\": \"9" }, { "\"level\": ", "\"level\": 1" }, { "\"size\": ", "\"size\": 1" }, { "\"kdf_iterations\": 3000", "\"kdf_iterations\": 3001" } };
+    for (auto& e : edits) {
+        int at = good.find(e[0]); if (at < 0) { c_.note("edit not found: %s", e[0]); c_.failed = true; continue; }
+        Str bad = good.substr(0, (size_t)at) + e[1] + good.substr((size_t)at + strlen(e[0]));
+        T_CHECK(PutText(*t, m.archive + ".json", bad));
+        Str e1; bool ok = VerifyBackup(*t, m.archive, o.password, nullptr, nullptr, e1);
+        if (ok) { c_.note("a manifest changed at %s was accepted", e[0]); c_.failed = true; }
+        Str e2; bool rok = RestoreBackup(*t, m.archive, tmp.sub("rest-bad"), o.password, nullptr, nullptr, e2);
+        if (rok) { c_.note("a restore of a manifest changed at %s was accepted", e[0]); c_.failed = true; }
+        T_CHECK(!rok);
+    }
+    // the code removed, or replaced by another one
+    { int a = good.find("\"mac\""); Str bad = good.substr(0, (size_t)a); while (!bad.empty() && (bad[bad.size() - 1] == ' ' || bad[bad.size() - 1] == '\n' || bad[bad.size() - 1] == '\r' || bad[bad.size() - 1] == ',')) bad = bad.substr(0, bad.size() - 1); bad += "\n}";
+      T_CHECK(PutText(*t, m.archive + ".json", bad)); T_CHECK(!VerifyBackup(*t, m.archive, o.password, nullptr, nullptr, err)); }
+    // hostile iterations / salt in the manifest: refused at once, no key derivation for minutes
+    { int a = good.find("\"kdf_iterations\": 3000"); Str bad = good.substr(0, (size_t)a) + "\"kdf_iterations\": 100000000" + good.substr((size_t)a + 22);
+      T_CHECK(PutText(*t, m.archive + ".json", bad)); DWORD t0 = GetTickCount(); T_CHECK(!VerifyBackup(*t, m.archive, o.password, nullptr, nullptr, err)); T_CHECK(GetTickCount() - t0 < 4000); }
+    // the original text works again; without a password only sizes and hashes are checked (the manifest cannot be authenticated then)
+    T_CHECK(PutText(*t, m.archive + ".json", good)); T_CHECK(VerifyBackup(*t, m.archive, o.password, nullptr, nullptr, err)); T_CHECK(VerifyBackup(*t, m.archive, "", nullptr, nullptr, err));
+    T_CHECK(RestoreBackup(*t, m.archive, tmp.sub("rest"), o.password, nullptr, nullptr, err)); T_CHECK(SameTree(c_, tmp.sub("rest"), "vm", files));
+    delete src; delete t;
+    return true;
+}
+
+// A source with a resume token (the directory source has none), to see what the engine does with the token in the journal.
+struct TokenSource : VmSource {
+    VmSource* in; Str gotToken; int begins;
+    explicit TokenSource(VmSource* i) : in(i), begins(0) {}
+    ~TokenSource() override { delete in; }
+    const char* kind() const override { return in->kind(); }
+    bool list(Vec<VmInfo>& v) override { return in->list(v) || fail(in->err); }
+    bool begin(const Str& vm, bool live, const Str& resumeToken, Str& fp, Str& token, Str& warning) override {
+        ++begins; gotToken = resumeToken;
+        if (!in->begin(vm, live, Str(), fp, token, warning)) return fail(in->err, in->transient);
+        token = "cold|VM2Backup-1-on-1700000000/0"; return true;           // the shape of an ESXi token: the power state before the backup
+    }
+    bool pack(TarWriter& tar, Progress* pr, Str& warning) override { if (!in->pack(tar, pr, warning)) return fail(in->err, in->transient); return true; }
+    void end(bool keep) override { in->end(keep); }
+    bool holdsVm() const override { return in->holdsVm(); }
+};
+
+VM2B_TEST("resume", resume_token_is_signed_and_cannot_be_changed)
+{
+    for (int variant = 0; variant < 3; ++variant) {                  // 0: unencrypted, token signed with the service's secret   1: encrypted   2: unencrypted, signed, the secret differs later
+        TmpDir tmp(c_, "rtok");
+        Str root = tmp.sub("vms"); Vec<FileRec> files; MakeVm(c_, root, "vm", files, 400000); AddBig(c_, root, "vm", files, 1500000);
+        BackupOptions o = SmallVolumes(c_); o.retry = FastRetry(0); o.segmentBytes = 512 * 100;
+        Str secret((const char*)Content(c_, 32, 1).data(), 32);
+        if (variant != 1) o.tokenSecret = secret; else o.password = "tok-pw";
+        Str storePath = tmp.sub("store");
+        {   // an interrupted backup: the journal keeps the token
+            FlakyTarget* ft = new FlakyTarget(LocalTargetAt(storePath), &c_, 1, 100000, 800000);
+            TokenSource* src = new TokenSource(NewDirectorySource(root)); Manifest m; Str w, err;
+            T_CHECK(!BackupVm(*src, "vm", *ft, o, nullptr, m, w, err));
+            delete src; delete ft;
+        }
+        Target* t = LocalTargetAt(storePath);
+        Vec<ResumeInfo> rs; Str e2; T_CHECK(ListResumable(*t, nullptr, rs, e2)); T_CHECK(rs.size() == 1); if (rs.empty()) { delete t; continue; }
+        Str jtext; T_CHECK(GetText(*t, rs[0].archive + ".resume", jtext));
+        if (variant != 1) T_CHECK(jtext.find("m1:") >= 0);
+        if (variant == 1) { T_CHECK(jtext.find("e1:") >= 0); T_CHECK(jtext.find("VM2Backup-1-on") < 0); }      // never in clear text with a password
+        BackupOptions o2 = o; o2.retry = FastRetry();
+        // the untouched journal: continues, the source gets the token back without the signature
+        {
+            TokenSource* src = new TokenSource(NewDirectorySource(root)); Manifest m; Str w, err; CountProgress pr;
+            // the backup would finish and remove the journal: run it on a copy of the store folder
+            Str copy = tmp.sub("store-copy"); Vec<Str> names; t->list(names); Target* tc = LocalTargetAt(copy); T_CHECK(tc->connect());
+            for (const Str& n : names) { Bytes b; T_CHECK(t->get_bytes(n, b, 64 << 20)); T_CHECK(tc->put_bytes(n, b.data(), b.size())); }
+            bool ok = variant == 2 ? true : BackupVm(*src, "vm", *tc, o2, &pr, m, w, err);
+            if (variant != 2) { T_CHECK(ok); T_CHECK(pr.resumes == 1); T_CHECK(src->gotToken == "cold|VM2Backup-1-on-1700000000/0"); }
+            delete src; delete tc;
+        }
+        // a changed token (the power state "on" -> "off"), or one stripped of its signature: the copy starts over with a warning, nothing is believed
+        Str tampered;
+        { int a = jtext.find("\"token\""); T_CHECK(a >= 0); size_t b = (size_t)a + 7; while (b < jtext.size() && jtext[b] != '"') ++b; ++b; size_t e = b; while (e < jtext.size() && jtext[e] != '"') ++e; Str tok = jtext.substr(b, e - b);
+          Str nt = tok;
+          if (variant == 1) nt[nt.size() - 3] = nt[nt.size() - 3] == 'A' ? 'B' : 'A';               // a flipped character of the encrypted token
+          else if (tok.starts_with("m1:")) { int q = nt.find("-on-"); T_CHECK(q >= 0); nt = nt.substr(0, (size_t)q) + "-off-" + nt.substr((size_t)q + 4); }
+          tampered = jtext.substr(0, b) + nt + jtext.substr(e); }
+        if (variant == 2) { o2.tokenSecret = Str((const char*)Content(c_, 32, 7).data(), 32); tampered = jtext; }     // the service's secret changed: the old signature is worthless
+        T_CHECK(PutText(*t, rs[0].archive + ".resume", tampered));
+        {
+            TokenSource* src = new TokenSource(NewDirectorySource(root)); Manifest m; Str w, err; CountProgress pr;
+            bool ok = BackupVm(*src, "vm", *t, o2, &pr, m, w, err);
+            if (!ok) c_.note("tampered token: %s", err.c_str());
+            T_CHECK(ok); T_CHECK(pr.resumes == 0);                                        // it did not continue
+            if (src->gotToken.find("off") >= 0 || (!src->gotToken.empty())) { c_.note("the source was given a token: %s", src->gotToken.c_str()); c_.failed = true; }
+            T_CHECK(w.find("resume token") >= 0);                                        // and says why
+            Str re; T_CHECK(RestoreBackup(*t, m.archive, tmp.sub("rest"), o2.password, nullptr, nullptr, re)); T_CHECK(SameTree(c_, tmp.sub("rest"), "vm", files));
+            delete src;
+        }
+        delete t;
+    }
+    return true;
+}
+
 } // namespace vm2b

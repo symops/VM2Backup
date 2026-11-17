@@ -46,6 +46,7 @@ public:
         if (vm.empty() || vm.find('/') >= 0 || vm.find('\\') >= 0 || vm == "." || vm == "..") return fail("bad VM name: " + vm);
         m_dir = JoinPath(m_root, vm);
         if (!DirExists(m_dir)) return fail("VM not found: " + vm);
+        m_dirFinal = FinalPathOfPath(m_dir);
         // Папка ВМ - это ссылка (junction / symlink): list() такие папки не показывает; здесь отказ нужен для имени, заданного вручную или оставшегося в задаче,
         // иначе подмена папки ссылкой увела бы копию (с правами службы) в чужой каталог, например C:\Windows.
         { DWORD at = GetFileAttributesW(FilePath(m_dir)); if (at != INVALID_FILE_ATTRIBUTES && (at & FILE_ATTRIBUTE_REPARSE_POINT)) return fail("the folder of the VM \"" + vm + "\" is a link (junction or symbolic link): links are not followed, give the real folder"); }
@@ -88,7 +89,8 @@ public:
                 // (виртуальная машина работает и держит диск) копировать нельзя: резервная копия не должна молча пропускать файл.
                 HANDLE h = INVALID_HANDLE_VALUE; DWORD le = 0;
                 for (int attempt = 0; attempt < 16; ++attempt) {
-                    h = CreateFileW(FilePath(JoinPath(m_dir, e.rel)), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+                    // FILE_FLAG_OPEN_REPARSE_POINT: a file that was replaced by a link after the folder was walked is opened as the link itself and refused below (F10)
+                    h = CreateFileW(FilePath(JoinPath(m_dir, e.rel)), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
                     if (h != INVALID_HANDLE_VALUE) break;
                     le = GetLastError();
                     if (le != ERROR_SHARING_VIOLATION && le != ERROR_LOCK_VIOLATION) break;
@@ -96,6 +98,9 @@ public:
                     Sleep(500);
                 }
                 if (h == INVALID_HANDLE_VALUE) { SetLastError(le); return fail(LastErrorText("cannot read", e.rel) + ((le == ERROR_SHARING_VIOLATION || le == ERROR_LOCK_VIOLATION) ? " (the file is held by another program; the backup does not skip files)" : "")); }
+                if (HandleIsReparse(h) || !FinalPathInside(FinalPathOfHandle(h), m_dirFinal)) {        // a link (to a file anywhere on the machine, read here with the service's rights) or a parent folder that became a link
+                    CloseHandle(h); return fail("\"" + e.rel + "\" was replaced by a link while the backup was running (it leads outside the folder of the VM): links are not followed, the file was not read");
+                }
                 if (skip) { LARGE_INTEGER p; p.QuadPart = (LONGLONG)skip; if (!SetFilePointerEx(h, p, nullptr, FILE_BEGIN)) { Str er = LastErrorText("cannot seek in", e.rel); CloseHandle(h); return fail(er); } }
                 bool short_ = false;
                 while (left) {
@@ -138,7 +143,7 @@ private:
             }
         }
     }
-    SmbConnection* m_conn; Str m_root, m_vm, m_dir, m_meta; i64 m_metaTime = 0; Vec<Entry> m_entries;
+    SmbConnection* m_conn; Str m_root, m_vm, m_dir, m_dirFinal, m_meta; i64 m_metaTime = 0; Vec<Entry> m_entries;
 };
 
 } // namespace

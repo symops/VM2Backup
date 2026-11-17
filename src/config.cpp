@@ -151,13 +151,13 @@ bool Config::setSettings(const Json& patch, Str& err)
         if (k == "level" && !LevelValueOk(v)) { unlock(); err = kCodecLevelError; return false; }                    // (before the generic kind check: a string "5" gets the same text as 10)
         bool defBool = s.get(k.c_str()).is_bool();                                                         // a switch may be sent as true / false or 1 / 0
         if (defBool ? !(v.is_bool() || v.is_number()) : cls(v) != cls(s.get(k.c_str()))) { unlock(); err = "bad value of " + k; return false; }   // a setting keeps the kind of its value (number / text / object)
-        // upper limits: what the engine can really use (kdf: the decryptor refuses more than 100000000 iterations; the pauses are multiplied by 1000 as int; the volume size is shifted by 20)
+        // upper limits: what the engine can really use (kdf: the decryptor refuses more than 10000000 iterations, and fewer than 100000 are too weak for a new copy; the pauses are multiplied by 1000 as int; the volume size is shifted by 20)
         if ((k == "retry_base_sec" || k == "retry_max_sec") && v.integer() > 86400) { unlock(); err = "bad value of " + k; return false; }
-        if ((k == "kdf_iterations" && v.integer() > 100000000) || (k == "segment_mib" && v.integer() > (1 << 30)) || (k == "misfire_grace_min" && v.integer() > 1000000) ||
+        if ((k == "kdf_iterations" && v.integer() > kEncIterationsMax) || (k == "segment_mib" && v.integer() > (1 << 30)) || (k == "misfire_grace_min" && v.integer() > 1000000) ||
             (k == "retry_base_ms" && v.integer() > 86400000) || (k == "speed_limit_mbit" && !(v.num() <= 1e7)) || (k == "max_history" && v.integer() > 10000000)) { unlock(); err = "bad value of " + k; return false; }
         if ((k == "max_parallel" && (v.integer() < 1 || v.integer() > 16)) || (k == "retry_attempts" && (v.integer() < 0 || v.integer() > 100)) ||
             (k == "retry_base_sec" && v.integer() < 1) || (k == "retry_max_sec" && v.integer() < 1) || (k == "speed_limit_mbit" && v.num() < 0) ||
-            (k == "segment_mib" && v.integer() != 0 && v.integer() < 1) || (k == "kdf_iterations" && v.integer() < 1000) || (k == "misfire_grace_min" && v.integer() < 0) || (k == "retry_base_ms" && v.integer() < 0)) { unlock(); err = "bad value of " + k; return false; }
+            (k == "segment_mib" && v.integer() != 0 && v.integer() < 1) || (k == "kdf_iterations" && v.integer() < kEncIterationsMin) || (k == "misfire_grace_min" && v.integer() < 0) || (k == "retry_base_ms" && v.integer() < 0)) { unlock(); err = "bad value of " + k; return false; }
         if (k == "level" && !LevelValueOk(v)) { unlock(); err = kCodecLevelError; return false; }
         if (k == "threads" && (v.integer() < 0 || v.integer() > 64)) { unlock(); err = "bad number of compression threads"; return false; }
         if (defBool) s[k.c_str()] = Json(v.boolean()); else s[k.c_str()] = v;

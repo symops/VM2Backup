@@ -284,10 +284,10 @@ VM2B_TEST("core", encrypt_header_and_volume_games)
     // headers: short, wrong magic, hostile iteration counts, wrong volume index -- fast errors, no hang
     Bytes v0 = EncVol(d, "pw", salt, 0, true);
     T_CHECK(DecAll(v0, "pw", 0, out) && out.size() == d.size());
-    for (size_t cut = 0; cut < 40; ++cut) { Bytes x = v0; x.resize(cut); T_CHECK(!DecAll(x, "pw", 0, out)); }
-    for (int t = 0; t < 8; ++t) { Bytes x = v0; x[t] ^= 0x55; T_CHECK(!DecAll(x, "pw", 0, out)); }
+    for (size_t cut = 0; cut < (size_t)kEncHeaderBytes; ++cut) { Bytes x = v0; x.resize(cut); T_CHECK(!DecAll(x, "pw", 0, out)); }
+    for (int t = 0; t < kEncHeaderBytes; ++t) { Bytes x = v0; x[t] ^= 0x55; T_CHECK(!DecAll(x, "pw", 0, out)); }     // every byte of the header is authenticated (magic, salt, iterations, volume, nonce prefix)
     DWORD t0 = GetTickCount();
-    u32 bad[] = { 0, 1, 999, 100000001, 0xffffffffu, 0x80000000u };
+    u32 bad[] = { 0, 1, 999, 10000001, 100000000, 100000001, 0xffffffffu, 0x80000000u };
     for (u32 it : bad) { Bytes x = v0; x[24] = (u8)(it >> 24); x[25] = (u8)(it >> 16); x[26] = (u8)(it >> 8); x[27] = (u8)it; Str er; T_CHECK(!DecAll(x, "pw", 0, out, nullptr, &er)); }
     T_CHECK(GetTickCount() - t0 < 5000);                                                                       // refused up front, not derived
     { Bytes x = v0; x[31] ^= 1; T_CHECK(!DecAll(x, "pw", 0, out)); }                                             // wrong volume index in the header
@@ -297,7 +297,7 @@ VM2B_TEST("core", encrypt_header_and_volume_games)
     Bytes a = EncVol(zeros, "pw", salt, 0, false, 2000, 1 << 20), b = EncVol(zeros, "pw", salt, 1, false, 2000, 1 << 20);
     Vec<Str> seen;
     for (int pass = 0; pass < 2; ++pass) {
-        const Bytes& x = pass ? b : a; size_t o = 32;
+        const Bytes& x = pass ? b : a; size_t o = kEncHeaderBytes;
         while (o + 4 <= x.size()) { u32 len = (u32)x[o] << 24 | (u32)x[o + 1] << 16 | (u32)x[o + 2] << 8 | x[o + 3]; Str blk((const char*)x.data() + o + 4, 32 < len ? 32 : len); for (const Str& s : seen) T_CHECK(s != blk); seen.push_back(blk); o += 4 + len; }
     }
     T_CHECK(seen.size() >= 8);
@@ -312,13 +312,13 @@ VM2B_TEST("core", encrypt_header_and_volume_games)
     T_CHECK(!DecAll(w1, "pw", 0, out)); T_CHECK(!DecAll(w2, "pw", 1, out)); T_CHECK(!DecAll(w0, "pw", 2, out));       // reordered / swapped
     // blocks moved between volumes (same salt, same key!): block 0 of volume 0 pasted into volume 1 in place of its own
     {
-        size_t s0 = 32; u32 l0 = (u32)w0[s0] << 24 | (u32)w0[s0 + 1] << 16 | (u32)w0[s0 + 2] << 8 | w0[s0 + 3];
-        size_t s1 = 32; u32 l1 = (u32)w1[s1] << 24 | (u32)w1[s1 + 1] << 16 | (u32)w1[s1 + 2] << 8 | w1[s1 + 3];
-        Bytes x = Prefix(w1, 32); for (size_t i = 0; i < 4 + l0; ++i) x.push_back(w0[s0 + i]); for (size_t i = s1 + 4 + l1; i < w1.size(); ++i) x.push_back(w1[i]);
+        size_t s0 = kEncHeaderBytes; u32 l0 = (u32)w0[s0] << 24 | (u32)w0[s0 + 1] << 16 | (u32)w0[s0 + 2] << 8 | w0[s0 + 3];
+        size_t s1 = kEncHeaderBytes; u32 l1 = (u32)w1[s1] << 24 | (u32)w1[s1 + 1] << 16 | (u32)w1[s1 + 2] << 8 | w1[s1 + 3];
+        Bytes x = Prefix(w1, kEncHeaderBytes); for (size_t i = 0; i < 4 + l0; ++i) x.push_back(w0[s0 + i]); for (size_t i = s1 + 4 + l1; i < w1.size(); ++i) x.push_back(w1[i]);
         T_CHECK(!DecAll(x, "pw", 1, out));
     }
     // truncation / duplication / reorder of blocks at every boundary of the 3-block volume
-    Vec<size_t> st; { size_t o = 32; while (o < w0.size()) { st.push_back(o); u32 len = (u32)w0[o] << 24 | (u32)w0[o + 1] << 16 | (u32)w0[o + 2] << 8 | w0[o + 3]; o += 4 + len; } st.push_back(w0.size()); }
+    Vec<size_t> st; { size_t o = kEncHeaderBytes; while (o < w0.size()) { st.push_back(o); u32 len = (u32)w0[o] << 24 | (u32)w0[o + 1] << 16 | (u32)w0[o + 2] << 8 | w0[o + 3]; o += 4 + len; } st.push_back(w0.size()); }
     T_CHECK(st.size() == 4);                                                                                       // 3 MiB = 3 blocks (+ the end)
     for (size_t cut = 0; cut + 1 < st.size(); ++cut) { Bytes x = Prefix(w0, st[cut]); T_CHECK(!DecAll(x, "pw", 0, out)); }     // cut at every block boundary, even keeping the header only
     for (size_t b2 = 0; b2 + 1 < st.size(); ++b2) {
@@ -332,7 +332,7 @@ VM2B_TEST("core", encrypt_header_and_volume_games)
     }
     // block length field damage: huge, zero, off by one
     u32 lens[] = { 0, 15, 16, 17, 0x7fffffffu, 0xffffffffu, (1u << 20) + 17 };
-    for (u32 L : lens) { Bytes x = w0; x[32] = (u8)(L >> 24); x[33] = (u8)(L >> 16); x[34] = (u8)(L >> 8); x[35] = (u8)L; T_CHECK(!DecAll(x, "pw", 0, out)); }
+    for (u32 L : lens) { Bytes x = w0; x[40] = (u8)(L >> 24); x[41] = (u8)(L >> 16); x[42] = (u8)(L >> 8); x[43] = (u8)L; T_CHECK(!DecAll(x, "pw", 0, out)); }
     // an empty password and unicode passwords round trip; a password that differs in one byte fails
     Bytes ep = EncVol(p2, "", salt, 0, true); T_CHECK(DecAll(ep, "", 0, out)); T_CHECK(!DecAll(ep, " ", 0, out));
     Str uni = "\xd0\x9f\xd0\xb0\xd1\x80\xd0\xbe\xd0\xbb\xd1\x8c\xe6\x97\xa5\xe6\x9c\xac\xf0\x9f\x94\x91";
@@ -387,6 +387,25 @@ Str PaxRec(const Str& k, const Str& v)
 void Append(Bytes& a, const Bytes& b) { for (size_t i = 0; i < b.size(); ++i) a.push_back(b[i]); }
 Bytes Zeros(size_t n) { Bytes z; z.resize(n); return z; }
 } // namespace
+
+// Security review F11: the nonce prefix is random per written volume (a volume written again with other content never repeats a nonce under the same key),
+// and the whole header is authenticated by every block.
+VM2B_TEST("core", encrypt_nonce_prefix_is_fresh_per_written_volume)
+{
+    u8 salt[16]; c_.fill(salt, 16);
+    Bytes a = Noise(c_, 3 << 20, 1), b = Noise(c_, 3 << 20, 1);               // the same volume written twice with DIFFERENT content (a resume after the source changed)
+    Bytes v1 = EncVol(a, "pw", salt, 2, false, 2000, 1 << 20), v2 = EncVol(b, "pw", salt, 2, false, 2000, 1 << 20), v3 = EncVol(a, "pw", salt, 2, false, 2000, 1 << 20);
+    T_CHECK(memcmp(v1.data() + 32, v2.data() + 32, 8) != 0); T_CHECK(memcmp(v1.data() + 32, v3.data() + 32, 8) != 0);       // different prefixes under the same key
+    T_CHECK(memcmp(v1.data() + kEncHeaderBytes, v3.data() + kEncHeaderBytes, 64) != 0);                                        // the same data: another ciphertext
+    // 64 volumes of one backup: no repeated prefix
+    Vec<Str> seen; for (int i = 0; i < 64; ++i) { Bytes v = EncVol(a, "pw", salt, 2, false, 1000, 1 << 20); Str p((const char*)v.data() + 32, 8); for (const Str& x : seen) T_CHECK(x != p); seen.push_back(p); if (i > 3) break; }
+    Bytes out; T_CHECK(DecAll(v1, "pw", 2, out) && out.size() == a.size() && memcmp(out.data(), a.data(), a.size()) == 0);
+    // the header of a volume pasted onto another volume's blocks (same salt, same key, same index): the blocks are bound to their own header
+    Bytes x = v1; memcpy(x.data() + 32, v2.data() + 32, 8); T_CHECK(!DecAll(x, "pw", 2, out));
+    // iterations: a value in range but not the one the key was made with
+    Bytes y = v1; y[27] ^= 1; T_CHECK(!DecAll(y, "pw", 2, out));
+    return true;
+}
 
 VM2B_TEST("core", tar_huge_sizes_and_pax_edges)
 {

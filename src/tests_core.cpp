@@ -136,7 +136,7 @@ VM2B_TEST("core", encrypt_roundtrip_and_tamper)
         Bytes d = RandomData(c_, n, 1 + (int)c_.rnd(3)), enc, out;
         Str pw = Str::fmt("pa$$w0rd-%u-\xd0\xbf\xd0\xb0\xd1\x80\xd0\xbe\xd0\xbb\xd1\x8c", c_.rnd(100000));
         T_CHECK(EncryptTo(c_, d, pw, c_.coin() ? 1 + c_.rnd(300000) : (size_t)1 << 21, enc));
-        T_CHECK(enc.size() == 32 + 4 * ((n + 1048575) / 1048576 + (n == 0 ? 1 : 0)) + n + 16 * ((n + 1048575) / 1048576 + (n == 0 ? 1 : 0)));
+        T_CHECK(enc.size() == kEncHeaderBytes + 4 * ((n + 1048575) / 1048576 + (n == 0 ? 1 : 0)) + n + 16 * ((n + 1048575) / 1048576 + (n == 0 ? 1 : 0)));
         T_CHECK(DecryptFrom(enc, pw, c_.coin() ? 777 : 100000, out) == 0);
         T_CHECK(out.size() == d.size() && (d.empty() || memcmp(out.data(), d.data(), d.size()) == 0));
         bool wrong = false; Bytes o2;
@@ -158,10 +158,10 @@ VM2B_TEST("core", encrypt_roundtrip_and_tamper)
     // blocks swapped / dropped: needs more than one block
     Bytes d = RandomData(c_, 3 * 1048576 + 5, 1), enc;
     T_CHECK(EncryptTo(c_, d, "pw", 1 << 20, enc));
-    size_t o = 32, starts[8], nb = 0; while (o < enc.size() && nb < 8) { starts[nb++] = o; u32 len = (u32)enc[o] << 24 | (u32)enc[o + 1] << 16 | (u32)enc[o + 2] << 8 | enc[o + 3]; o += 4 + len; }
+    size_t o = kEncHeaderBytes, starts[8], nb = 0; while (o < enc.size() && nb < 8) { starts[nb++] = o; u32 len = (u32)enc[o] << 24 | (u32)enc[o + 1] << 16 | (u32)enc[o + 2] << 8 | enc[o + 3]; o += 4 + len; }
     T_CHECK(nb == 4);
     Bytes swapped(enc), dropped; swapped.resize(0);
-    for (size_t i = 0; i < 32; ++i) swapped.push_back(enc[i]);
+    for (size_t i = 0; i < (size_t)kEncHeaderBytes; ++i) swapped.push_back(enc[i]);
     size_t order[4] = { 1, 0, 2, 3 };
     for (size_t b = 0; b < 4; ++b) { size_t s = starts[order[b]], e = order[b] + 1 < nb ? starts[order[b] + 1] : enc.size(); for (size_t i = s; i < e; ++i) swapped.push_back(enc[i]); }
     Bytes oo; T_CHECK(DecryptFrom(swapped, "pw", 4096, oo) == -1);

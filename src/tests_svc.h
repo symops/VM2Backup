@@ -42,7 +42,7 @@ struct Svc {
         Str err; up = core.start(o, err);
         if (!up) { c.note("service did not start: %s", err.c_str()); c.failed = true; return; }
         if (!cli.connect(pipe, 5000, err)) { c.note("cannot connect: %s", err.c_str()); c.failed = true; }
-        Json st = Json::object(); st["kdf_iterations"] = 3000; st["retry_base_ms"] = 1; st["retry_attempts"] = 6; st["segment_mib"] = 1; st["retry_max_sec"] = 1;
+        Json st = Json::object(); st["kdf_iterations"] = 100000;        /* the least the settings accept */ st["retry_base_ms"] = 1; st["retry_attempts"] = 6; st["segment_mib"] = 1; st["retry_max_sec"] = 1;
         call("settings.set", st);
     }
     ~Svc() { cli.close(); core.stop(); }
