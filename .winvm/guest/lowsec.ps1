@@ -3,7 +3,7 @@
 #           (раньше «cannot create the pipe ... is the service already running?» и остановка навсегда), сайт на 127.0.0.1:8443 работает.
 #           Дальше хост запускает vm2bautotest --only pipe_default_name_client_checks_the_service с VM2B_SQUAT=1: клиент канала отказывается («not the VM2Backup service»): теперь тест ещё проверяет, что отказ - отдельный вид ошибки
 #           IPC_WRONG_SERVER с текстом «wrong server: ...» (а не «служба не запущена»), по которому панель VM2Backup.exe показывает «Blocked: the control channel is held
-#           by another program» с именем программы и номером процесса вместо «Stopped» (ожидание обновлено 18.11.2026, на настоящей Windows НЕ прогонялось; панель под Wine проверяет guitest-сценарий wrong_server).
+#           by another program» с именем программы и номером процесса вместо «Stopped» (ожидание обновлено 18.11.2026, прогнано на настоящей Windows 10 x86 в раунде 17; панель под Wine проверяет guitest-сценарий wrong_server).
 #   finish: занимавшая программа убита; служба сама занимает имя канала (до 60 с), настоящий клиент (тот же тест без VM2B_SQUAT) проходит.
 param([string]$Mode = 'start')
 . C:\vm2b\guest\lib.ps1

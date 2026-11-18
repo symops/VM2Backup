@@ -61,7 +61,7 @@ VM2B_TEST("winreal", pipe_name_held_by_another_program_is_waited_out)
     Counting h; Str err;
     { IpcServer s1; bool ok = s1.start(pipe, &h, err, "D:(A;;GA;;;WD)"); T_CHECK(!ok); T_CHECK(err.find("already running") >= 0); c_.note("a held name, no waiting: %s", err.c_str()); }
     IpcServer s2; T_CHECK(s2.start(pipe, &h, err, "D:(A;;GA;;;WD)", true)); T_CHECK(s2.waiting());
-    { IpcClient cli; cli.expectServerImage("C:\\Windows\\System32\\notepad.exe"); Str e2; T_CHECK(!cli.connect(pipe, 2000, e2)); T_CHECK(e2.find("not the VM2Backup service") >= 0 || e2.find("cannot") >= 0); T_CHECK(cli.failure() == IPC_WRONG_SERVER); }
+    { IpcClient cli; cli.expectServerImage("C:\\Windows\\System32\\notepad.exe"); Str e2; T_CHECK(!cli.connect(pipe, 2000, e2)); T_CHECK(e2.find("not the VM2Backup service") >= 0 || e2.find("cannot") >= 0); T_CHECK(e2.find("not the VM2Backup service") < 0 || cli.failure() == IPC_WRONG_SERVER); }      // this squatter does not listen (PIPE_BUSY: the server is never reached); IPC_WRONG_SERVER for a listening one is checked by pipe_default_name_client_checks_the_service
     T_CHECK(h.calls == 0);
     CloseHandle(squat);                                                                  // the other program lets go
     bool took = false; for (int i = 0; i < 40 && !took; ++i) { if (!s2.waiting()) took = true; else Sleep(250); }
